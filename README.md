@@ -4,7 +4,7 @@
   <img src="Docs/tokenmon-logo.png" alt="TokenMon" width="280">
 </p>
 
-A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **OpenCode**, and **Cursor** — in real time.
+A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **OpenCode**, **Cursor**,  **Claude**, **ChatGPT** and **OpenRouter** — in real time.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/faulknerpearce/token_monitor)
 [![Swift](https://img.shields.io/badge/Swift-5.10-orange)](https://www.swift.org)
