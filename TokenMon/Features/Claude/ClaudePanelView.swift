@@ -44,7 +44,9 @@ struct ClaudePanelView: View {
                         DailyBudgetBarsView(
                             days: days,
                             accent: ConcentricUsageRingView.claudeColor,
-                            allowanceNoun: "weekly"
+                            allowanceNoun: "weekly",
+                            infoText: "Share of weekly allowance per day "
+                                + "(budget 14.3%/day)."
                         )
                     }
                 }

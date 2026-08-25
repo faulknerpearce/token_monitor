@@ -317,6 +317,72 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertNotEqual(month.usedUSD, 3, accuracy: 0.001)
     }
 
+    func testScaledSpendsPercentAnchorsTotalToUsedPercent() {
+        let d1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let d2 = Date(timeIntervalSince1970: 1_700_086_400)
+        let scaled = OpenCodeLocalStats.scaledSpendsPercent([d1: 5, d2: 15], to: 30)
+        XCTAssertEqual(scaled[d1] ?? -1, 7.5, accuracy: 0.001)
+        XCTAssertEqual(scaled[d2] ?? -1, 22.5, accuracy: 0.001)
+        XCTAssertEqual(scaled.values.reduce(0, +), 30, accuracy: 0.001)
+    }
+
+    func testScaledSpendsPercentUnchangedWhenNothingToAnchor() {
+        let d1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let scaled = OpenCodeLocalStats.scaledSpendsPercent([d1: 5], to: 0)
+        XCTAssertEqual(scaled[d1] ?? -1, 5, accuracy: 0.001)
+        XCTAssertTrue(OpenCodeLocalStats.scaledSpendsPercent([:], to: 30).isEmpty)
+    }
+
+    func testMonthDailyBudgetDaysAnchorsBarsToUsedPercent() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func d(_ y: Int, _ month: Int, _ day: Int) -> Date {
+            cal.date(from: DateComponents(year: y, month: month, day: day))!
+        }
+        // Subscription anchor: a Go session on 2026-08-01 sets the billing month start.
+        insert(timeCreated: d(2026, 8, 1), cost: 0, input: 0, model: modelJSON(provider: "opencode-go", id: "m"))
+        let now = d(2026, 8, 5).addingTimeInterval(12 * 3600) // midday Aug 5
+        let spends: [Date: Double] = [
+            cal.startOfDay(for: d(2026, 8, 4)): 3.0,
+            cal.startOfDay(for: d(2026, 8, 5)): 7.0
+        ]
+        let days = OpenCodeLocalStats.monthDailyBudgetDays(
+            limitUSD: 60,
+            usedPercent: 30,
+            now: now,
+            spentByDay: spends,
+            dbURL: dbURL,
+            calendar: cal
+        )
+        XCTAssertEqual(days.count, 7)
+        // Bars reconcile with the Monthly bar: recent-week total equals usedPercent.
+        XCTAssertEqual(days.reduce(0) { $0 + $1.spentUSD }, 30, accuracy: 0.001)
+        // Relative distribution preserved: 3 : 7.
+        let aug4 = days.first { cal.isDate($0.date, inSameDayAs: d(2026, 8, 4)) }
+        let aug5 = days.first { cal.isDate($0.date, inSameDayAs: d(2026, 8, 5)) }
+        XCTAssertEqual(aug4?.spentUSD ?? -1, 9, accuracy: 0.001)   // 3/10 * 30
+        XCTAssertEqual(aug5?.spentUSD ?? -1, 21, accuracy: 0.001)  // 7/10 * 30
+    }
+
+    func testMonthDailySpendsTrackGoOnly() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func d(_ y: Int, _ month: Int, _ day: Int) -> Date {
+            cal.date(from: DateComponents(year: y, month: month, day: day))!
+        }
+        // Go session anchors the billing month (Aug 1) and is the only spend counted.
+        insert(timeCreated: d(2026, 8, 1), cost: 3, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
+        // Zen and direct-provider usage must NOT count toward Go daily spend.
+        insert(timeCreated: d(2026, 8, 2), cost: 5, input: 1, model: modelJSON(provider: "opencode", id: "m"))
+        insert(timeCreated: d(2026, 8, 3), cost: 4, input: 1, model: modelJSON(provider: "deepseek", id: "m"))
+
+        let spends = try OpenCodeLocalStats.fetchMonthDailySpends(dbURL: dbURL, now: d(2026, 8, 5).addingTimeInterval(12 * 3600))
+        // Only the Go message counts; Zen and direct-provider usage are excluded.
+        XCTAssertEqual(spends.count, 1)
+        XCTAssertEqual(spends.values.reduce(0, +), 3, accuracy: 0.001)
+        XCTAssertEqual(spends.values.first ?? -1, 3, accuracy: 0.001)
+    }
+
     func testMonthlyBoundsClampsShortMonths() throws {
         // Subscribed on Jan 31 → period through Feb clamps end day to Feb 28 (2026 not leap)
         let subscribed = Date(timeIntervalSince1970: 1_769_817_600) // 2026-01-31 00:00 UTC

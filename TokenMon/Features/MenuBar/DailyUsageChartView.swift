@@ -17,7 +17,11 @@ struct DailyUsageChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: "Daily Usage - budget \(Int(DailyUsageBuilder.dailyCapPercent.rounded()))%")
+                PanelSectionHeader(title: "Daily Budget \(Int(DailyUsageBuilder.dailyCapPercent.rounded()))%")
+                Image(systemName: "info.circle")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .help("Share of weekly allowance per day (budget 14.3%/day).")
                 Spacer(minLength: 8)
                 PanelPill(text: week.rangeLabel)
             }

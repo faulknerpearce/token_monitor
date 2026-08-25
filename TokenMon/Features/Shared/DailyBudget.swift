@@ -145,28 +145,50 @@ enum DailyBudget {
         return days
     }
 
-    /// Bars for the full weekly window: `weekStartWeekday` (Calendar
-    /// convention, 1 = Sunday … 7 = Saturday) through the six days after it.
-    ///
-    /// Claude's weekly pool resets on Saturday, so passing `7` makes the first
-    /// bar that Saturday. Always emits 7 bars; days after today carry 0 spent
-    /// and the chart view dims them as future days.
+    /// Bars for the full weekly window anchored at the pool's actual reset
+    /// instant rather than a fixed weekday. The window is the 7 days ending on
+    /// the last day of the running period (advancing `resetsAt` by whole periods
+    /// when the payload is stale), so it always contains today. On reset day
+    /// before the instant that last day is today — calendar-keyed deltas stay
+    /// visible. After the instant the window rolls to the new period. Never
+    /// mixes two partial periods. Days after today carry 0 and are dimmed.
     static func buildWeeklyWindowDays(
         limitUSD: Double,
         daysInPeriod: Int,
-        weekStartWeekday: Int,
+        resetsAt: Date,
         spentByDay: [Date: Double],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
         let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: daysInPeriod)
         let today = calendar.startOfDay(for: now)
-        let weekday = calendar.component(.weekday, from: today)
-        let back = (weekday - weekStartWeekday + 7) % 7
-        let weekStart = calendar.date(byAdding: .day, value: -back, to: today) ?? today
+        // Advance a stale `resetsAt` to the next future reset so the window
+        // still contains today instead of sliding into the future empty.
+        var nextReset = resetsAt
+        var guardIter = 0
+        while nextReset <= now, guardIter < 520 {
+            guard let advanced = calendar.date(
+                byAdding: .day, value: daysInPeriod, to: nextReset
+            ) else { break }
+            nextReset = advanced
+            guardIter += 1
+        }
+        let resetDay = calendar.startOfDay(for: nextReset)
+        // Normally the running period ends the calendar day before reset. On
+        // reset day itself (before the instant) end on today so same-day
+        // usage recorded under today's key is still painted.
+        let weekEnd: Date
+        if calendar.isDate(today, inSameDayAs: resetDay) {
+            weekEnd = today
+        } else {
+            weekEnd = calendar.date(byAdding: .day, value: -1, to: resetDay) ?? today
+        }
+        let weekStart = calendar.date(
+            byAdding: .day, value: -(max(1, daysInPeriod) - 1),
+            to: weekEnd
+        ) ?? today
         var days: [DailyBudgetDay] = []
-        for offset in 0..<7 {
-            // week-start day … week-start + 6 (future days included, empty)
+        for offset in 0..<max(1, daysInPeriod) {
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
             days.append(DailyBudgetDay(date: key, spentUSD: spentByDay[key] ?? 0, budgetUSD: perDay))

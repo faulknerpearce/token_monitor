@@ -683,7 +683,9 @@ enum OpenCodeLocalStats {
 
     // MARK: - Daily budget
 
-    /// Daily USD spend per calendar day for the current monthly period.
+    /// Daily USD spend per calendar day for the current monthly period, counting
+    /// only Go-plan usage (Zen is free and tracked separately in the models and
+    /// overview sections).
     static func fetchMonthDailySpends(now: Date = Date()) throws -> [Date: Double] {
         try fetchMonthDailySpends(dbURL: databaseURL, now: now)
     }
@@ -701,7 +703,7 @@ enum OpenCodeLocalStats {
             from: db,
             startMS: Int64(month.start.timeIntervalSince1970 * 1000),
             endMS: Int64(month.end.timeIntervalSince1970 * 1000)
-        )
+        ).filter { goEligibleProvider($0.providerID) }
         return dailySpendsByDay(rows: monthRows)
     }
 
@@ -727,11 +729,12 @@ enum OpenCodeLocalStats {
 
     static func monthDailyBudgetDays(
         limitUSD: Double,
+        usedPercent: Double = 0,
         now: Date = Date(),
         spentByDay: [Date: Double]? = nil,
+        dbURL: URL = databaseURL,
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
-        let dbURL = databaseURL
         let usdSpends: [Date: Double]
         if let spentByDay {
             usdSpends = spentByDay
@@ -742,6 +745,10 @@ enum OpenCodeLocalStats {
         let spendsPercent: [Date: Double] = limitUSD > 0
             ? usdSpends.mapValues { $0 / limitUSD * 100 }
             : [:]
+        // Anchor the bars to the consumed monthly usage (the Monthly bar): local
+        // events only shape *how* the budget was spread across days, while the
+        // authoritative monthly total sets the scale so the bars reconcile with it.
+        let anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
         let percentLimit: Double = 100 // monthly allocation = 100%
         // 7-bar rolling window; daily budget = 100% / daysInPeriod
         if FileManager.default.fileExists(atPath: dbURL.path),
@@ -754,7 +761,7 @@ enum OpenCodeLocalStats {
                     periodStart: month.start,
                     periodEnd: month.end,
                     limitUSD: percentLimit,
-                    spentByDay: spendsPercent,
+                    spentByDay: anchoredPercent,
                     now: now,
                     calendar: calendar
                 )
@@ -765,9 +772,24 @@ enum OpenCodeLocalStats {
         return DailyBudget.buildRolling7Days(
             limitUSD: percentLimit,
             daysInPeriod: daysInMonth,
-            spentByDay: spendsPercent,
+            spentByDay: anchoredPercent,
             now: now,
             calendar: calendar
         )
+    }
+
+    /// Scales per-day percentage-point spends so their sum equals the consumed
+    /// monthly usage (`usedPercent`) — the same anchor Cursor uses. Prior weeks'
+    /// usage stays counted in the monthly total while only the latest days are
+    /// drawn, so the 7 visible bars are a consistent slice of the Monthly bar.
+    /// Returns the spends unchanged when there is nothing to anchor to.
+    static func scaledSpendsPercent(
+        _ spendsPercent: [Date: Double],
+        to usedPercent: Double
+    ) -> [Date: Double] {
+        let total = spendsPercent.values.reduce(0, +)
+        guard total > 0, usedPercent > 0 else { return spendsPercent }
+        let scale = usedPercent / total
+        return spendsPercent.mapValues { $0 * scale }
     }
 }

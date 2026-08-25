@@ -3,14 +3,17 @@ import SwiftUI
 /// Daily-budget bar chart styled exactly like the Grok daily-use chart.
 ///
 /// 7 vertical stems (one per calendar day). Each stem's full height is that day's
-/// budget — an equal share of the **monthly usage allowance** (`100% / daysInMonth`).
-/// The fill shows how much of that day's allowance was actually used.
+/// budget — an even share of the allowance (`100% / daysInPeriod`, weekly ≈14.3% or
+/// monthly ≈3.2%). The fill shows how much of that day's allowance was actually used.
+/// Hover the ⓘ icon for what the bars count toward, and hover a bar for its exact %.
 struct DailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
-    var title: String = "Daily Usage"
+    var title: String = "Daily Budget"
     /// What the equal daily share is drawn from, e.g. "monthly" or "weekly".
     var allowanceNoun: String = "monthly"
+    /// Optional longer explanation shown as an info tooltip next to the header.
+    var infoText: String?
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -39,7 +42,14 @@ struct DailyBudgetBarsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: dailyBudget > 0 ? "\(title) - budget \(Int(dailyBudget.rounded()))%" : title)
+                PanelSectionHeader(title: dailyBudget > 0 ? "\(title) \(Int(dailyBudget.rounded()))%" : title)
+                if let infoText {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .help(infoText)
+                        .accessibilityLabel(infoText)
+                }
                 Spacer(minLength: 8)
                 PanelPill(text: rangeLabel)
             }
@@ -132,7 +142,7 @@ struct DailyBudgetBarsView: View {
         if day.budgetUSD <= 0 { return "\(dateStr): no budget" }
         if day.spentUSD <= 0.001 { return String(format: "%@: used 0%% of %.1f%% allowance", dateStr, day.budgetUSD) }
         let ofAllowance = Int((day.spentUSD / day.budgetUSD * 100).rounded())
-        return String(format: "%@: %.1f%% of monthly, %d%% of daily allowance", dateStr, day.spentUSD, ofAllowance)
+        return String(format: "%@: %.1f%% of %@, %d%% of daily allowance", dateStr, day.spentUSD, allowanceNoun, ofAllowance)
     }
 }
 
