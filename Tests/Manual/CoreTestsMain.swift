@@ -88,12 +88,14 @@ struct CoreTestsMain {
         cal.firstWeekday = 2
         let now = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
         let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
-        let bounds = DailyUsageBuilder.billingPeriodWeekBounds(
+        guard let bounds = DailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,
             now: now
-        )
+        ) else {
+            throw TestFailure("period bounds nil with reset supplied")
+        }
         try assertTrue(cal.component(.weekday, from: bounds.start) == 5, "period starts Thursday")
         try assertTrue(cal.component(.weekday, from: bounds.end) == 4, "period ends Wednesday")
 

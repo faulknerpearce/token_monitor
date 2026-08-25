@@ -94,26 +94,18 @@ struct CursorUsageClient: Sendable {
                 calendar: calendar
             )
         } else if snap.planLimitUSD != nil {
-            // No events yet — still show empty 7-bar budget (percent-based).
+            // No events yet — still show empty 7-bar budget when we know the
+            // subscription/billing month (never invent a calendar month).
             let percentLimit: Double = 100
-            if let start = snap.billingCycleStart, let end = snap.billingCycleEnd, end > start {
-                dailyBudgetDays = DailyBudget.buildLast7Days(
-                    periodStart: start,
-                    periodEnd: end,
-                    limitUSD: percentLimit,
-                    spentByDay: [:],
-                    now: now,
-                    calendar: calendar
-                )
-            } else {
-                let daysInMonth = DailyBudget.daysInCalendarMonth(for: now, calendar: calendar)
-                dailyBudgetDays = DailyBudget.buildRolling7Days(
-                    limitUSD: percentLimit,
-                    daysInPeriod: daysInMonth,
-                    spentByDay: [:],
-                    now: now,
-                    calendar: calendar
-                )
+            if let built = DailyBudget.buildSubscriptionMonthLast7Days(
+                limitUSD: percentLimit,
+                spentByDay: [:],
+                knownStart: snap.billingCycleStart,
+                resetsAt: snap.billingCycleEnd,
+                now: now,
+                calendar: calendar
+            ) {
+                dailyBudgetDays = built.days
             }
         }
         return (snap, hourly, dailyBudgetDays)
@@ -606,9 +598,10 @@ struct CursorUsageClient: Sendable {
         return usdSpends.mapValues { $0 * scale }
     }
 
-    /// Builds 7-bar daily budget days for the current billing cycle or calendar month.
+    /// Builds 7-bar daily budget days for the current **billing cycle**.
     /// Daily cap = `100% / daysInPeriod`. Each bar is that day's share of
-    /// `usedPercent`, not `chargedUSD / planLimit`.
+    /// `usedPercent`, not `chargedUSD / planLimit`. Returns nil when the
+    /// subscription month cannot be resolved (no calendar-month fallback).
     static func dailyBudgetDays(
         events: [[String: Any]],
         planLimitUSD: Double?,
@@ -620,34 +613,22 @@ struct CursorUsageClient: Sendable {
     ) -> [DailyBudgetDay]? {
         guard let planLimitUSD, planLimitUSD > 0 else { return nil }
         let percentLimit: Double = 100
-        if let start = billingCycleStart, let end = billingCycleEnd, end > start {
-            let usdSpends = dailySpendByDay(
-                events: events,
-                cycleStart: start,
-                cycleEnd: end,
-                calendar: calendar
-            )
-            return DailyBudget.buildLast7Days(
-                periodStart: start,
-                periodEnd: end,
-                limitUSD: percentLimit,
-                spentByDay: quotaPercentsByDay(usdSpends: usdSpends, usedPercent: usedPercent),
-                now: now,
-                calendar: calendar
-            )
-        }
-        let monthStart = calendar.dateInterval(of: .month, for: now)?.start
-        let monthEnd = calendar.dateInterval(of: .month, for: now)?.end
+        guard let bounds = DailyBudget.subscriptionMonth(
+            knownStart: billingCycleStart,
+            resetsAt: billingCycleEnd,
+            now: now,
+            calendar: calendar
+        ) else { return nil }
         let usdSpends = dailySpendByDay(
             events: events,
-            cycleStart: monthStart,
-            cycleEnd: monthEnd,
+            cycleStart: bounds.start,
+            cycleEnd: bounds.end,
             calendar: calendar
         )
-        let daysInMonth = DailyBudget.daysInCalendarMonth(for: now, calendar: calendar)
-        return DailyBudget.buildRolling7Days(
+        return DailyBudget.buildLast7Days(
+            periodStart: bounds.start,
+            periodEnd: bounds.end,
             limitUSD: percentLimit,
-            daysInPeriod: daysInMonth,
             spentByDay: quotaPercentsByDay(usdSpends: usdSpends, usedPercent: usedPercent),
             now: now,
             calendar: calendar

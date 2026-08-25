@@ -1,24 +1,78 @@
 import SwiftUI
 
-/// Daily-budget bar chart styled exactly like the Grok daily-use chart.
-///
-/// 7 vertical stems (one per calendar day). Each stem's full height is that day's
-/// budget — an even share of the allowance (`100% / daysInPeriod`, weekly ≈14.3% or
-/// monthly ≈3.2%). The fill shows how much of that day's allowance was actually used.
-/// Hover the ⓘ icon for what the bars count toward, and hover a bar for its exact %.
-///
-/// Footer pacing uses the pulled period used % when provided — not summed bar
-/// spends — so banked headroom stays accurate when local bars lag.
+/// Daily-budget bar chart for providers whose quota window is a **week**
+/// (Claude). Bars usually cover the full period; pace uses the first bar as
+/// period start.
+struct WeeklyDailyBudgetBarsView: View {
+    let days: [DailyBudgetDay]
+    var accent: Color
+    var title: String = "Daily Budget"
+    var infoText: String?
+    var periodUsedPercent: Double?
+
+    var body: some View {
+        DailyBudgetBarsView(
+            days: days,
+            accent: accent,
+            title: title,
+            allowancePeriod: .weekly,
+            allowanceNoun: "weekly",
+            infoText: infoText,
+            periodUsedPercent: periodUsedPercent,
+            periodStart: DailyBudget.weeklyPacePeriodStart(days: days)
+        )
+    }
+}
+
+/// Daily-budget bar chart for providers whose quota is a **subscription /
+/// billing month** (Cursor, OpenCode Go). Shows the last 7 days; pace earns
+/// across the full subscription month — never the calendar month of today.
+struct MonthlyDailyBudgetBarsView: View {
+    let days: [DailyBudgetDay]
+    var accent: Color
+    var title: String = "Daily Budget"
+    var infoText: String?
+    var periodUsedPercent: Double?
+    /// Billing-cycle / Go-subscription start when known.
+    var periodStart: Date?
+    /// Next reset / cycle end — used to derive start when `periodStart` is nil.
+    var resetsAt: Date?
+
+    var body: some View {
+        let start = DailyBudget.monthlyPacePeriodStart(
+            days: days,
+            knownStart: periodStart,
+            resetsAt: resetsAt
+        )
+        return DailyBudgetBarsView(
+            days: days,
+            accent: accent,
+            title: title,
+            allowancePeriod: .monthly,
+            allowanceNoun: "monthly",
+            infoText: infoText,
+            periodUsedPercent: periodUsedPercent,
+            periodStart: start
+        )
+    }
+}
+
+/// Shared stem chart + pace footer. Prefer `WeeklyDailyBudgetBarsView` or
+/// `MonthlyDailyBudgetBarsView` at call sites so weekly vs subscription-month
+/// math cannot be mixed up.
 struct DailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
     var title: String = "Daily Budget"
+    var allowancePeriod: DailyBudget.AllowancePeriod = .monthly
     /// What the equal daily share is drawn from, e.g. "monthly" or "weekly".
     var allowanceNoun: String = "monthly"
     /// Optional longer explanation shown as an info tooltip next to the header.
     var infoText: String?
     /// Live used % for the same pool the bars pace against (API source of truth).
-    var periodUsedPercent: Double? = nil
+    var periodUsedPercent: Double?
+    /// Start of the full quota period (subscription month or weekly window).
+    var periodStart: Date?
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -48,7 +102,25 @@ struct DailyBudgetBarsView: View {
 
     private var pace: DailyBudget.PaceHeadroom? {
         guard let periodUsedPercent else { return nil }
-        return DailyBudget.paceHeadroom(days: days, periodConsumed: periodUsedPercent)
+        let start = periodStart ?? DailyBudget.pacePeriodStart(
+            period: allowancePeriod,
+            days: days
+        )
+        // Weekly windows earn from visible bars when start is unknown.
+        // Monthly requires a subscription start — never invent a calendar month.
+        let elapsed: Int?
+        if let start {
+            elapsed = DailyBudget.elapsedDaysThroughToday(from: start)
+        } else if allowancePeriod == .weekly {
+            elapsed = nil
+        } else {
+            return nil
+        }
+        return DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: periodUsedPercent,
+            elapsedDaysInPeriod: elapsed
+        )
     }
 
     private var footerCaption: String? {
@@ -102,15 +174,15 @@ struct DailyBudgetBarsView: View {
         if pace.periodConsumed <= 0.001 {
             if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
                 return String(
-                    format: "No usage yet. Up to %.1f%% available today from unused earlier days.",
+                    format: "Up to %.1f%% available today from unused earlier days.",
                     pace.headroomToday
                 )
             }
-            return String(format: "No usage yet. Budget is %.1f%% per day.", pace.dailyBudget)
+            return nil
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "Above even pace. Used %.0f%% with only %.1f%% available through today.",
+                format: "Used %.0f%% with only %.1f%% available through today.",
                 pace.periodConsumed,
                 pace.earnedThroughToday
             )
@@ -121,7 +193,7 @@ struct DailyBudgetBarsView: View {
                 pace.headroomToday
             )
         }
-        return nil
+        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
     }
 
     private func dayColumn(_ day: DailyBudgetDay) -> some View {
@@ -197,7 +269,7 @@ struct DailyBudgetBarsView: View {
 }
 
 #if DEBUG
-#Preview {
+#Preview("Monthly") {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
     let days: [DailyBudgetDay] = (0..<7).map { offset in
@@ -205,8 +277,29 @@ struct DailyBudgetBarsView: View {
         let spent: Double = [1.2, 0, 4.1, 2.8, 0.5, 3.6, 1.0][offset]
         return DailyBudgetDay(date: date, spentUSD: spent, budgetUSD: 3.3)
     }
-    return DailyBudgetBarsView(days: days, accent: ModelPalette.purple.color, periodUsedPercent: 12)
-        .padding()
-        .frame(width: 360)
+    return MonthlyDailyBudgetBarsView(
+        days: days,
+        accent: ModelPalette.purple.color,
+        periodUsedPercent: 12,
+        periodStart: calendar.date(byAdding: .day, value: -20, to: today)
+    )
+    .padding()
+    .frame(width: 360)
+}
+
+#Preview("Weekly") {
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let days: [DailyBudgetDay] = (0..<7).map { offset in
+        let date = calendar.date(byAdding: .day, value: offset - 6, to: today)!
+        return DailyBudgetDay(date: date, spentUSD: Double(offset), budgetUSD: 100.0 / 7)
+    }
+    return WeeklyDailyBudgetBarsView(
+        days: days,
+        accent: ConcentricUsageRingView.claudeColor,
+        periodUsedPercent: 40
+    )
+    .padding()
+    .frame(width: 360)
 }
 #endif

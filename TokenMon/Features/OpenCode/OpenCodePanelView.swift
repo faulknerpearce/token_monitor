@@ -34,14 +34,16 @@ struct OpenCodePanelView: View {
                 }
 
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
+                    let monthly = snapshot.windows.first { $0.kind == .monthly }
                     PanelCard {
-                        DailyBudgetBarsView(
+                        MonthlyDailyBudgetBarsView(
                             days: days,
                             accent: ModelPalette.purple.color,
-                            allowanceNoun: "monthly",
-                            infoText: "Go-only share of monthly quota per day. "
+                            infoText: "Go-only share of subscription-month quota per day. "
                                 + "Last 7 days shown.",
-                            periodUsedPercent: snapshot.monthlyUsedPercent
+                            periodUsedPercent: snapshot.monthlyUsedPercent,
+                            periodStart: poller.dailyBudgetPeriodStart,
+                            resetsAt: monthly?.resetsAt
                         )
                     }
                 }

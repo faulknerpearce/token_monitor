@@ -48,12 +48,13 @@ struct CursorPanelView: View {
 
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
                     PanelCard {
-                        DailyBudgetBarsView(
+                        MonthlyDailyBudgetBarsView(
                             days: days,
                             accent: ConcentricUsageRingView.cursorColor,
-                            allowanceNoun: "monthly",
-                            infoText: "Share of monthly quota per day. Last 7 days shown.",
-                            periodUsedPercent: cursorModelsPercent
+                            infoText: "Share of billing-cycle quota per day. Last 7 days shown.",
+                            periodUsedPercent: cursorModelsPercent,
+                            periodStart: snapshot.billingCycleStart,
+                            resetsAt: snapshot.billingCycleEnd
                         )
                     }
                 }

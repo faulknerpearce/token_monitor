@@ -727,14 +727,22 @@ enum OpenCodeLocalStats {
         return byDay
     }
 
+    /// Builds the last-7 daily-budget bars for the Go **subscription** month,
+    /// plus that period's start for pace captions.
+    ///
+    /// Console `periodResetsAt` is authoritative when present — signed-in bars
+    /// must match the console Monthly bar. The local first-Go-session
+    /// anniversary is only a fallback for the local-estimate path. Returns nil
+    /// when neither signal exists — never invents a calendar month of `now`.
     static func monthDailyBudgetDays(
         limitUSD: Double,
         usedPercent: Double = 0,
+        periodResetsAt: Date? = nil,
         now: Date = Date(),
         spentByDay: [Date: Double]? = nil,
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
-    ) -> [DailyBudgetDay] {
+    ) -> (days: [DailyBudgetDay], periodStart: Date)? {
         let usdSpends: [Date: Double]
         if let spentByDay {
             usdSpends = spentByDay
@@ -750,32 +758,37 @@ enum OpenCodeLocalStats {
         // authoritative monthly total sets the scale so the bars reconcile with it.
         let anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
         let percentLimit: Double = 100 // monthly allocation = 100%
-        // 7-bar rolling window; daily budget = 100% / daysInPeriod
+
+        // Console monthly reset wins: signed-in bars must agree with the Monthly bar.
+        if let periodResetsAt {
+            return DailyBudget.buildSubscriptionMonthLast7Days(
+                limitUSD: percentLimit,
+                spentByDay: anchoredPercent,
+                knownStart: nil,
+                resetsAt: periodResetsAt,
+                now: now,
+                calendar: calendar
+            )
+        }
+
         if FileManager.default.fileExists(atPath: dbURL.path),
            let db = try? openConnection(at: dbURL) {
             defer { sqlite3_close(db) }
             if let rows = try? readRows(db: db),
                let subscribedAt = earliestGoSessionDate(in: rows) {
                 let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
-                return DailyBudget.buildLast7Days(
-                    periodStart: month.start,
-                    periodEnd: month.end,
+                return DailyBudget.buildSubscriptionMonthLast7Days(
                     limitUSD: percentLimit,
                     spentByDay: anchoredPercent,
+                    knownStart: month.start,
+                    resetsAt: month.end,
                     now: now,
                     calendar: calendar
                 )
             }
         }
-        let daysInMonth = DailyBudget.daysInCalendarMonth(for: now, calendar: calendar)
-        // Fallback when DB missing: rolling 7 days ending today
-        return DailyBudget.buildRolling7Days(
-            limitUSD: percentLimit,
-            daysInPeriod: daysInMonth,
-            spentByDay: anchoredPercent,
-            now: now,
-            calendar: calendar
-        )
+
+        return nil
     }
 
     /// Scales per-day percentage-point spends so their sum equals the consumed

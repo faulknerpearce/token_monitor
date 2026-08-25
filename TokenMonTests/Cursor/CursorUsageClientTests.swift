@@ -363,4 +363,39 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertLessThan(saturday?.spentUSD ?? 100, 2)
         XCTAssertFalse(sunday?.isOverBudget ?? true)
     }
+
+    /// A payload whose billingCycleEnd already passed must paint the running
+    /// cycle (today), not the last 7 days of the closed month.
+    func testDailyBudgetDaysAdvancesStaleBillingCycle() {
+        let calendar = utcCalendar()
+        let now = utcDate(2026, 8, 25, hour: 12, calendar: calendar)
+        let days = CursorUsageClient.dailyBudgetDays(
+            events: [],
+            planLimitUSD: 20,
+            usedPercent: 0,
+            billingCycleStart: utcDate(2026, 6, 16, hour: 17, minute: 57, calendar: calendar),
+            billingCycleEnd: utcDate(2026, 7, 16, hour: 17, minute: 57, calendar: calendar),
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(days?.count, 7)
+        XCTAssertTrue(days?.contains { calendar.isDate($0.date, inSameDayAs: now) } ?? false)
+        XCTAssertFalse(days?.contains { $0.date < calendar.startOfDay(for: utcDate(2026, 8, 16, calendar: calendar)) } ?? true)
+    }
+
+    /// No billing-cycle signal → no Daily Budget at all. A calendar-month
+    /// fallback would silently paint the wrong pool.
+    func testDailyBudgetDaysNilWithoutCycleDates() {
+        let calendar = utcCalendar()
+        let days = CursorUsageClient.dailyBudgetDays(
+            events: [event(at: utcDate(2026, 8, 23, hour: 10, calendar: calendar), chargedCents: 100)],
+            planLimitUSD: 20,
+            usedPercent: 4,
+            billingCycleStart: nil,
+            billingCycleEnd: nil,
+            now: utcDate(2026, 8, 23, hour: 12, calendar: calendar),
+            calendar: calendar
+        )
+        XCTAssertNil(days)
+    }
 }

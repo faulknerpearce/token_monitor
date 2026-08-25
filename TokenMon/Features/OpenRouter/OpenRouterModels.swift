@@ -159,12 +159,32 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         } else if let limit = key.limit, limit > 0 {
             snapshot.budgetSource = .keyLimit
             snapshot.budgetUSD = limit
-            snapshot.usedUSD = key.usage
-            snapshot.remainingUSD = key.limitRemaining ?? max(0, limit - key.usage)
+            // Window selection comes from the provider's own `limit_reset` — never
+            // the local calendar. Inside a reset window the bar shows spend against
+            // the *current window* so it reconciles with `limit_remaining`; without
+            // a reset window, `/key` usage is all-time.
+            let windowUsage = key.limitReset.flatMap { reset in
+                key.limitRemaining.map { max(0, limit - $0) }
+                    ?? Self.windowUsage(key: key, reset: reset.lowercased())
+            }
+            snapshot.usedUSD = windowUsage ?? key.usage
+            snapshot.remainingUSD = key.limitRemaining
+                ?? windowUsage.map { max(0, limit - $0) }
+                ?? max(0, limit - key.usage)
         }
 
         // Negative balances (overdraft) clamp so the bar never underfills.
         snapshot.usedUSD = max(0, snapshot.usedUSD)
         return snapshot
+    }
+
+    /// `/key` usage field matching the provider-declared `limit_reset` window.
+    private static func windowUsage(key: OpenRouterKeyData, reset: String) -> Double? {
+        switch reset {
+        case "daily": return key.usageDaily
+        case "weekly": return key.usageWeekly
+        case "monthly": return key.usageMonthly
+        default: return nil
+        }
     }
 }

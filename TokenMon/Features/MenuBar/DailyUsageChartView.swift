@@ -11,7 +11,7 @@ struct DailyUsageChartView: View {
     var onNextWeek: (() -> Void)?
     var canGoNext: Bool = true
     /// Live weekly used % for the current period (omit for past weeks).
-    var periodUsedPercent: Double? = nil
+    var periodUsedPercent: Double?
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -27,7 +27,13 @@ struct DailyUsageChartView: View {
                 budgetUSD: DailyUsageBuilder.dailyCapPercent
             )
         }
-        return DailyBudget.paceHeadroom(days: days, periodConsumed: periodUsedPercent)
+        // Billing-period week already spans the full SuperGrok pool window.
+        let elapsed = DailyBudget.elapsedDaysThroughToday(from: week.weekStart)
+        return DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: periodUsedPercent,
+            elapsedDaysInPeriod: elapsed
+        )
     }
 
     private var footerCaption: String? {
@@ -82,15 +88,15 @@ struct DailyUsageChartView: View {
         if pace.periodConsumed <= 0.001 {
             if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
                 return String(
-                    format: "No usage yet. Up to %.1f%% available today from unused earlier days.",
+                    format: "Up to %.1f%% available today from unused earlier days.",
                     pace.headroomToday
                 )
             }
-            return String(format: "No usage yet. Budget is %.1f%% per day.", pace.dailyBudget)
+            return nil
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "Above even pace. Used %.0f%% with only %.1f%% available through today.",
+                format: "Used %.0f%% with only %.1f%% available through today.",
                 pace.periodConsumed,
                 pace.earnedThroughToday
             )
@@ -101,7 +107,7 @@ struct DailyUsageChartView: View {
                 pace.headroomToday
             )
         }
-        return nil
+        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
     }
 
     private func dayColumn(_ day: DailyUsageDay) -> some View {
