@@ -72,6 +72,16 @@ final class DailyQuotaDeltaStore: ObservableObject {
         persist()
     }
 
+    /// Drops all accumulated day totals because the tracked quota window rolled
+    /// over (e.g. a weekly pool reset), while keeping the utilization baseline.
+    /// Keeping the baseline routes the next recorded sample through the usual
+    /// drop-as-reset path, so whatever accrued in the fresh window before the
+    /// next poll is credited to its day instead of lost.
+    func beginNewWindow() {
+        defer { persist() }
+        spentByDay = [:]
+    }
+
     private static func prune(_ days: inout [Date: Double]) {
         let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Calendar.current.startOfDay(for: Date())) ?? .distantPast
         days = days.filter { $0.key >= cutoff }

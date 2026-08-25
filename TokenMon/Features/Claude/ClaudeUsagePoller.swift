@@ -8,8 +8,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
-    /// Daily bars for the current weekly window (Saturday → Friday): % of the
-    /// weekly pool burned per calendar day.
+    /// Daily bars for the current weekly window, anchored to the pool's actual
+    /// `resets_at`: % of the weekly pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
     @Published var menuIsOpen = false
 
@@ -18,6 +18,11 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
     private let logger = Logger(category: "Claude")
+
+    /// Last observed `seven_day.resets_at`; tracks weekly-pool rollovers so the
+    /// day-delta history can be cleared when a new period begins, and anchors
+    /// the chart if a later payload omits the reset time.
+    private var weeklyResetsAt: Date?
 
     private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
@@ -42,6 +47,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     func clearSnapshot() {
         snapshot = nil
         dailyBudgetDays = nil
+        weeklyResetsAt = nil
         lastError = nil
     }
 
@@ -77,9 +83,14 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")
             }
             if let weeklyPercent = response.sevenDay?.usedPercent {
+                noteWeeklyResetAdvance(response.sevenDay?.resetsAt)
                 daily.record(windowUsedPercent: weeklyPercent, at: fetchedAt)
             }
-            dailyBudgetDays = Self.buildDailyBudgetDays(spentByDay: daily.spentByDay, now: fetchedAt)
+            dailyBudgetDays = Self.buildDailyBudgetDays(
+                spentByDay: daily.spentByDay,
+                resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
+                now: fetchedAt
+            )
         } catch let error as ClaudeUsageError {
             let usageError = error.usageError
             switch usageError {
@@ -104,17 +115,48 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
     }
 
-    /// Daily bars for the current weekly window: always 7 bars anchored at
-    /// Saturday (the weekly pool's reset day); days after today stay empty and
-    /// render dimmed. The weekly window's 100% pool is split evenly across its
+    /// Tracks the latest observed `seven_day.resets_at` so it can anchor the
+    /// chart if a later payload omits the reset time.
+    ///
+    /// Note: this deliberately does NOT wipe accumulated day deltas when
+    /// `resets_at` moves forward. Claude's weekly pool is a rolling window whose
+    /// reset time advances with usage, so a forward move is not necessarily a
+    /// fresh period — clearing on it erased real history. Old-period days simply
+    /// fall outside the anchored window and are hidden; a true reset still gets
+    /// captured by the drop-as-reset credit in `DailyQuotaDeltaStore`.
+    private func noteWeeklyResetAdvance(_ resetsAt: Date?) {
+        guard let resetsAt else { return }
+        weeklyResetsAt = resetsAt
+    }
+
+    /// Daily bars for the current weekly window, anchored to the pool's actual
+    /// reset time: while the period runs, the first bar is the day it began
+    /// (the reset minus seven days) and the last bar is the day before the
+    /// reset. Falls back to a rolling 7-day window while no reset time has
+    /// been observed. The weekly window's 100% pool is split evenly across its
     /// 7 days, so each day's budget is 1/7th of it.
-    static func buildDailyBudgetDays(spentByDay: [Date: Double], now: Date = Date()) -> [DailyBudgetDay] {
-        DailyBudget.buildWeeklyWindowDays(
+    static func buildDailyBudgetDays(
+        spentByDay: [Date: Double],
+        resetsAt: Date?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay] {
+        guard let resetsAt else {
+            return DailyBudget.buildRolling7Days(
+                limitUSD: 100,
+                daysInPeriod: 7,
+                spentByDay: spentByDay,
+                now: now,
+                calendar: calendar
+            )
+        }
+        return DailyBudget.buildWeeklyWindowDays(
             limitUSD: 100,
             daysInPeriod: 7,
-            weekStartWeekday: 7,
+            resetsAt: resetsAt,
             spentByDay: spentByDay,
-            now: now
+            now: now,
+            calendar: calendar
         )
     }
 }

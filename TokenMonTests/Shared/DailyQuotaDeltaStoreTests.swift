@@ -82,6 +82,26 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[today] ?? 0, 11, accuracy: 0.001)
     }
 
+    func testBeginNewWindowClearsDaysAndNextSampleIsCreditedAsReset() {
+        // A quota-window rollover drops finished-period day totals while the
+        // baseline survives, so the first sample of the fresh window is
+        // credited whole via the drop-as-reset path instead of being lost.
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        store.record(windowUsedPercent: 40, at: date(dayOffset: 0, hour: 9))
+        store.record(windowUsedPercent: 60, at: date(dayOffset: 0, hour: 10))
+        store.beginNewWindow()
+        XCTAssertTrue(store.spentByDay.isEmpty)
+
+        // New period already burned 25% by the next poll.
+        store.record(windowUsedPercent: 25, at: date(dayOffset: 0, hour: 11))
+
+        let today = Calendar.current.startOfDay(for: date(dayOffset: 0, hour: 0))
+        XCTAssertEqual(store.spentByDay.count, 1)
+        XCTAssertEqual(store.spentByDay[today] ?? 0, 25, accuracy: 0.001)
+    }
+
     func testReloadRestoresPersistedDaysAndBaseline() {
         let (store, dir) = makeStore()
         store.record(windowUsedPercent: 10, at: date(dayOffset: 0, hour: 9))

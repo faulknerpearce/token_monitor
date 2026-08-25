@@ -35,7 +35,13 @@ struct OpenCodePanelView: View {
 
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
                     PanelCard {
-                        DailyBudgetBarsView(days: days, accent: ModelPalette.purple.color)
+                        DailyBudgetBarsView(
+                            days: days,
+                            accent: ModelPalette.purple.color,
+                            allowanceNoun: "monthly",
+                            infoText: "Go-only share of monthly quota per day. "
+                                + "Last 7 days shown."
+                        )
                     }
                 }
 
@@ -143,15 +149,7 @@ struct OpenCodeModelsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("Top models")
-                    .font(PanelTypography.bodySemibold)
-                    .foregroundStyle(.primary)
-                Text("by spend")
-                    .font(PanelTypography.body)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-            }
+            PanelSectionHeader(title: "Top Models by Spend")
 
             ForEach(Array(visible.enumerated()), id: \.element.id) { index, model in
                 OpenCodeModelWeekRow(model: model)
@@ -280,6 +278,9 @@ private struct ModelCompanyLogo: View {
                     Image(asset, bundle: nil)
                         .resizable()
                         .scaledToFit()
+                        // Template logos (OpenAI, Anthropic) must tint dark so they
+                        // stay visible on the white backing in dark mode.
+                        .foregroundStyle(Color.black)
                         .padding(company == .deepseek ? 5 : 4)
                         .frame(width: 28, height: 28, alignment: .center)
                 }

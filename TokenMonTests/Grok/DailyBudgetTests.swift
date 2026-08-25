@@ -109,75 +109,68 @@ final class DailyBudgetTests: XCTestCase {
 
     // MARK: buildWeeklyWindowDays
 
-    /// August 2026: Aug 1/8/15/22/29 are Saturdays.
-    func testWeeklyWindowAnchorsAtSaturdayMidWeek() {
-        // Wednesday → first bar is the prior Saturday; full 7-bar Sat–Fri week.
-        let wednesday = date(2026, 8, 19)
-        let spent: [Date: Double] = [calendar.startOfDay(for: date(2026, 8, 15)): 3]
+    /// August 2026: Aug 27 is a Thursday. The window anchors to the reset
+    /// instant itself — not a hardcoded weekday.
+    func testWeeklyWindowAnchorsToResetMidPeriod() {
+        // Running period that resets Thu Aug 27 11:00 → bars run Thu Aug 20…Wed Aug 26.
+        let tuesday = date(2026, 8, 25, hour: 15)
+        let reset = date(2026, 8, 27, hour: 11)
+        let spent: [Date: Double] = [calendar.startOfDay(for: date(2026, 8, 22)): 3]
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 70,
             daysInPeriod: 7,
-            weekStartWeekday: 7,
+            resetsAt: reset,
             spentByDay: spent,
-            now: wednesday,
+            now: tuesday,
             calendar: calendar
         )
         XCTAssertEqual(days.count, 7)
-        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: date(2026, 8, 15)), true)
-        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: date(2026, 8, 21)), true)
-        XCTAssertEqual(days[0].spentUSD, 3)
-        XCTAssertEqual(days[1].spentUSD, 0)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 20)))
+        XCTAssertTrue(calendar.isDate(days[3].date, inSameDayAs: date(2026, 8, 23)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 26)))
+        XCTAssertEqual(days[2].spentUSD, 3)
+        XCTAssertEqual(days[3].spentUSD, 0)
         // Days after today are present but empty (chart dims them as future).
         XCTAssertEqual(days[5].spentUSD, 0)
-        XCTAssertEqual(days[6].spentUSD, 0)
         XCTAssertEqual(days[0].budgetUSD, 10, accuracy: 1e-9)
     }
 
-    func testWeeklyWindowOnResetDayStartsToday() {
-        // Fresh window on Saturday: 7 bars starting today, rest empty.
-        let saturday = date(2026, 8, 22)
+    func testWeeklyWindowBeforeResetInstantKeepsRunningPeriod() {
+        // Reset lands at 11:00 on Aug 27; at 09:00 the old period is still
+        // running, so the window must not roll yet even though it's "reset day".
+        let beforeReset = date(2026, 8, 27, hour: 9)
+        let reset = date(2026, 8, 27, hour: 11)
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 70,
             daysInPeriod: 7,
-            weekStartWeekday: 7,
+            resetsAt: reset,
             spentByDay: [:],
-            now: saturday,
+            now: beforeReset,
             calendar: calendar
         )
-        XCTAssertEqual(days.count, 7)
-        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: saturday), true)
-        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: date(2026, 8, 28)), true)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 20)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 26)))
     }
 
-    func testWeeklyWindowSundayKeepsSaturdayFirst() {
-        let sunday = date(2026, 8, 23)
+    func testWeeklyWindowRollsForwardAtResetInstant() {
+        // At/after the reset instant the whole window rolls to the new period
+        // starting today — never two partial periods in one chart.
+        let atReset = date(2026, 8, 27, hour: 11)
+        let staleSpent: [Date: Double] = [calendar.startOfDay(for: date(2026, 8, 21)): 40]
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 70,
             daysInPeriod: 7,
-            weekStartWeekday: 7,
-            spentByDay: [:],
-            now: sunday,
+            resetsAt: atReset,
+            spentByDay: staleSpent,
+            now: atReset,
             calendar: calendar
         )
         XCTAssertEqual(days.count, 7)
-        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 22)))
-        XCTAssertTrue(calendar.isDate(days[1].date, inSameDayAs: sunday))
-        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 28)))
-    }
-
-    func testWeeklyWindowFullWeekEndsFriday() {
-        // Friday closes the window: all 7 bars, Saturday first.
-        let friday = date(2026, 8, 28)
-        let days = DailyBudget.buildWeeklyWindowDays(
-            limitUSD: 70,
-            daysInPeriod: 7,
-            weekStartWeekday: 7,
-            spentByDay: [:],
-            now: friday,
-            calendar: calendar
-        )
-        XCTAssertEqual(days.count, 7)
-        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: date(2026, 8, 22)), true)
-        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: friday), true)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 27)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 9, 2)))
+        // The finished period's day totals no longer appear.
+        for day in days where !calendar.isDate(day.date, inSameDayAs: date(2026, 8, 27)) {
+            XCTAssertEqual(day.spentUSD, 0)
+        }
     }
 }
