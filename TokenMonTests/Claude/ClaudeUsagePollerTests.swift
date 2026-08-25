@@ -32,16 +32,15 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertEqual(days[0].budgetUSD, 100.0 / 7, accuracy: 1e-9)
     }
 
-    func testBuildDailyBudgetDaysFallsBackToRollingWeekWithoutResetTime() {
-        let now = date(2026, 8, 25)
+    /// No provider reset observed → no bars at all. A rolling 7-day window is
+    /// never substituted for the real weekly period.
+    func testBuildDailyBudgetDaysEmptyWithoutResetTime() {
         let days = ClaudeUsagePoller.buildDailyBudgetDays(
             spentByDay: [:],
             resetsAt: nil,
-            now: now,
+            now: date(2026, 8, 25),
             calendar: calendar
         )
-        XCTAssertEqual(days.count, 7)
-        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 19)))
-        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: now))
+        XCTAssertTrue(days.isEmpty)
     }
 }

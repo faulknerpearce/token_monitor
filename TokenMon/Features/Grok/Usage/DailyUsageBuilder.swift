@@ -53,6 +53,9 @@ enum DailyUsageBuilder {
         return min(percent / dailyCapPercent, 1.0)
     }
 
+    /// Billing-period week for the SuperGrok pool. Returns nil when no
+    /// provider-supplied `resetsAt` exists — a calendar Mon–Sun week is never
+    /// invented as a substitute.
     static func week(
         history: [WeeklyUsageSnapshot],
         current: WeeklyUsageSnapshot?,
@@ -61,17 +64,19 @@ enum DailyUsageBuilder {
         resetsAt: Date? = nil,
         calendar: Calendar = .current,
         now: Date = Date()
-    ) -> DailyUsageWeek {
-        var cal = calendar
-        cal.firstWeekday = 2
+    ) -> DailyUsageWeek? {
+        let cal = calendar
 
         let effectiveResetsAt = resetsAt ?? current?.resetsAt
-        let (weekStart, weekEnd) = billingPeriodWeekBounds(
-            resetsAt: effectiveResetsAt,
-            weekOffset: weekOffset,
-            calendar: cal,
-            now: now
-        )
+        guard
+            let effectiveResetsAt,
+            let (weekStart, weekEnd) = billingPeriodWeekBounds(
+                resetsAt: effectiveResetsAt,
+                weekOffset: weekOffset,
+                calendar: cal,
+                now: now
+            )
+        else { return nil }
         let dayCount = max(
             1,
             (cal.dateComponents([.day], from: weekStart, to: weekEnd).day ?? 6) + 1
@@ -301,12 +306,21 @@ enum DailyUsageBuilder {
         // Anchor a synthetic reset so the preview is always a Thu→Wed period.
         let resetAt = ISO8601DateFormatter.parseFlexible("2026-07-16T20:25:00Z")
             ?? now.addingTimeInterval(3 * 24 * 3600)
-        let (weekStart, weekEnd) = billingPeriodWeekBounds(
+        guard let (weekStart, weekEnd) = billingPeriodWeekBounds(
             resetsAt: resetAt,
             weekOffset: 0,
             calendar: cal,
             now: resetAt.addingTimeInterval(-2 * 24 * 3600)
-        )
+        ) else {
+            return finalize(
+                weekStart: now,
+                weekEnd: now,
+                days: [],
+                isEstimated: true,
+                resetsAt: resetAt,
+                calendar: cal
+            )
+        }
 
         let pattern: [(Double, Double, Double)] = [
             (5, 1, 0),   // period start (e.g. Thu)
@@ -389,37 +403,29 @@ enum DailyUsageBuilder {
     /// - Once the API advances `resetsAt` by a week, the same formula
     ///   (`startOfDay(resetsAt) - 7` … `+ 6`) yields the new period.
     ///
-    /// A single bar never mixes two billing periods.
+    /// Returns nil when `resetsAt` is unknown — never falls back to a calendar week.
     static func billingPeriodWeekBounds(
         resetsAt: Date?,
         weekOffset: Int,
         calendar: Calendar,
         now: Date
-    ) -> (start: Date, end: Date) {
-        var cal = calendar
+    ) -> (start: Date, end: Date)? {
+        let cal = calendar
 
-        if let resetsAt {
-            let resetDay = cal.startOfDay(for: resetsAt)
-            // Active period start for the current snapshot of `resetsAt`:
-            // • Still in the period (now < resetsAt): started 7 days before that reset day.
-            // • Past the reset instant (now >= resetsAt) and API has not moved `resetsAt` yet:
-            //   roll the chart to the new week starting on `resetDay` (no second Thursday).
-            // • API already advanced `resetsAt`: now < new resetsAt again → first branch with
-            //   resetDay = next week, so start = that day − 7 = current period’s Thursday.
-            let baseStart: Date
-            if now >= resetsAt {
-                baseStart = resetDay
-            } else {
-                baseStart = cal.date(byAdding: .day, value: -7, to: resetDay) ?? resetDay
-            }
-            let shiftedStart = cal.date(byAdding: .day, value: weekOffset * 7, to: baseStart) ?? baseStart
-            let shiftedEnd = cal.date(byAdding: .day, value: 6, to: shiftedStart) ?? shiftedStart
-            return (shiftedStart, shiftedEnd)
+        guard let resetsAt else { return nil }
+        let resetDay = cal.startOfDay(for: resetsAt)
+        // Active period start for the current snapshot of `resetsAt`:
+        // • Still in the period (now < resetsAt): started 7 days before that reset day.
+        // • Past the reset instant (now >= resetsAt) and API has not moved `resetsAt` yet:
+        //   roll the chart to the new week starting on `resetDay` (no second Thursday).
+        // • API already advanced `resetsAt`: now < new resetsAt again → first branch with
+        //   resetDay = next week, so start = that day − 7 = current period’s Thursday.
+        let baseStart: Date
+        if now >= resetsAt {
+            baseStart = resetDay
+        } else {
+            baseStart = cal.date(byAdding: .day, value: -7, to: resetDay) ?? resetDay
         }
-
-        // No reset metadata: fall back to Mon→Sun containing `now`.
-        cal.firstWeekday = 2
-        let baseStart = startOfWeek(containing: now, calendar: cal)
         let shiftedStart = cal.date(byAdding: .day, value: weekOffset * 7, to: baseStart) ?? baseStart
         let shiftedEnd = cal.date(byAdding: .day, value: 6, to: shiftedStart) ?? shiftedStart
         return (shiftedStart, shiftedEnd)
@@ -548,13 +554,6 @@ enum DailyUsageBuilder {
             hasDailyData: hasDailyData,
             isEstimated: isEstimated
         )
-    }
-
-    private static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
-        let day = calendar.startOfDay(for: date)
-        let weekday = calendar.component(.weekday, from: day)
-        let daysFromStart = (weekday - calendar.firstWeekday + 7) % 7
-        return calendar.date(byAdding: .day, value: -daysFromStart, to: day) ?? day
     }
 
     /// Absolute product slices — only products with usage above zero.

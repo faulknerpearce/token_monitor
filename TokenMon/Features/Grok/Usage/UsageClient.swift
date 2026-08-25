@@ -424,9 +424,13 @@ enum GRPCWebParser {
             guard field.value >= 1_700_000_000, field.value <= 2_100_000_000 else { return nil }
             return (field.path, Date(timeIntervalSince1970: TimeInterval(field.value)))
         }
+        // Canonical reset field [1,5,1] is kept even when already past — a lagging
+        // payload must not lose the period anchor. `billingPeriodWeekBounds` rolls
+        // the window when now >= resetsAt. Non-canonical candidates stay future-only
+        // so unrelated old timestamps never invent an anchor.
+        let canonical = resetCandidates.filter { $0.path == [1, 5, 1] }.map(\.date).min()
         let future = resetCandidates.filter { $0.date > now }
-        let reset = future.filter { $0.path == [1, 5, 1] }.map(\.date).min()
-            ?? future.map(\.date).min()
+        let reset = canonical ?? future.map(\.date).min()
 
         let hasPeriod = varints.contains {
             $0.path.starts(with: [1, 5]) || ($0.path == [1, 8, 1] && ($0.value == 1 || $0.value == 2))

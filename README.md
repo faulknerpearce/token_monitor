@@ -4,27 +4,43 @@
   <img src="Docs/tokenmon-logo.png" alt="TokenMon" width="280">
 </p>
 
-A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **OpenCode**, **Cursor**,  **Claude**, **ChatGPT** and **OpenRouter** — in real time.
+A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **OpenCode**, **Cursor**, **Claude**, **ChatGPT** and **OpenRouter** — in real time.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/faulknerpearce/token_monitor)
 [![Swift](https://img.shields.io/badge/Swift-5.10-orange)](https://www.swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml)
 
-> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by xAI. It uses authenticated grok.com surfaces that may change without notice.
+> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (xAI, Cursor, OpenCode, Anthropic, OpenAI, or OpenRouter). It uses authenticated provider surfaces that may change without notice.
 
 ## Overview
 
-TokenMon sits in the macOS menu bar and shows how much of your SuperGrok weekly limit you have used — overall and by product (Chat, Grok Build, API, and others when present) — alongside OpenCode and Cursor usage. Sign in once per provider; the app polls authenticated endpoints and keeps a local history for the daily chart.
+TokenMon sits in the macOS menu bar and shows how much of your allowance you have used on each connected AI provider — overall and, where the provider exposes it, broken down by product or time window. Switch between providers from one dropdown, or use the **Overview** tab to see every connected provider side by side. Sign in once per provider; the app polls authenticated endpoints and keeps a local history for the daily chart.
+
+Adding a provider is a registry entry away: `ProviderRegistry` wires each `MonitorProvider` to its poller, and every provider implements the same auth / polling / snapshot contract.
+
+## Supported providers
+
+| Provider | Usage pools surfaced | Daily Budget chart |
+|----------|----------------------|--------------------|
+| **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
+| **Claude** | 5-hour session + weekly (7-day) pool | Weekly window |
+| **ChatGPT (Codex)** | 5-hour primary + weekly secondary pool | — |
+| **Cursor** | Monthly billing cycle (usage-summary %) | Last 7 days of the billing cycle |
+| **OpenCode Go** | 5-hour + weekly + monthly limits (console); local estimate when signed out | Weekly + subscription-month sections |
+| **OpenRouter** | Account credits (management key) or per-key spending cap with provider-declared reset window | — |
+
+Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). TokenMon never substitutes a calendar-derived guess when a provider payload is incomplete — the affected section simply waits for the next complete refresh.
 
 ## Features
 
 | Area | Details |
 |------|---------|
-| **Menu bar** | Compact status: Grok icon, used %, optional filling pill, optional Chat / Build / API chips |
-| **Dropdown** | Weekly used / remaining, segmented bar, category breakdown, daily bars, reset time |
-| **Daily use** | Billing-period chart (e.g. Thu→Wed, `100/7` daily cap); whole week flips on reset; day-over-day deltas from local history |
-| **Auth** | WKWebView sign-in; session cookies in Application Support |
+| **Menu bar** | Compact status: provider icon, used %, optional filling usage bar |
+| **Dropdown** | Per-provider panel: used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
+| **Overview tab** | All connected providers at a glance with hourly multi-provider chart |
+| **Daily Budget** | Per-pool daily charts (weekly windows, subscription months) paced against the provider's own consumed % |
+| **Auth** | WKWebView sign-in per provider; session cookies in Application Support |
 | **Polling** | Faster refresh while the menu is open; backoff on errors; sleep / wake aware |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
 | **Alerts** | Optional threshold notifications |
@@ -35,7 +51,7 @@ TokenMon sits in the macOS menu bar and shows how much of your SuperGrok weekly 
 
 - macOS 14 Sonoma or later
 - [Xcode 15+](https://developer.apple.com/xcode/) (full app; Command Line Tools alone are not enough)
-- A SuperGrok / Grok account
+- A signed-in account for at least one supported provider
 
 ## Getting started
 
@@ -49,12 +65,12 @@ open TokenMon.xcodeproj
 
 Select the **TokenMon** scheme → **My Mac** → Run (⌘R). The app appears in the menu bar (no Dock icon).
 
-### 2. Sign in
+### 2. Sign in to your providers
 
-1. Click the menu bar item → **Sign In…**
-2. Complete login on `accounts.x.ai` / grok.com in the sign-in window
+1. Click the menu bar item and pick a provider from the switcher (or start on **Overview**)
+2. Click **Sign In…** and complete the login on that provider's official sign-in page
 3. If capture does not happen automatically, click **I'm signed in — Capture Session**
-4. Usage appears after the first successful refresh
+4. Usage appears after the first successful refresh — repeat for any other providers you want to track
 
 ## Build from the command line
 
@@ -130,9 +146,12 @@ TokenMon/
     Grok/        Grok auth, usage, history, and alerts
     OpenCode/    OpenCode auth, console/local usage, and panel
     Cursor/      Cursor auth, dashboard usage, and panel
+    Claude/      Claude auth, weekly usage, and panel
+    ChatGPT/     ChatGPT/Codex usage pools and panel
+    OpenRouter/  OpenRouter key/credits usage and panel
     Overview/    Multi-provider rings and hourly chart
-    Provider/    Provider identity, switching, and logos
-    Shared/      Cookie capture, sign-in shell, poll helpers
+    Provider/    Provider identity, registry, switching, and logos
+    Shared/      Cookie capture, sign-in shell, Daily Budget kernel, poll helpers
     MenuBar/     Label renderer, dropdown, daily chart
     Settings/    Preferences, UserDefaults
   Resources/     Info.plist, entitlements, assets
@@ -147,7 +166,7 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 - Session cookies and optional bearer tokens are stored as **user-only** files under Application Support (not Keychain — avoids access-dialog loops on ad-hoc debug builds).
 - The app is **not sandboxed**; the store path is:
   `~/Library/Application Support/TokenMon/` (files `auth_*.dat`, mode `0600`)
-- Network access is limited to authenticated Grok/xAI, OpenCode, and Cursor hosts for usage and auth.
+- Network access is limited to authenticated hosts of the connected providers (grok.com/x.ai, opencode.ai, cursor.com, claude.ai, chatgpt.com, openrouter.ai) for usage and auth.
 - History stays on this Mac (SwiftData). No third-party telemetry.
 
 ## Documentation
@@ -155,7 +174,7 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 | Doc | Contents |
 |-----|----------|
 | [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md) | Module map and data flow |
-| [Docs/AUTH_AND_ENDPOINTS.md](Docs/AUTH_AND_ENDPOINTS.md) | Auth model, endpoints, daily-use limitations |
+| [Docs/AUTH_AND_ENDPOINTS.md](Docs/AUTH_AND_ENDPOINTS.md) | Auth model, endpoints, usage-window limitations |
 | [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md) | Developer ID signing and notarization |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to develop and open PRs |
 | [SECURITY.md](SECURITY.md) | How to report vulnerabilities |
@@ -164,9 +183,11 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 
 For a signed, notarized release build, see [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md) and `Scripts/notarize.sh`.
 
-## Notes on daily use
+## Notes on usage windows
 
-Grok’s billing API exposes **cumulative weekly** usage, not a public per-day series. The daily chart is always **exactly seven days** of the active billing period (e.g. Thu→Wed). When the pool resets, the whole window rolls to the next period — never two Thursdays and never a split bar. Until local day-to-day history exists, bars stay empty. After the app has polled across multiple days, bars use day-over-day deltas within the same billing period. Each bar is scaled to a daily share of the pool (`100 / 7`).
+Each provider defines its own consumption pool: a rolling week anchored to a reset instant (SuperGrok), a weekly window plus 5-hour session (Claude, ChatGPT), a monthly billing cycle (Cursor), stacked 5-hour/weekly/monthly limits (OpenCode Go), or credits and key caps with a declared reset period (OpenRouter). Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
+
+TokenMon never invents a usage period. If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh rather than substituting a calendar-derived guess. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
 
 ## Contributing
 

@@ -346,7 +346,7 @@ final class OpenCodeStatsTests: XCTestCase {
             cal.startOfDay(for: d(2026, 8, 4)): 3.0,
             cal.startOfDay(for: d(2026, 8, 5)): 7.0
         ]
-        let days = OpenCodeLocalStats.monthDailyBudgetDays(
+        let budget = OpenCodeLocalStats.monthDailyBudgetDays(
             limitUSD: 60,
             usedPercent: 30,
             now: now,
@@ -354,7 +354,9 @@ final class OpenCodeStatsTests: XCTestCase {
             dbURL: dbURL,
             calendar: cal
         )
+        let days = try XCTUnwrap(budget?.days)
         XCTAssertEqual(days.count, 7)
+        XCTAssertTrue(cal.isDate(try XCTUnwrap(budget?.periodStart), inSameDayAs: d(2026, 8, 1)))
         // Bars reconcile with the Monthly bar: recent-week total equals usedPercent.
         XCTAssertEqual(days.reduce(0) { $0 + $1.spentUSD }, 30, accuracy: 0.001)
         // Relative distribution preserved: 3 : 7.
@@ -362,6 +364,52 @@ final class OpenCodeStatsTests: XCTestCase {
         let aug5 = days.first { cal.isDate($0.date, inSameDayAs: d(2026, 8, 5)) }
         XCTAssertEqual(aug4?.spentUSD ?? -1, 9, accuracy: 0.001)   // 3/10 * 30
         XCTAssertEqual(aug5?.spentUSD ?? -1, 21, accuracy: 0.001)  // 7/10 * 30
+    }
+
+    /// Console monthly reset wins over the local first-Go-session anniversary:
+    /// signed-in bars must agree with the console Monthly bar's window.
+    func testMonthDailyBudgetDaysPrefersConsoleResetsAtOverLocalAnniversary() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func d(_ y: Int, _ month: Int, _ day: Int) -> Date {
+            cal.date(from: DateComponents(year: y, month: month, day: day))!
+        }
+        // A local Go session would set an Aug-1 anniversary if it were consulted;
+        // console says the subscription month resets Aug 20 instead.
+        insert(timeCreated: d(2026, 8, 1), cost: 0, input: 0, model: modelJSON(provider: "opencode-go", id: "m"))
+        let now = d(2026, 8, 5).addingTimeInterval(12 * 3600)
+        let budget = OpenCodeLocalStats.monthDailyBudgetDays(
+            limitUSD: 60,
+            usedPercent: 30,
+            periodResetsAt: d(2026, 8, 20),
+            now: now,
+            spentByDay: [
+                cal.startOfDay(for: d(2026, 8, 4)): 3.0,
+                cal.startOfDay(for: d(2026, 8, 5)): 7.0
+            ],
+            dbURL: dbURL,
+            calendar: cal
+        )
+        let periodStart = try XCTUnwrap(budget?.periodStart)
+        // Anniversary month would be Aug 1; the console window is Jul 20 – Aug 20.
+        XCTAssertTrue(cal.isDate(periodStart, inSameDayAs: d(2026, 7, 20)))
+    }
+
+    /// Neither console reset nor a resolvable local anniversary → no bars.
+    func testMonthDailyBudgetDaysNilWithoutSignals() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 8, day: 5, hour: 12))!
+        let budget = OpenCodeLocalStats.monthDailyBudgetDays(
+            limitUSD: 60,
+            usedPercent: 30,
+            periodResetsAt: nil,
+            now: now,
+            spentByDay: [:],
+            dbURL: dbURL,
+            calendar: cal
+        )
+        XCTAssertNil(budget)
     }
 
     func testMonthDailySpendsTrackGoOnly() throws {

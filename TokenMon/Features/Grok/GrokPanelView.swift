@@ -65,7 +65,6 @@ struct GrokPanelView: View {
             weekOffset: weekOffset,
             resetsAt: snapshot.resetsAt
         )
-
         VStack(alignment: .leading, spacing: 10) {
             grokTitle
 
@@ -107,14 +106,17 @@ struct GrokPanelView: View {
                 }
             }
 
-            PanelCard {
-                DailyUsageChartView(
-                    week: week,
-                    onPreviousWeek: { weekOffset -= 1 },
-                    onNextWeek: { weekOffset = min(0, weekOffset + 1) },
-                    canGoNext: weekOffset < 0,
-                    periodUsedPercent: weekOffset == 0 ? snapshot.usedPercent : nil
-                )
+            // No provider reset → no billing window exists; refuse to paint one.
+            if let week {
+                PanelCard {
+                    DailyUsageChartView(
+                        week: week,
+                        onPreviousWeek: { weekOffset -= 1 },
+                        onNextWeek: { weekOffset = min(0, weekOffset + 1) },
+                        canGoNext: weekOffset < 0,
+                        periodUsedPercent: weekOffset == 0 ? snapshot.usedPercent : nil
+                    )
+                }
             }
 
             if let error = poller.lastError {

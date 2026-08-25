@@ -133,24 +133,17 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// reset time: while the period runs, the first bar is the day it began
     /// and the last bar is the day before reset — except on reset day itself
     /// before the instant, when the last bar is today so calendar-keyed
-    /// deltas stay visible. Falls back to a rolling 7-day window while no
-    /// reset time has been observed. The weekly window's 100% pool is split
-    /// evenly across its 7 days, so each day's budget is 1/7th of it.
+    /// deltas stay visible. Returns [] when no provider reset has been observed —
+    /// a rolling 7-day window is never substituted for the real period.
+    /// The weekly window's 100% pool is split evenly across its 7 days, so each
+    /// day's budget is 1/7th of it.
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
-        guard let resetsAt else {
-            return DailyBudget.buildRolling7Days(
-                limitUSD: 100,
-                daysInPeriod: 7,
-                spentByDay: spentByDay,
-                now: now,
-                calendar: calendar
-            )
-        }
+        guard let resetsAt else { return [] }
         return DailyBudget.buildWeeklyWindowDays(
             limitUSD: 100,
             daysInPeriod: 7,
