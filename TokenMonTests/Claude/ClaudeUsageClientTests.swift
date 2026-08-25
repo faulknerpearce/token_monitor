@@ -53,42 +53,6 @@ final class ClaudeUsageClientTests: XCTestCase {
         XCTAssertThrowsError(try ClaudeUsageResponse.parse(Data("not json".utf8)))
     }
 
-    func testParsePerModelWindows() throws {
-        let data = Data("""
-        {
-          "five_hour": { "utilization": 33.0, "resets_at": "2026-04-11T07:00:00.528743+00:00" },
-          "seven_day": { "utilization": 13.0, "resets_at": "2026-04-17T00:59:59.951713+00:00" },
-          "seven_day_opus": null,
-          "seven_day_sonnet": { "utilization": 1.0, "resets_at": "2026-04-16T03:00:00.951719+00:00" },
-          "seven_day_haiku": { "utilization": 5.5, "resets_at": "2026-04-16T05:00:00.000000+00:00" }
-        }
-        """.utf8)
-        let response = try ClaudeUsageResponse.parse(data)
-        XCTAssertNil(response.sevenDayOpus)
-        XCTAssertEqual(response.sevenDaySonnet?.usedPercent ?? -1, 1.0, accuracy: 0.001)
-        XCTAssertEqual(response.sevenDayHaiku?.usedPercent ?? -1, 5.5, accuracy: 0.001)
-        XCTAssertEqual(response.perModelWindows.count, 2)
-        XCTAssertEqual(response.perModelWindows[0].label, "Sonnet")
-        XCTAssertEqual(response.perModelWindows[1].label, "Haiku")
-
-        let snap = ClaudeSnapshot(
-            fetchedAt: Date(), fiveHour: response.fiveHour, sevenDay: response.sevenDay,
-            sevenDayOpus: response.sevenDayOpus, sevenDaySonnet: response.sevenDaySonnet,
-            sevenDayHaiku: response.sevenDayHaiku, accountEmail: nil
-        )
-        XCTAssertEqual(snap.perModelWindows.count, 2)
-    }
-
-    func testParsePerModelWindowsAllNull() throws {
-        let data = Data("""
-        { "five_hour": { "utilization": 10, "resets_at": "2026-04-11T07:00:00+00:00" },
-          "seven_day": { "utilization": 20, "resets_at": "2026-04-17T00:00:00+00:00" },
-          "seven_day_opus": null, "seven_day_sonnet": null, "seven_day_haiku": null }
-        """.utf8)
-        let response = try ClaudeUsageResponse.parse(data)
-        XCTAssertTrue(response.perModelWindows.isEmpty)
-    }
-
     func testOrganizationIDFromCookieHeader() {
         let header = "__cf_bm=abc; lastActiveOrg=9d7a1b2c-1234-5678-90ab-cdef12345678; sessionKey=sk-ant-sid01-xyz"
         XCTAssertEqual(

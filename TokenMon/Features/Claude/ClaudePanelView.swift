@@ -39,23 +39,6 @@ struct ClaudePanelView: View {
                     )
                 }
 
-                if !snapshot.perModelWindows.isEmpty {
-                    PanelCard {
-                        // Separate weekly rate-limit buckets (not a split of the
-                        // aggregate Weekly bar above). Null buckets are omitted.
-                        PanelSectionHeader(title: "Model limits")
-                        ForEach(snapshot.perModelWindows, id: \.label) { item in
-                            SlimUsageTrack(
-                                label: item.label,
-                                percent: item.window.usedPercent,
-                                color: ConcentricUsageRingView.claudeColor,
-                                caption: item.window.resetsAt
-                                    .map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
-                            )
-                        }
-                    }
-                }
-
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
                     PanelCard {
                         DailyBudgetBarsView(

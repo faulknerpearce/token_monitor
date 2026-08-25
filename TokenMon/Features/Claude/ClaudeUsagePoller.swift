@@ -57,10 +57,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        let cookieHeader = auth.cookieHeader() ?? ""
-        let oauthToken = ClaudeOAuthTokenProvider.accessToken()
-        let startedWithCookieSession = auth.isSignedIn
-        guard !cookieHeader.isEmpty || !(oauthToken?.isEmpty ?? true) else {
+        guard let cookieHeader = auth.cookieHeader(), !cookieHeader.isEmpty else {
             auth.needsSignIn = true
             if snapshot == nil {
                 lastError = "Sign in to Claude to load usage."
@@ -68,34 +65,19 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
-        let client = ClaudeUsageClient(
-            cookieHeader: cookieHeader,
-            oauthToken: oauthToken
-        )
+        let client = ClaudeUsageClient(cookieHeader: cookieHeader)
         do {
             let (response, fetchedAt) = try await client.fetchUsage()
-            guard !Task.isCancelled else { return }
-            // Drop mid-flight cookie sign-out. OAuth-only users never set
-            // `isSignedIn`, so they must still accept a successful OAuth payload.
-            if startedWithCookieSession && auth.needsSignIn { return }
-            let hasOAuth = !(oauthToken?.isEmpty ?? true)
-            guard auth.isSignedIn || hasOAuth else { return }
+            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,
                 sevenDay: response.sevenDay,
-                sevenDayOpus: response.sevenDayOpus,
-                sevenDaySonnet: response.sevenDaySonnet,
-                sevenDayHaiku: response.sevenDayHaiku,
                 accountEmail: auth.accountEmail
             )
             lastError = nil
             lastRefreshedAt = Date()
-            // Cookie sessions clear needsSignIn; OAuth-only keeps the Sign In
-            // affordance so users can still link the web session for email/org.
-            if auth.isSignedIn {
-                auth.needsSignIn = false
-            }
+            auth.needsSignIn = false
             if let percent = response.fiveHour?.usedPercent {
                 hourly.record(usedPercent: percent, at: fetchedAt)
                 logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")

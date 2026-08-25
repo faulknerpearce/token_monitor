@@ -11,40 +11,19 @@ struct ClaudeUsageWindow: Hashable, Sendable {
     }
 }
 
-/// Parsed `claude.ai/api/organizations/{org}/usage` payload, plus the
-/// OAuth `api.anthropic.com/api/oauth/usage` variant which adds per-model
-/// weekly windows (`seven_day_opus` / `seven_day_sonnet` / `seven_day_haiku`).
+/// Parsed `claude.ai/api/organizations/{org}/usage` payload.
 struct ClaudeUsageResponse: Hashable, Sendable {
     var fiveHour: ClaudeUsageWindow?
     var sevenDay: ClaudeUsageWindow?
-    /// Per-model weekly windows from the OAuth endpoint (`null` when unused).
-    var sevenDayOpus: ClaudeUsageWindow?
-    var sevenDaySonnet: ClaudeUsageWindow?
-    var sevenDayHaiku: ClaudeUsageWindow?
 
-    /// Known per-model weekly rate-limit buckets, in display order
-    /// (Opus → Sonnet → Haiku). These are independent caps from the OAuth
-    /// endpoint — not a composition of `seven_day`. Null / unused omitted.
-    var perModelWindows: [(label: String, window: ClaudeUsageWindow)] {
-        var out: [(String, ClaudeUsageWindow)] = []
-        if let opusWindow = sevenDayOpus { out.append(("Opus", opusWindow)) }
-        if let sonnetWindow = sevenDaySonnet { out.append(("Sonnet", sonnetWindow)) }
-        if let haikuWindow = sevenDayHaiku { out.append(("Haiku", haikuWindow)) }
-        return out
-    }
-
-    /// Parses the raw usage JSON (`five_hour` / `seven_day` windows, plus the
-    /// optional `seven_day_*` per-model windows from the OAuth endpoint).
+    /// Parses the raw usage JSON (`five_hour` / `seven_day` windows).
     static func parse(_ data: Data) throws -> ClaudeUsageResponse {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ClaudeUsageError.badResponse("Unexpected usage payload")
         }
         return ClaudeUsageResponse(
             fiveHour: window(from: root["five_hour"]),
-            sevenDay: window(from: root["seven_day"]),
-            sevenDayOpus: window(from: root["seven_day_opus"]),
-            sevenDaySonnet: window(from: root["seven_day_sonnet"]),
-            sevenDayHaiku: window(from: root["seven_day_haiku"])
+            sevenDay: window(from: root["seven_day"])
         )
     }
 
@@ -62,23 +41,11 @@ struct ClaudeSnapshot: Identifiable, Hashable, Sendable {
     var fetchedAt: Date
     var fiveHour: ClaudeUsageWindow?
     var sevenDay: ClaudeUsageWindow?
-    var sevenDayOpus: ClaudeUsageWindow?
-    var sevenDaySonnet: ClaudeUsageWindow?
-    var sevenDayHaiku: ClaudeUsageWindow?
     var accountEmail: String?
 
     var resetsAt: Date? { fiveHour?.resetsAt ?? sevenDay?.resetsAt }
 
     var headlineUsedPercent: Double {
         (fiveHour ?? sevenDay)?.usedPercent ?? 0
-    }
-
-    /// Per-model rows for the panel, matching `ClaudeUsageResponse.perModelWindows`.
-    var perModelWindows: [(label: String, window: ClaudeUsageWindow)] {
-        var out: [(String, ClaudeUsageWindow)] = []
-        if let opusWindow = sevenDayOpus { out.append(("Opus", opusWindow)) }
-        if let sonnetWindow = sevenDaySonnet { out.append(("Sonnet", sonnetWindow)) }
-        if let haikuWindow = sevenDayHaiku { out.append(("Haiku", haikuWindow)) }
-        return out
     }
 }
