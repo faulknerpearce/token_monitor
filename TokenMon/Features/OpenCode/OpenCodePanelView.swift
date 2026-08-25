@@ -40,7 +40,8 @@ struct OpenCodePanelView: View {
                             accent: ModelPalette.purple.color,
                             allowanceNoun: "monthly",
                             infoText: "Go-only share of monthly quota per day. "
-                                + "Last 7 days shown."
+                                + "Last 7 days shown.",
+                            periodUsedPercent: snapshot.monthlyUsedPercent
                         )
                     }
                 }

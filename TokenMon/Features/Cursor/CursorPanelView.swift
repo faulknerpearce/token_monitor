@@ -10,6 +10,17 @@ struct CursorPanelView: View {
         if auth.needsSignIn && poller.snapshot == nil {
             signedOut
         } else if let snapshot = poller.snapshot {
+            let cursorModelsPercent: Double = {
+                if let total = snapshot.pools.first(where: { $0.kind == .total }) { return total.usedPercent }
+                if let auto = snapshot.pools.first(where: { $0.kind == .auto }) { return auto.usedPercent }
+                return snapshot.usedPercent
+            }()
+            let otherModelsPercent: Double = {
+                if let api = snapshot.pools.first(where: { $0.kind == .api }) { return api.usedPercent }
+                return 0
+            }()
+            let cursorModelsResetsAt = snapshot.pools.first(where: { $0.kind == .total })?.resetsAt ?? snapshot.resetsAt
+            let otherModelsResetsAt = snapshot.pools.first(where: { $0.kind == .api })?.resetsAt ?? snapshot.resetsAt
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     ProviderHeaderLabel(provider: .cursor, title: "Cursor")
@@ -21,17 +32,6 @@ struct CursorPanelView: View {
 
                 PanelCard {
                     PanelSectionHeader(title: "Usage")
-                    let cursorModelsPercent: Double = {
-                        if let total = snapshot.pools.first(where: { $0.kind == .total }) { return total.usedPercent }
-                        if let auto = snapshot.pools.first(where: { $0.kind == .auto }) { return auto.usedPercent }
-                        return snapshot.usedPercent
-                    }()
-                    let otherModelsPercent: Double = {
-                        if let api = snapshot.pools.first(where: { $0.kind == .api }) { return api.usedPercent }
-                        return 0
-                    }()
-                    let cursorModelsResetsAt = snapshot.pools.first(where: { $0.kind == .total })?.resetsAt ?? snapshot.resetsAt
-                    let otherModelsResetsAt = snapshot.pools.first(where: { $0.kind == .api })?.resetsAt ?? snapshot.resetsAt
                     SlimUsageTrack(
                         label: "Cursor Models",
                         percent: cursorModelsPercent,
@@ -52,7 +52,8 @@ struct CursorPanelView: View {
                             days: days,
                             accent: ConcentricUsageRingView.cursorColor,
                             allowanceNoun: "monthly",
-                            infoText: "Share of monthly quota per day. Last 7 days shown."
+                            infoText: "Share of monthly quota per day. Last 7 days shown.",
+                            periodUsedPercent: cursorModelsPercent
                         )
                     }
                 }

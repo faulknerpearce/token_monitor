@@ -46,7 +46,8 @@ struct ClaudePanelView: View {
                             accent: ConcentricUsageRingView.claudeColor,
                             allowanceNoun: "weekly",
                             infoText: "Share of weekly allowance per day "
-                                + "(budget 14.3%/day)."
+                                + "(budget 14.3%/day).",
+                            periodUsedPercent: snapshot.sevenDay?.usedPercent
                         )
                     }
                 }

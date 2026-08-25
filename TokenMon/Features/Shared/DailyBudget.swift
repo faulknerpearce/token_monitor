@@ -195,4 +195,39 @@ enum DailyBudget {
         }
         return days
     }
+
+    /// Even-pace headroom through today vs live period consumption.
+    ///
+    /// Uses `days` only for structure (allotment + which calendar days have
+    /// elapsed). `periodConsumed` is the pulled used % for the pool — not the
+    /// sum of bar spends, which can lag local sampling.
+    struct PaceHeadroom: Hashable, Sendable {
+        var dailyBudget: Double
+        var earnedThroughToday: Double
+        var periodConsumed: Double
+        var headroomToday: Double
+    }
+
+    /// Earned = sum of per-day budgets for bars with `date <= today`.
+    /// Headroom = earned − consumed (how much more can burn today while staying
+    /// under even pace through today). Future bars do not earn.
+    static func paceHeadroom(
+        days: [DailyBudgetDay],
+        periodConsumed: Double,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> PaceHeadroom? {
+        guard let first = days.first, first.budgetUSD > 0 else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let earned = days
+            .filter { calendar.startOfDay(for: $0.date) <= today }
+            .reduce(0.0) { $0 + $1.budgetUSD }
+        let consumed = max(0, periodConsumed)
+        return PaceHeadroom(
+            dailyBudget: first.budgetUSD,
+            earnedThroughToday: earned,
+            periodConsumed: consumed,
+            headroomToday: earned - consumed
+        )
+    }
 }

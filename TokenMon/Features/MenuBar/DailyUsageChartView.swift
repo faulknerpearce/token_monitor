@@ -4,15 +4,41 @@ import SwiftUI
 ///
 /// Each day’s track is an equal share of the weekly pool (`100/7`).
 /// Grey stem is the daily cap; Grok blue is how much of that cap was used.
+/// Footer pacing uses the pulled weekly used % when provided.
 struct DailyUsageChartView: View {
     let week: DailyUsageWeek
     var onPreviousWeek: (() -> Void)?
     var onNextWeek: (() -> Void)?
     var canGoNext: Bool = true
+    /// Live weekly used % for the current period (omit for past weeks).
+    var periodUsedPercent: Double? = nil
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
+    private static let bankEpsilon = 0.05
+
+    private var pace: DailyBudget.PaceHeadroom? {
+        guard let periodUsedPercent else { return nil }
+        let days = week.displayDays.map {
+            DailyBudgetDay(
+                date: $0.dayStart,
+                spentUSD: $0.totalPercent,
+                budgetUSD: DailyUsageBuilder.dailyCapPercent
+            )
+        }
+        return DailyBudget.paceHeadroom(days: days, periodConsumed: periodUsedPercent)
+    }
+
+    private var footerCaption: String? {
+        if let pace, let caption = paceCaption(pace) {
+            return caption
+        }
+        if week.isEstimated || !week.hasDailyData {
+            return "Daily bars only show changes between samples. Week totals are above."
+        }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -44,12 +70,38 @@ struct DailyUsageChartView: View {
             .frame(maxWidth: .infinity)
             .frame(height: trackHeight + 36)
 
-            if week.isEstimated || !week.hasDailyData {
-                Text("Daily bars only show changes between samples. Week-to-date totals are above.")
+            if let footerCaption {
+                Text(footerCaption)
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
+        if pace.periodConsumed <= 0.001 {
+            if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
+                return String(
+                    format: "No usage yet. Up to %.1f%% available today from unused earlier days.",
+                    pace.headroomToday
+                )
+            }
+            return String(format: "No usage yet. Budget is %.1f%% per day.", pace.dailyBudget)
+        }
+        if pace.headroomToday < 0 {
+            return String(
+                format: "Above even pace. Used %.0f%% with only %.1f%% available through today.",
+                pace.periodConsumed,
+                pace.earnedThroughToday
+            )
+        }
+        if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {
+            return String(
+                format: "%.1f%% still available today from unused earlier days.",
+                pace.headroomToday
+            )
+        }
+        return nil
     }
 
     private func dayColumn(_ day: DailyUsageDay) -> some View {
@@ -120,7 +172,7 @@ struct DailyUsageChartView: View {
 
 #if DEBUG
 #Preview {
-    DailyUsageChartView(week: DailyUsageBuilder.preview())
+    DailyUsageChartView(week: DailyUsageBuilder.preview(), periodUsedPercent: 12)
         .padding()
         .frame(width: 340)
 }

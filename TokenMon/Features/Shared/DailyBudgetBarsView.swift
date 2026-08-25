@@ -6,6 +6,9 @@ import SwiftUI
 /// budget — an even share of the allowance (`100% / daysInPeriod`, weekly ≈14.3% or
 /// monthly ≈3.2%). The fill shows how much of that day's allowance was actually used.
 /// Hover the ⓘ icon for what the bars count toward, and hover a bar for its exact %.
+///
+/// Footer pacing uses the pulled period used % when provided — not summed bar
+/// spends — so banked headroom stays accurate when local bars lag.
 struct DailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
@@ -14,10 +17,14 @@ struct DailyBudgetBarsView: View {
     var allowanceNoun: String = "monthly"
     /// Optional longer explanation shown as an info tooltip next to the header.
     var infoText: String?
+    /// Live used % for the same pool the bars pace against (API source of truth).
+    var periodUsedPercent: Double? = nil
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
+    /// Headroom meaningfully above one daily share → show banked caption.
+    private static let bankEpsilon = 0.05
 
     /// Render a day reliably (weekday + day-of-month), cached per calendar.
     private static let formatterCacheLock = NSLock()
@@ -38,6 +45,27 @@ struct DailyBudgetBarsView: View {
     }
 
     private var dailyBudget: Double { days.first?.budgetUSD ?? 0 }
+
+    private var pace: DailyBudget.PaceHeadroom? {
+        guard let periodUsedPercent else { return nil }
+        return DailyBudget.paceHeadroom(days: days, periodConsumed: periodUsedPercent)
+    }
+
+    private var footerCaption: String? {
+        if let pace {
+            return paceCaption(pace)
+        }
+        // Fallback when no live used % was passed.
+        if days.allSatisfy({ $0.spentUSD <= 0.001 }) {
+            return String(format: "No usage yet. Budget is %.1f%% per day.", dailyBudget)
+        }
+        if days.contains(where: {
+            Calendar.current.isDate($0.date, inSameDayAs: Date()) && $0.spentUSD > $0.budgetUSD
+        }) {
+            return "Over today's daily allowance."
+        }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -62,16 +90,38 @@ struct DailyBudgetBarsView: View {
             .frame(maxWidth: .infinity)
             .frame(height: trackHeight + 36)
 
-            if days.allSatisfy({ $0.spentUSD <= 0.001 }) {
-                Text(String(format: "No usage this period yet — daily budget is %.1f%% of your %@ allowance.", dailyBudget, allowanceNoun))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
-            } else if days.contains(where: { Calendar.current.isDate($0.date, inSameDayAs: Date()) && $0.spentUSD > $0.budgetUSD }) {
-                Text("Over daily allowance — pace is above even spend.")
+            if let footerCaption {
+                Text(footerCaption)
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
+        if pace.periodConsumed <= 0.001 {
+            if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
+                return String(
+                    format: "No usage yet. Up to %.1f%% available today from unused earlier days.",
+                    pace.headroomToday
+                )
+            }
+            return String(format: "No usage yet. Budget is %.1f%% per day.", pace.dailyBudget)
+        }
+        if pace.headroomToday < 0 {
+            return String(
+                format: "Above even pace. Used %.0f%% with only %.1f%% available through today.",
+                pace.periodConsumed,
+                pace.earnedThroughToday
+            )
+        }
+        if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {
+            return String(
+                format: "%.1f%% still available today from unused earlier days.",
+                pace.headroomToday
+            )
+        }
+        return nil
     }
 
     private func dayColumn(_ day: DailyBudgetDay) -> some View {
@@ -155,7 +205,7 @@ struct DailyBudgetBarsView: View {
         let spent: Double = [1.2, 0, 4.1, 2.8, 0.5, 3.6, 1.0][offset]
         return DailyBudgetDay(date: date, spentUSD: spent, budgetUSD: 3.3)
     }
-    return DailyBudgetBarsView(days: days, accent: ModelPalette.purple.color)
+    return DailyBudgetBarsView(days: days, accent: ModelPalette.purple.color, periodUsedPercent: 12)
         .padding()
         .frame(width: 360)
 }
