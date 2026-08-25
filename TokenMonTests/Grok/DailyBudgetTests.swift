@@ -137,19 +137,24 @@ final class DailyBudgetTests: XCTestCase {
 
     func testWeeklyWindowBeforeResetInstantKeepsRunningPeriod() {
         // Reset lands at 11:00 on Aug 27; at 09:00 the old period is still
-        // running, so the window must not roll yet even though it's "reset day".
+        // running, so the window must not roll yet — but it must include today
+        // so calendar-keyed same-day usage is not hidden until the instant.
         let beforeReset = date(2026, 8, 27, hour: 9)
         let reset = date(2026, 8, 27, hour: 11)
+        let todayKey = calendar.startOfDay(for: beforeReset)
+        let spent: [Date: Double] = [todayKey: 12]
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 70,
             daysInPeriod: 7,
             resetsAt: reset,
-            spentByDay: [:],
+            spentByDay: spent,
             now: beforeReset,
             calendar: calendar
         )
-        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 20)))
-        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 26)))
+        XCTAssertEqual(days.count, 7)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 21)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 27)))
+        XCTAssertEqual(days[6].spentUSD, 12)
     }
 
     func testWeeklyWindowRollsForwardAtResetInstant() {

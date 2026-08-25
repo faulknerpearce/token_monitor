@@ -131,10 +131,11 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
 
     /// Daily bars for the current weekly window, anchored to the pool's actual
     /// reset time: while the period runs, the first bar is the day it began
-    /// (the reset minus seven days) and the last bar is the day before the
-    /// reset. Falls back to a rolling 7-day window while no reset time has
-    /// been observed. The weekly window's 100% pool is split evenly across its
-    /// 7 days, so each day's budget is 1/7th of it.
+    /// and the last bar is the day before reset — except on reset day itself
+    /// before the instant, when the last bar is today so calendar-keyed
+    /// deltas stay visible. Falls back to a rolling 7-day window while no
+    /// reset time has been observed. The weekly window's 100% pool is split
+    /// evenly across its 7 days, so each day's budget is 1/7th of it.
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,

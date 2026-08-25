@@ -146,10 +146,12 @@ enum DailyBudget {
     }
 
     /// Bars for the full weekly window anchored at the pool's actual reset
-    /// instant rather than a fixed weekday. The window is the 7 days ending at
-    /// the next reset after `now` (advancing `resetsAt` by whole periods when
-    /// the payload is stale), so it always contains today. Never mixes two
-    /// partial periods. Days after today carry 0 and are dimmed.
+    /// instant rather than a fixed weekday. The window is the 7 days ending on
+    /// the last day of the running period (advancing `resetsAt` by whole periods
+    /// when the payload is stale), so it always contains today. On reset day
+    /// before the instant that last day is today — calendar-keyed deltas stay
+    /// visible. After the instant the window rolls to the new period. Never
+    /// mixes two partial periods. Days after today carry 0 and are dimmed.
     static func buildWeeklyWindowDays(
         limitUSD: Double,
         daysInPeriod: Int,
@@ -171,9 +173,19 @@ enum DailyBudget {
             nextReset = advanced
             guardIter += 1
         }
+        let resetDay = calendar.startOfDay(for: nextReset)
+        // Normally the running period ends the calendar day before reset. On
+        // reset day itself (before the instant) end on today so same-day
+        // usage recorded under today's key is still painted.
+        let weekEnd: Date
+        if calendar.isDate(today, inSameDayAs: resetDay) {
+            weekEnd = today
+        } else {
+            weekEnd = calendar.date(byAdding: .day, value: -1, to: resetDay) ?? today
+        }
         let weekStart = calendar.date(
-            byAdding: .day, value: -daysInPeriod,
-            to: calendar.startOfDay(for: nextReset)
+            byAdding: .day, value: -(max(1, daysInPeriod) - 1),
+            to: weekEnd
         ) ?? today
         var days: [DailyBudgetDay] = []
         for offset in 0..<max(1, daysInPeriod) {
