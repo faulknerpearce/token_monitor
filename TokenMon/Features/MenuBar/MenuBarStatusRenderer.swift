@@ -422,8 +422,12 @@ enum MenuBarStatusRenderer {
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
-        guard usedPercent > 0 else { return }
+        // Always draw a fill once a percent is present, even when it rounds to
+        // 0 (e.g. right after a weekly reset). Dropping the fill at 0 made the
+        // bar vanish behind a near-invisible track; the track stays on screen
+        // so the bar slot is always visible as a graph.
         let fillWidth = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
+        guard fillWidth > 0 else { return }
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
         color.setFill()
         let clip = NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2)
@@ -434,7 +438,9 @@ enum MenuBarStatusRenderer {
     }
 
     private static func drawBarTrack(in barRect: NSRect) {
-        chromeColor.withAlphaComponent(0.14).setFill()
+        // Opaque enough to read as a visible empty graph slot against a
+        // translucent menu bar, unlike the previous 0.14 alpha which washed out.
+        chromeColor.withAlphaComponent(0.22).setFill()
         NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2).fill()
     }
 

@@ -56,6 +56,18 @@ final class MenuBarStatusRendererTests: XCTestCase {
         XCTAssertEqual(empty.height, withData.height)
     }
 
+    func testCompositeModeRendersVisibleTrackAtZeroUsage() {
+        // Regression: the bar graph used to vanish when usage hit 0 (e.g. right
+        // after a weekly reset) because the fill was dropped and the track was
+        // painted at 0.14 alpha. The track must stay visible so the bar slot is
+        // always drawn, even at an empty (0%) fill.
+        let zero = render(provider: .grok, showSelectedProvider: false)
+        let full = render(provider: .grok, showSelectedProvider: false)
+        // The empty track should cover the same area as the filled bar.
+        XCTAssertEqual(zero.size.width, full.size.width)
+        XCTAssertGreaterThan(hasNonTransparentPixels(zero), 0)
+    }
+
     func testCompositeModeIgnoresSelectedProvider() {
         let grok = render(provider: .grok, showSelectedProvider: false).size
         let openRouter = render(provider: .openrouter, showSelectedProvider: false).size
@@ -70,6 +82,17 @@ final class MenuBarStatusRendererTests: XCTestCase {
             width = size.width
             height = size.height
         }
+    }
+
+    private func hasNonTransparentPixels(_ image: NSImage) -> Int {
+        guard let rep = NSBitmapImageRep(data: image.tiffRepresentation ?? Data()) else { return 0 }
+        var count = 0
+        for x in 0..<rep.pixelsWide {
+            for y in 0..<rep.pixelsHigh where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0 {
+                count += 1
+            }
+        }
+        return count
     }
 
     private func makeClaudeSnapshot() -> ClaudeSnapshot {
