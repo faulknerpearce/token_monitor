@@ -16,6 +16,7 @@ struct MenuBarLabelView: View {
     let showOpenCodeBar: Bool
     let showCursorBar: Bool
     let showClaudeBar: Bool
+    let providerOrder: [MonitorProvider]
     let visibleProductIDs: Set<String>
 
     @Environment(\.colorScheme) private var colorScheme
@@ -36,6 +37,7 @@ struct MenuBarLabelView: View {
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
+            providerOrder: providerOrder,
             visibleProductIDs: visibleProductIDs
         )
         Image(nsImage: image)

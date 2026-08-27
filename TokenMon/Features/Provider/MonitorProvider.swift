@@ -11,8 +11,51 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    /// Concrete usage providers in dropdown / menu-bar order (Overview excluded).
-    static var usageProviders: [MonitorProvider] { [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter] }
+    /// Concrete usage providers in default dropdown / menu-bar order (Overview excluded).
+    static var usageProviders: [MonitorProvider] {
+        [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter]
+    }
+
+    /// Drops Overview and unknowns, de-duplicates, then appends any usage
+    /// providers the saved list does not yet know about so new providers appear
+    /// without wiping a user's order.
+    static func normalizedOrder(_ raw: [MonitorProvider]) -> [MonitorProvider] {
+        var seen = Set<MonitorProvider>()
+        var result: [MonitorProvider] = []
+        result.reserveCapacity(usageProviders.count)
+        for provider in raw {
+            guard provider != .overview, !seen.contains(provider),
+                  usageProviders.contains(provider)
+            else { continue }
+            seen.insert(provider)
+            result.append(provider)
+        }
+        for provider in usageProviders where !seen.contains(provider) {
+            result.append(provider)
+        }
+        return result
+    }
+
+    /// Reorders the visible subsequence in `order` while leaving hidden
+    /// providers in their existing slots.
+    static func movingVisible(
+        order: [MonitorProvider],
+        visible: [MonitorProvider],
+        from source: IndexSet,
+        to destination: Int
+    ) -> [MonitorProvider] {
+        let normalized = normalizedOrder(order)
+        var moved = visible
+        moved.move(fromOffsets: source, toOffset: destination)
+        var iterator = moved.makeIterator()
+        let visibleSet = Set(visible)
+        return normalized.map { provider in
+            guard visibleSet.contains(provider), let next = iterator.next() else {
+                return provider
+            }
+            return next
+        }
+    }
 
     var displayName: String {
         switch self {

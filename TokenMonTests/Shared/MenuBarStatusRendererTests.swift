@@ -15,7 +15,8 @@ final class MenuBarStatusRendererTests: XCTestCase {
         claude: ClaudeSnapshot? = nil,
         chatGPT: ChatGPTSnapshot? = nil,
         openRouter: OpenRouterSnapshot? = nil,
-        isGrokSignedIn: Bool = false
+        isGrokSignedIn: Bool = false,
+        providerOrder: [MonitorProvider] = MonitorProvider.usageProviders
     ) -> NSImage {
         MenuBarStatusRenderer.image(
             selectedProvider: provider,
@@ -32,6 +33,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
             showOpenCodeBar: true,
             showCursorBar: true,
             showClaudeBar: true,
+            providerOrder: providerOrder,
             visibleProductIDs: Set(ProductCatalog.knownIDs)
         )
     }

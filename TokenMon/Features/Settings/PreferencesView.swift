@@ -24,27 +24,54 @@ struct PreferencesView: View {
     let openChatGPTSignIn: () -> Void
     @State private var exportError: String?
     @State private var openRouterKeyDraft = ""
+    @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
-        Form {
+        List {
             Section {
-                ForEach(MonitorProvider.usageProviders, id: \.id) { provider in
-                    Toggle(provider.displayName, isOn: Binding(
-                        get: { settings.enabledProviderIDs.contains(provider) },
-                        set: { on in
-                            if on {
-                                settings.enabledProviderIDs.insert(provider)
-                            } else {
-                                settings.enabledProviderIDs.remove(provider)
+                ForEach(settings.orderedUsageProviders) { provider in
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 22)
+                            .contentShape(Rectangle())
+                            .onDrag {
+                                draggingProvider = provider
+                                return NSItemProvider(object: NSString(string: provider.rawValue))
                             }
-                        }
-                    ))
-                    .disabled(settings.enabledProviderIDs == [provider])
+                        Image(nsImage: ProviderLogo.image(for: provider))
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                        Toggle(provider.displayName, isOn: Binding(
+                            get: { settings.enabledProviderIDs.contains(provider) },
+                            set: { on in
+                                if on {
+                                    settings.enabledProviderIDs.insert(provider)
+                                } else {
+                                    settings.enabledProviderIDs.remove(provider)
+                                }
+                            }
+                        ))
+                        .disabled(settings.enabledProviderIDs == [provider])
+                    }
+                    .contentShape(Rectangle())
+                    .onDrop(
+                        of: [.utf8PlainText, .text, .plainText],
+                        delegate: ProviderReorderDropDelegate(
+                            target: provider,
+                            dragging: $draggingProvider,
+                            move: settings.moveProvider
+                        )
+                    )
                 }
+                .onMove(perform: settings.moveOrderedProviders)
             } header: {
                 Text("Providers")
             } footer: {
-                Text("Choose which provider tabs appear in the menu dropdown.")
+                Text("Toggle which tabs appear in the menu dropdown. Drag a row (or its handle) to set tab, Overview, and menu-bar graph order.")
             }
 
             Section {
@@ -357,5 +384,31 @@ struct PreferencesView: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+}
+
+/// Form rows ignore `onMove` on macOS; this delegate reorders while dragging
+/// a handle over another provider row.
+private struct ProviderReorderDropDelegate: DropDelegate {
+    let target: MonitorProvider
+    @Binding var dragging: MonitorProvider?
+    let move: (MonitorProvider, MonitorProvider) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { true }
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target else { return }
+        withAnimation(.easeInOut(duration: 0.12)) {
+            move(dragging, target)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }

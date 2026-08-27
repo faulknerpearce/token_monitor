@@ -49,23 +49,8 @@ struct OverviewPanelView: View {
                     .monospacedDigit()
             }
 
-            if settings.enabledProviderIDs.contains(.grok) {
-                grokUsageCard
-            }
-            if settings.enabledProviderIDs.contains(.opencode) {
-                openCodeUsageCard
-            }
-            if settings.enabledProviderIDs.contains(.cursor) {
-                cursorUsageCard
-            }
-            if settings.enabledProviderIDs.contains(.claude) {
-                claudeUsageCard
-            }
-            if settings.enabledProviderIDs.contains(.chatgpt) {
-                chatGPTUsageCard
-            }
-            if settings.enabledProviderIDs.contains(.openrouter) {
-                openRouterUsageCard
+            ForEach(settings.visibleUsageProviders) { provider in
+                usageCard(for: provider)
             }
 
             PanelCard {
@@ -181,6 +166,19 @@ struct OverviewPanelView: View {
             cursorHourTokens: cursorTokenWeights
         )
         return built.isEmpty ? nil : built
+    }
+
+    @ViewBuilder
+    private func usageCard(for provider: MonitorProvider) -> some View {
+        switch provider {
+        case .grok: grokUsageCard
+        case .opencode: openCodeUsageCard
+        case .cursor: cursorUsageCard
+        case .claude: claudeUsageCard
+        case .chatgpt: chatGPTUsageCard
+        case .openrouter: openRouterUsageCard
+        case .overview: EmptyView()
+        }
     }
 
     private var grokUsageCard: some View {

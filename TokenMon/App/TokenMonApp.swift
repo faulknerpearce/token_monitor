@@ -284,6 +284,7 @@ struct MenuBarLabelContainer: View {
             showOpenCodeBar: model.settings.showOpenCodeBarInMenuBar,
             showCursorBar: model.settings.showCursorBarInMenuBar,
             showClaudeBar: model.settings.showClaudeBarInMenuBar,
+            providerOrder: model.settings.orderedUsageProviders,
             visibleProductIDs: model.settings.visibleProductIDs
         )
     }
