@@ -31,6 +31,5 @@ struct ProviderSignInWebView: NSViewRepresentable {
         nsView.isReturnPage = isReturnPage
         nsView.onAuthHostSeen = onAuthHostSeen
         nsView.onReturned = onReturned
-        controller.attach(nsView)
     }
 }
