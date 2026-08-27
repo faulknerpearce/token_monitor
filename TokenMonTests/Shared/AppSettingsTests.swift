@@ -46,11 +46,13 @@ final class AppSettingsTests: XCTestCase {
         first.activePollSeconds = 45
         first.showCursorBarInMenuBar = true
         first.showClaudeBarInMenuBar = true
+        first.showGrokbotBarInMenuBar = true
 
         let second = makeSettings()
         XCTAssertEqual(second.activePollSeconds, 45)
         XCTAssertTrue(second.showCursorBarInMenuBar)
         XCTAssertTrue(second.showClaudeBarInMenuBar)
+        XCTAssertTrue(second.showGrokbotBarInMenuBar)
     }
 
     func testShowSelectedProviderDefaultsOffAndPersists() throws {
@@ -89,8 +91,27 @@ final class AppSettingsTests: XCTestCase {
         settings.selectedProvider = .grok
         settings.showCursorBarInMenuBar = false
         settings.showOpenCodeBarInMenuBar = false
+        settings.showGrokbotBarInMenuBar = false
         XCTAssertFalse(settings.needsCursorPolling)
         XCTAssertFalse(settings.needsOpenCodePolling)
+        XCTAssertFalse(settings.needsGrokbotPolling)
+    }
+
+    func testNeedsGrokbotPollingFollowsBarAndProvider() {
+        let settings = makeSettings()
+        settings.selectedProvider = .cursor
+        settings.showGrokbotBarInMenuBar = false
+        XCTAssertFalse(settings.needsGrokbotPolling)
+
+        settings.showGrokbotBarInMenuBar = true
+        XCTAssertTrue(settings.needsGrokbotPolling)
+
+        settings.showGrokbotBarInMenuBar = false
+        settings.selectedProvider = .grokbot
+        XCTAssertTrue(settings.needsGrokbotPolling)
+
+        settings.selectedProvider = .overview
+        XCTAssertTrue(settings.needsGrokbotPolling)
     }
 
     func testNeedsClaudePollingFollowsBarAndProvider() {

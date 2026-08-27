@@ -42,7 +42,10 @@ struct TokenMonApp: App {
 
         Window("Sign in to Cursor", id: AppWindowID.cursorSignIn.rawValue) {
             CursorSignInView(auth: model.cursorAuth) {
-                Task { await model.cursorPoller.refreshNow() }
+                Task {
+                    await model.cursorPoller.refreshNow()
+                    await model.grokbotPoller.refreshNow()
+                }
                 AppDelegate.hideDockIfNoWindows()
             }
             .signInWindowChrome()
@@ -108,12 +111,15 @@ final class AppModel: ObservableObject {
     let grokHourly = HourlyDeltaActivityStore(storageKey: "grok_hourly_today")
     let claudeHourly = HourlyDeltaActivityStore(storageKey: "claude_hourly_today")
     let claudeDaily = DailyQuotaDeltaStore(storageKey: "claude_daily_usage")
+    let grokbotHourly = HourlyDeltaActivityStore(storageKey: "grokbot_hourly_today")
+    let grokbotDaily = DailyQuotaDeltaStore(storageKey: "grokbot_daily_usage")
     let poller: UsagePoller
     let openCodePoller: OpenCodeUsagePoller
     let cursorPoller: CursorUsagePoller
     let claudePoller: ClaudeUsagePoller
     let chatGPTPoller: ChatGPTUsagePoller
     let openRouterPoller: OpenRouterUsagePoller
+    let grokbotPoller: GrokbotUsagePoller
     let providers: ProviderRegistry
 
     private var cancellables = Set<AnyCancellable>()
@@ -150,19 +156,29 @@ final class AppModel: ObservableObject {
         claudePoller = ClaudeUsagePoller(settings: settings, auth: claudeAuth, hourly: claudeHourly, daily: claudeDaily)
         chatGPTPoller = ChatGPTUsagePoller(settings: settings, auth: chatGPTAuth)
         openRouterPoller = OpenRouterUsagePoller(settings: settings, auth: openRouterAuth)
+        // Grokbot bills through the Cursor account, so it borrows that session.
+        grokbotPoller = GrokbotUsagePoller(
+            settings: settings,
+            auth: cursorAuth,
+            hourly: grokbotHourly,
+            daily: grokbotDaily
+        )
         providers = ProviderRegistry(
             grok: poller,
             openCode: openCodePoller,
             cursor: cursorPoller,
             claude: claudePoller,
             chatGPT: chatGPTPoller,
-            openRouter: openRouterPoller
+            openRouter: openRouterPoller,
+            grokbot: grokbotPoller
         )
         forwardChanges(from: settings)
         forwardChanges(from: history)
         forwardChanges(from: grokHourly)
         forwardChanges(from: claudeHourly)
         forwardChanges(from: claudeDaily)
+        forwardChanges(from: grokbotHourly)
+        forwardChanges(from: grokbotDaily)
         for (_, providerPoller) in providers.all {
             forwardChanges(from: providerPoller)
         }
@@ -220,10 +236,12 @@ struct MenuBarRoot: View {
             chatGPTPoller: model.chatGPTPoller,
             openRouterAuth: model.openRouterAuth,
             openRouterPoller: model.openRouterPoller,
+            grokbotPoller: model.grokbotPoller,
             settings: model.settings,
             history: model.history,
             grokHourly: model.grokHourly,
             claudeHourly: model.claudeHourly,
+            grokbotHourly: model.grokbotHourly,
             openPreferences: { model.openWindow(.preferences, openWindow: openWindow) },
             openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
             openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
@@ -255,6 +273,7 @@ private struct PreferencesRoot: View {
             claudePoller: model.claudePoller,
             chatGPTPoller: model.chatGPTPoller,
             openRouterPoller: model.openRouterPoller,
+            grokbotPoller: model.grokbotPoller,
             openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
             openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
             openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },
@@ -278,12 +297,14 @@ struct MenuBarLabelContainer: View {
             claudeSnapshot: model.claudePoller.snapshot,
             chatGPTSnapshot: model.chatGPTPoller.snapshot,
             openRouterSnapshot: model.openRouterPoller.snapshot,
+            grokbotSnapshot: model.grokbotPoller.snapshot,
             isGrokSignedIn: model.auth.isSignedIn && !model.auth.needsSignIn,
             showGrokBar: model.settings.showGrokBarInMenuBar,
             showGrokCategories: model.settings.showCategoriesInMenuBar,
             showOpenCodeBar: model.settings.showOpenCodeBarInMenuBar,
             showCursorBar: model.settings.showCursorBarInMenuBar,
             showClaudeBar: model.settings.showClaudeBarInMenuBar,
+            showGrokbotBar: model.settings.showGrokbotBarInMenuBar,
             providerOrder: model.settings.orderedUsageProviders,
             visibleProductIDs: model.settings.visibleProductIDs
         )

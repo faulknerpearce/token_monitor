@@ -8,12 +8,13 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case claude
     case chatgpt
     case openrouter
+    case grokbot
 
     var id: String { rawValue }
 
     /// Concrete usage providers in default dropdown / menu-bar order (Overview excluded).
     static var usageProviders: [MonitorProvider] {
-        [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter]
+        [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot]
     }
 
     /// Drops Overview and unknowns, de-duplicates, then appends any usage
@@ -66,6 +67,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         case .claude: return "Claude"
         case .chatgpt: return "ChatGPT"
         case .openrouter: return "OpenRouter"
+        case .grokbot: return "Grokbot"
         }
     }
 
@@ -73,7 +75,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     var switcherLabel: String {
         switch self {
         case .overview: return "All"
-        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter: return displayName
+        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot: return displayName
         }
     }
 
@@ -107,6 +109,11 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         self == .openrouter || self == .overview
     }
 
+    /// Whether this mode should refresh Grokbot usage.
+    var pollsGrokbot: Bool {
+        self == .grokbot || self == .overview
+    }
+
     /// Public dashboard / console URL for “Visit website”.
     var websiteURL: URL? {
         switch self {
@@ -124,6 +131,8 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
             return URL(string: "https://chatgpt.com/codex")
         case .openrouter:
             return URL(string: "https://openrouter.ai/credits")
+        case .grokbot:
+            return URL(string: "https://cursor.com/bot")
         }
     }
 }

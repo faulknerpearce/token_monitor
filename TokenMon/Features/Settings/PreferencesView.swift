@@ -17,6 +17,7 @@ struct PreferencesView: View {
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
+    @ObservedObject var grokbotPoller: GrokbotUsagePoller
     let openSignIn: () -> Void
     let openOpenCodeSignIn: () -> Void
     let openCursorSignIn: () -> Void
@@ -81,6 +82,7 @@ struct PreferencesView: View {
                 Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
                 Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
                 Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+                Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
             } header: {
                 Text("Menu Bar")
             } footer: {
@@ -327,6 +329,16 @@ struct PreferencesView: View {
                     .foregroundStyle(.red)
                     .font(.caption)
             }
+        case .grokbot:
+            if let last = grokbotPoller.lastRefreshedAt {
+                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if let error = grokbotPoller.lastError {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
         case .overview:
             if let last = openCodePoller.lastRefreshedAt {
                 Text("OpenCode: \(last.formatted(date: .abbreviated, time: .shortened))")
@@ -346,6 +358,10 @@ struct PreferencesView: View {
             }
             if let last = openRouterPoller.lastRefreshedAt {
                 Text("OpenRouter: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if let last = grokbotPoller.lastRefreshedAt {
+                Text("Grokbot: \(last.formatted(date: .abbreviated, time: .shortened))")
                     .foregroundStyle(.secondary)
             }
             if let last = poller.lastRefreshedAt {

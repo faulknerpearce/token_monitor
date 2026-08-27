@@ -45,6 +45,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Grokbot usage % + bar in the menu bar.
+    @Published var showGrokbotBarInMenuBar: Bool {
+        didSet {
+            guard showGrokbotBarInMenuBar != oldValue else { return }
+            defaults.set(showGrokbotBarInMenuBar, forKey: Keys.showGrokbotBar)
+        }
+    }
+
     /// When on, the menu bar shows only the selected provider (icon + % + bar)
     /// instead of the pinned graph composite.
     @Published var showSelectedProviderInMenuBar: Bool {
@@ -163,6 +171,11 @@ final class AppSettings: ObservableObject {
         selectedProvider.pollsOpenRouter
     }
 
+    /// Whether Grokbot should be polled (panel tab or menu-bar graph).
+    var needsGrokbotPolling: Bool {
+        selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar
+    }
+
     /// Guards against recursive `didSet` when registration fails and we revert.
     private var isRevertingLaunchAtLogin = false
 
@@ -173,6 +186,7 @@ final class AppSettings: ObservableObject {
         showOpenCodeBarInMenuBar = defaults.object(forKey: Keys.showOpenCodeBar) as? Bool ?? false
         showCursorBarInMenuBar = defaults.object(forKey: Keys.showCursorBar) as? Bool ?? false
         showClaudeBarInMenuBar = defaults.object(forKey: Keys.showClaudeBar) as? Bool ?? false
+        showGrokbotBarInMenuBar = defaults.object(forKey: Keys.showGrokbotBar) as? Bool ?? false
         showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
         // Clamp on load — didSet does not run during init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
@@ -224,6 +238,7 @@ final class AppSettings: ObservableObject {
         static let showOpenCodeBar = "showOpenCodeBarInMenuBar"
         static let showCursorBar = "showCursorBarInMenuBar"
         static let showClaudeBar = "showClaudeBarInMenuBar"
+        static let showGrokbotBar = "showGrokbotBarInMenuBar"
         static let showSelectedProvider = "showSelectedProviderInMenuBar"
         static let activePoll = "activePollSeconds"
         static let idlePoll = "idlePollSeconds"

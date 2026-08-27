@@ -27,6 +27,7 @@ TokenMon is a SwiftUI agent-style macOS app (`LSUIElement` + `MenuBarExtra`) wit
 |------|----------------|
 | `App/` | `MenuBarExtra` scenes, `AppDelegate` activation policy |
 | `Grok/` | Grok auth, usage client/parser/poller, history, and alerts |
+| `Grokbot/` | Grokbot weekly allowance client/poller and panel. Owns no session: Grok Bot is a Cursor-backed product (`com.anysphere.sand`), so it borrows `CursorAuthSession` and its sign-in window |
 | `OpenCode/` | OpenCode auth, console/local usage, models, and panel |
 | `Cursor/` | Cursor auth, dashboard usage client/poller, and panel |
 | `Overview/` | Concentric usage rings and hourly multi-provider chart |

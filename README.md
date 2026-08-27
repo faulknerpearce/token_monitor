@@ -4,14 +4,14 @@
   <img src="Docs/tokenmon-logo.png" alt="TokenMon" width="280">
 </p>
 
-A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **OpenCode**, **Cursor**, **Claude**, **ChatGPT** and **OpenRouter** — in real time.
+A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **Grokbot**, **OpenCode**, **Cursor**, **Claude**, **ChatGPT** and **OpenRouter** — in real time.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/faulknerpearce/token_monitor)
 [![Swift](https://img.shields.io/badge/Swift-5.10-orange)](https://www.swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml)
 
-> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (xAI, Cursor, OpenCode, Anthropic, OpenAI, or OpenRouter). It uses authenticated provider surfaces that may change without notice.
+> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (xAI, Anysphere/Cursor, OpenCode, Anthropic, OpenAI, or OpenRouter). It uses authenticated provider surfaces that may change without notice.
 
 ## Overview
 
@@ -24,6 +24,7 @@ Adding a provider is a registry entry away: `ProviderRegistry` wires each `Monit
 | Provider | Usage pools surfaced | Daily Budget chart |
 |----------|----------------------|--------------------|
 | **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
+| **Grokbot** | Weekly Bot allowance, anchored to the plan's own reset instant | Weekly window |
 | **Claude** | 5-hour session + weekly (7-day) pool | Weekly window |
 | **ChatGPT (Codex)** | 5-hour primary + weekly secondary pool | — |
 | **Cursor** | Monthly billing cycle (usage-summary %) | Last 7 days of the billing cycle |
@@ -144,6 +145,7 @@ TokenMon/
   App/           Entry point, AppDelegate
   Features/
     Grok/        Grok auth, usage, history, and alerts
+    Grokbot/     Grokbot weekly allowance and panel (borrows the Cursor session)
     OpenCode/    OpenCode auth, console/local usage, and panel
     Cursor/      Cursor auth, dashboard usage, and panel
     Claude/      Claude auth, weekly usage, and panel
@@ -185,7 +187,7 @@ For a signed, notarized release build, see [Docs/NOTARIZATION.md](Docs/NOTARIZAT
 
 ## Notes on usage windows
 
-Each provider defines its own consumption pool: a rolling week anchored to a reset instant (SuperGrok), a weekly window plus 5-hour session (Claude, ChatGPT), a monthly billing cycle (Cursor), stacked 5-hour/weekly/monthly limits (OpenCode Go), or credits and key caps with a declared reset period (OpenRouter). Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
+Each provider defines its own consumption pool: a rolling week anchored to a reset instant (SuperGrok, Grokbot), a weekly window plus 5-hour session (Claude, ChatGPT), a monthly billing cycle (Cursor), stacked 5-hour/weekly/monthly limits (OpenCode Go), or credits and key caps with a declared reset period (OpenRouter). Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
 
 TokenMon never invents a usage period. If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh rather than substituting a calendar-derived guess. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
 

@@ -574,6 +574,24 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(usage.hours[10].grokSharePercent, 2.0 / 3.0 * 100, accuracy: 0.001)
     }
 
+    func testProviderHourlyUsageIncludesGrokbotShare() {
+        let zeros = Array(repeating: 0.0, count: 24)
+        var grokbot = zeros
+        grokbot[10] = 4
+        var grok = zeros
+        grok[10] = 1
+        let usage = ProviderDayHourlyUsage.build(
+            dayStart: Date(timeIntervalSince1970: 0),
+            grokHourWeights: grok,
+            openCodeGoHourWeights: zeros,
+            openCodeZenHourWeights: zeros,
+            grokbotHourWeights: grokbot
+        )
+        XCTAssertEqual(usage.hours[10].activity, 5, accuracy: 0.001)
+        XCTAssertEqual(usage.hours[10].grokbotSharePercent, 80, accuracy: 0.001)
+        XCTAssertEqual(usage.hours[10].grokbotActivity, 4, accuracy: 0.001)
+    }
+
     func testCatalogNames() {
         XCTAssertEqual(OpenCodeCatalog.providerShortName("opencode-go"), "Go")
         XCTAssertEqual(OpenCodeCatalog.providerShortName("opencode"), "Zen")
@@ -610,6 +628,7 @@ final class OpenCodeStatsTests: XCTestCase {
             openCodeZenSharePercent: 0,
             cursorSharePercent: 0,
             claudeSharePercent: 0,
+            grokbotSharePercent: 0,
             activity: 10.1,
             costUSD: 0,
             openCodeGoTokens: 0,

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Today's hourly Grok / OpenCode Go / OpenCode Zen / Cursor / Claude usage.
+/// Today's hourly Grok / Grokbot / OpenCode Go / OpenCode Zen / Cursor / Claude usage.
 struct OverviewHourlyUsageChart: View {
     let usage: ProviderDayHourlyUsage?
 
@@ -14,11 +14,12 @@ struct OverviewHourlyUsageChart: View {
 
     /// Bottom → top in the stacked bar (matches legend reading order).
     private static let stackOrderBottomToTop: [ProviderKind] = [
-        .grok, .cursor, .claude, .openCodeGo, .openCodeZen
+        .grok, .grokbot, .cursor, .claude, .openCodeGo, .openCodeZen
     ]
 
     private enum ProviderKind: String, CaseIterable, Identifiable {
         case grok
+        case grokbot
         case cursor
         case claude
         case openCodeGo
@@ -29,6 +30,7 @@ struct OverviewHourlyUsageChart: View {
         var title: String {
             switch self {
             case .grok: return "Grok"
+            case .grokbot: return "Grokbot"
             case .cursor: return "Cursor"
             case .claude: return "Claude"
             case .openCodeGo: return "OpenCode Go"
@@ -39,6 +41,7 @@ struct OverviewHourlyUsageChart: View {
         var legendTitle: String {
             switch self {
             case .grok: return "Grok"
+            case .grokbot: return "Grokbot"
             case .cursor: return "Cursor"
             case .claude: return "Claude"
             case .openCodeGo: return "Go"
@@ -49,6 +52,7 @@ struct OverviewHourlyUsageChart: View {
         var color: Color {
             switch self {
             case .grok: return ConcentricUsageRingView.grokColor
+            case .grokbot: return ConcentricUsageRingView.grokbotColor
             case .cursor: return ConcentricUsageRingView.cursorColor
             case .claude: return ConcentricUsageRingView.claudeColor
             case .openCodeGo: return OverviewHourlyUsageChart.openCodeGoColor
@@ -59,6 +63,7 @@ struct OverviewHourlyUsageChart: View {
         func activity(for hour: ProviderHourUsage) -> Double {
             switch self {
             case .grok: return hour.grokActivity
+            case .grokbot: return hour.grokbotActivity
             case .cursor: return hour.cursorActivity
             case .claude: return hour.claudeActivity
             case .openCodeGo: return hour.openCodeGoActivity
@@ -69,6 +74,7 @@ struct OverviewHourlyUsageChart: View {
         func tokenCount(for hour: ProviderHourUsage) -> Int64? {
             switch self {
             case .grok: return hour.grokTokens
+            case .grokbot: return nil
             case .cursor: return hour.cursorTokens
             case .claude: return hour.claudeTokens
             case .openCodeGo: return hour.openCodeGoTokens
@@ -80,7 +86,7 @@ struct OverviewHourlyUsageChart: View {
         /// percentage of a *different* quota window, so this can't be one hardcoded string.
         var quotaLabel: String {
             switch self {
-            case .grok: return "weekly"
+            case .grok, .grokbot: return "weekly"
             case .cursor: return "monthly"
             case .claude: return "5-hour window"
             case .openCodeGo, .openCodeZen: return "monthly"
@@ -94,7 +100,7 @@ struct OverviewHourlyUsageChart: View {
                 hourBars(usage)
                 legend
             } else {
-                Text("No Grok, OpenCode, Cursor, or Claude activity yet today.")
+                Text("No Grok, Grokbot, OpenCode, Cursor, or Claude activity yet today.")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
@@ -103,7 +109,7 @@ struct OverviewHourlyUsageChart: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 10) {
             ForEach(Self.stackOrderBottomToTop) { provider in
                 legendItem(title: provider.legendTitle, color: provider.color)
             }

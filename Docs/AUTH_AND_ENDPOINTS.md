@@ -25,6 +25,43 @@ Optional bearer tokens captured during WebKit sign-in (or saved under Applicatio
 | 2 | POST | `https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig` | gRPC-web+proto; empty frame body; yields used % + reset + product mix |
 | 3 | GET | `https://cli-chat-proxy.grok.com/v1/billing` | CLI JSON; needs bearer |
 
+## Grokbot (Grok Bot)
+
+Grok Bot is an xAI product but a **Cursor-backed** one: the desktop app bundle is
+`com.anysphere.sand`, its onboarding lives at `cursor.com/bot/onboarding`, and it
+talks to `api2.cursor.sh` / `api3.cursor.sh`. "Sand" is the name the wire protocol
+still uses. TokenMon therefore reuses `CursorAuthSession` (the
+`WorkosCursorSessionToken` cookie) rather than owning a second store.
+
+| Method | URL | Notes |
+|--------|-----|-------|
+| POST | `https://cursor.com/api/dashboard/get-sand-usage-status` | Body `{}`; REST wrapper over `aiserver.v1.GetSandUsageStatusResponse` |
+
+Response fields consumed (protobuf-es emits camelCase over JSON; the parser also
+accepts the proto names):
+
+| Field | Use |
+|-------|-----|
+| `usage_percent` | Weekly used % |
+| `next_reset_timestamp_utc` | Reset instant — the anchor for every window |
+| `current_period_start` | Period start; with the reset it yields the real period length |
+| `included_limit_zero`, `has_non_zero_included_limit` | Whether the plan includes an allowance at all |
+| `included_usage_super_grok_plan`, `grok_plan_label` | Which subscription funds the allowance |
+
+**One endpoint covers both purchase channels.** Grokbot is sold through Cursor
+*and* through SuperGrok; when a SuperGrok plan pays for it, the plan fields are
+populated and the rest of the payload is identical. There is no separate
+per-channel endpoint, so no source resolution is needed.
+
+**Signed-out behaviour:** an expired session returns `307` to
+`api.workos.com/user_management/authorize`. `URLSession` follows it and lands on
+an HTML page, so the client treats any non-JSON body as `unauthorized` rather
+than a decode failure.
+
+**Usage window:** `next_reset_timestamp_utc` is the only anchor. When it is
+absent the snapshot carries `resetsAt == nil` and the panel withholds both the
+weekly caption and the Daily Budget bars — no calendar-derived substitute.
+
 ### Daily use — status
 
 **No confirmed public daily series endpoint.**

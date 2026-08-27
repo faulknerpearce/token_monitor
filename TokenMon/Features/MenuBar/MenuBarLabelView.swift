@@ -10,12 +10,14 @@ struct MenuBarLabelView: View {
     let claudeSnapshot: ClaudeSnapshot?
     let chatGPTSnapshot: ChatGPTSnapshot?
     let openRouterSnapshot: OpenRouterSnapshot?
+    let grokbotSnapshot: GrokbotSnapshot?
     let isGrokSignedIn: Bool
     let showGrokBar: Bool
     let showGrokCategories: Bool
     let showOpenCodeBar: Bool
     let showCursorBar: Bool
     let showClaudeBar: Bool
+    let showGrokbotBar: Bool
     let providerOrder: [MonitorProvider]
     let visibleProductIDs: Set<String>
 
@@ -31,12 +33,14 @@ struct MenuBarLabelView: View {
             claudeSnapshot: claudeSnapshot,
             chatGPTSnapshot: chatGPTSnapshot,
             openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: showGrokBar,
             showGrokCategories: showGrokCategories,
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
             visibleProductIDs: visibleProductIDs
         )

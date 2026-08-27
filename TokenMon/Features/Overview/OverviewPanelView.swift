@@ -8,9 +8,11 @@ struct OverviewPanelView: View {
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
+    @ObservedObject var grokbotPoller: GrokbotUsagePoller
     @ObservedObject var settings: AppSettings
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
     @ObservedObject var claudeHourly: HourlyDeltaActivityStore
+    @ObservedObject var grokbotHourly: HourlyDeltaActivityStore
     @ObservedObject var grokAuth: AuthSessionService
     @ObservedObject var openCodeAuth: OpenCodeAuthSession
     @ObservedObject var cursorAuth: CursorAuthSession
@@ -138,6 +140,17 @@ struct OverviewPanelView: View {
             return Array(repeating: 0, count: 24)
         }()
 
+        let grokbotWeights: [Double] = {
+            guard settings.enabledProviderIDs.contains(.grokbot) else {
+                return Array(repeating: 0, count: 24)
+            }
+            if calendar.isDate(grokbotHourly.dayStart, inSameDayAs: dayStart),
+               grokbotHourly.hourWeights.count == 24 {
+                return grokbotHourly.hourWeights
+            }
+            return Array(repeating: 0, count: 24)
+        }()
+
         let cursorTokenWeights: [Int64] = {
             guard settings.enabledProviderIDs.contains(.cursor),
                   let hourly = cursorPoller.dayHourlyUsage,
@@ -160,6 +173,7 @@ struct OverviewPanelView: View {
             openCodeZenHourWeights: openCodeWeights.openCodeZen,
             cursorHourWeights: cursorWeights,
             claudeHourWeights: claudeWeights,
+            grokbotHourWeights: grokbotWeights,
             hourCostUSD: hourCostUSD,
             openCodeGoHourTokens: openCodeTokenWeights.openCodeGo,
             openCodeZenHourTokens: openCodeTokenWeights.openCodeZen,
@@ -177,6 +191,7 @@ struct OverviewPanelView: View {
         case .claude: claudeUsageCard
         case .chatgpt: chatGPTUsageCard
         case .openrouter: openRouterUsageCard
+        case .grokbot: grokbotUsageCard
         case .overview: EmptyView()
         }
     }
@@ -433,6 +448,57 @@ struct OverviewPanelView: View {
                     chatGPTAuth.signOut()
                     chatGPTPoller.clearSnapshot()
                 }
+            }
+        }
+    }
+
+    private var grokbotUsageCard: some View {
+        let percent = grokbotPoller.snapshot?.usedPercent ?? 0
+        let resetsAt = grokbotPoller.snapshot?.resetsAt
+        return PanelCard {
+            HStack(alignment: .center, spacing: 8) {
+                Image(nsImage: ProviderLogo.image(for: .grokbot))
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+                Text("Grokbot")
+                    .font(PanelTypography.title)
+                    .foregroundStyle(.primary)
+                Text("— Weekly")
+                    .font(PanelTypography.micro)
+                    .fontWeight(.semibold)
+                    .tracking(1.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                PanelPill(text: "\(Int(percent.rounded()))% used")
+            }
+            GeometryReader { geo in
+                let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.12))
+                    Capsule().fill(ConcentricUsageRingView.grokbotColor).frame(width: fillWidth)
+                }
+            }
+            .frame(height: 8)
+            if let resetsAt {
+                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.tertiary)
+            } else if grokbotPoller.snapshot == nil {
+                Text("No Grokbot data yet")
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            // Grokbot bills through Cursor, so its session lives on the Cursor card.
+            if cursorAuth.needsSignIn && grokbotPoller.snapshot == nil {
+                ProviderSignInButton(
+                    provider: .grokbot,
+                    title: "Sign In to Cursor…",
+                    font: PanelTypography.caption,
+                    action: openCursorSignIn
+                )
             }
         }
     }

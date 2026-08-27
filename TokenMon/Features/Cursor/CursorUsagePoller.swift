@@ -16,6 +16,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let auth: CursorAuthSession
     private let logger = Logger(category: "Cursor")
+    private var cancellables = Set<AnyCancellable>()
 
     /// Reuse the last refreshed result when a rapid consecutive poll lands within
     /// this window, avoiding redundant full-cycle event paging on every poll step.
@@ -29,6 +30,15 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     init(settings: AppSettings, auth: CursorAuthSession) {
         self.settings = settings
         self.auth = auth
+        // Grokbot signs out this same session; drop the Cursor snapshot as soon
+        // as the cookies are gone rather than waiting for the next poll.
+        auth.$isSignedIn
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] signedIn in
+                if !signedIn { self?.clearSnapshot() }
+            }
+            .store(in: &cancellables)
     }
 
     func start() {

@@ -14,10 +14,12 @@ struct MenuBarPanelView: View {
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
     @ObservedObject var openRouterAuth: OpenRouterAuthSession
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
+    @ObservedObject var grokbotPoller: GrokbotUsagePoller
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
     @ObservedObject var claudeHourly: HourlyDeltaActivityStore
+    @ObservedObject var grokbotHourly: HourlyDeltaActivityStore
 
     let openPreferences: () -> Void
     let openSignIn: () -> Void
@@ -51,6 +53,8 @@ struct MenuBarPanelView: View {
                 chatGPTContent
             case .openrouter:
                 openRouterContent
+            case .grokbot:
+                grokbotContent
             }
 
             Divider().padding(.vertical, 6)
@@ -69,6 +73,7 @@ struct MenuBarPanelView: View {
             claudePoller.menuIsOpen = true
             chatGPTPoller.menuIsOpen = true
             openRouterPoller.menuIsOpen = true
+            grokbotPoller.menuIsOpen = true
             Task { await refreshActivePoller() }
         }
         .onDisappear {
@@ -78,6 +83,7 @@ struct MenuBarPanelView: View {
             claudePoller.menuIsOpen = false
             chatGPTPoller.menuIsOpen = false
             openRouterPoller.menuIsOpen = false
+            grokbotPoller.menuIsOpen = false
         }
         .onChange(of: settings.selectedProvider) { _, _ in
             Task { await refreshActivePoller() }
@@ -95,6 +101,9 @@ struct MenuBarPanelView: View {
         }
         .onChange(of: settings.showClaudeBarInMenuBar) { _, enabled in
             if enabled { Task { await claudePoller.refreshNow() } }
+        }
+        .onChange(of: settings.showGrokbotBarInMenuBar) { _, enabled in
+            if enabled { Task { await grokbotPoller.refreshNow() } }
         }
     }
 
@@ -126,7 +135,12 @@ struct MenuBarPanelView: View {
                 await openRouterPoller.refreshNow()
             }
         }()
-        _ = await (grok, openCode, cursor, claude, chatGPT, openRouter)
+        async let grokbot: Void = {
+            if settings.needsGrokbotPolling {
+                await grokbotPoller.refreshNow()
+            }
+        }()
+        _ = await (grok, openCode, cursor, claude, chatGPT, openRouter, grokbot)
     }
 
     private var grokContent: some View {
@@ -174,6 +188,14 @@ struct MenuBarPanelView: View {
         )
     }
 
+    private var grokbotContent: some View {
+        GrokbotPanelView(
+            poller: grokbotPoller,
+            auth: cursorAuth,
+            openSignIn: openCursorSignIn
+        )
+    }
+
     private var openRouterContent: some View {
         OpenRouterPanelView(
             poller: openRouterPoller,
@@ -189,9 +211,11 @@ struct MenuBarPanelView: View {
             claudePoller: claudePoller,
             chatGPTPoller: chatGPTPoller,
             openRouterPoller: openRouterPoller,
+            grokbotPoller: grokbotPoller,
             settings: settings,
             grokHourly: grokHourly,
             claudeHourly: claudeHourly,
+            grokbotHourly: grokbotHourly,
             grokAuth: auth,
             openCodeAuth: openCodeAuth,
             cursorAuth: cursorAuth,
@@ -258,6 +282,13 @@ struct MenuBarPanelView: View {
                 EmptyView()
             case .openrouter:
                 EmptyView()
+            case .grokbot:
+                Toggle(isOn: $settings.showGrokbotBarInMenuBar) {
+                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showGrokbotBarInMenuBar)
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.plain)
+                .font(PanelTypography.body)
             case .overview:
                 EmptyView()
             }
@@ -276,6 +307,7 @@ struct MenuBarPanelView: View {
                     case .claude: return "Open Claude.ai"
                     case .chatgpt: return "Open ChatGPT.com"
                     case .openrouter: return "Open OpenRouter.ai"
+                    case .grokbot: return "Open Cursor.com/bot"
                     case .overview: return "Visit website"
                     }
                 }()

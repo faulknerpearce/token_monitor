@@ -5,7 +5,7 @@ import SwiftUI
 /// MenuBarExtra drops GeometryReader / Circle SwiftUI, so we draw explicitly.
 ///
 /// Composites enabled provider segments in `providerOrder`:
-/// Grok (always) + optional Cursor / OpenCode / Claude.
+/// Grok (always) + optional Cursor / OpenCode / Claude / Grokbot.
 ///
 /// The mutable statics (image cache, cached appearance, observer) are isolated
 /// to the main actor since rendering drives off SwiftUI's main-actor label.
@@ -29,12 +29,14 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>
     ) -> NSImage {
@@ -55,12 +57,14 @@ enum MenuBarStatusRenderer {
             claudeSnapshot: claudeSnapshot,
             chatGPTSnapshot: chatGPTSnapshot,
             openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: showGrokBar,
             showGrokCategories: showGrokCategories,
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
             visibleProductIDs: visibleProductIDs
         )
@@ -78,12 +82,14 @@ enum MenuBarStatusRenderer {
             claudeSnapshot: claudeSnapshot,
             chatGPTSnapshot: chatGPTSnapshot,
             openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: showGrokBar,
             showGrokCategories: showGrokCategories,
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder
         )
         _cache.setObject(image, forKey: cacheKey as NSString)
@@ -101,12 +107,14 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>
     ) -> String {
@@ -117,6 +125,7 @@ enum MenuBarStatusRenderer {
         let claude = claudeSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
         let chatGPT = chatGPTSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
         let openRouter = openRouterSnapshot?.usedPercent.map { Int($0.rounded()) } ?? -1
+        let grokbot = grokbotSnapshot.map { Int($0.usedPercent.rounded()) } ?? -1
 
         let productKey = grokProducts
             .map { "\($0.id):\(Int($0.percentOfPool.rounded()))" }
@@ -124,8 +133,8 @@ enum MenuBarStatusRenderer {
         let productIDs = visibleProductIDs.sorted().joined(separator: ",")
         let parts = [
             "mb-\(showSelectedProvider ? 1 : 0)-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)"
-                + "-\(claude)-\(chatGPT)-\(openRouter)",
-            "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
+                + "-\(claude)-\(chatGPT)-\(openRouter)-\(grokbot)",
+            "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)-\(showGrokbotBar)",
             "\(providerOrder.map(\.rawValue).joined(separator: ","))",
             "\(productKey)-\(productIDs)-\(chrome)"
         ]
@@ -151,9 +160,11 @@ enum MenuBarStatusRenderer {
         cursorSnapshot: CursorSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         claudeSnapshot: ClaudeSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         showCursorBar: Bool,
         showOpenCodeBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
         providerOrder: [MonitorProvider]
     ) -> [CompositePiece] {
         func solid(
@@ -202,6 +213,14 @@ enum MenuBarStatusRenderer {
                     icon: ProviderLogo.claude,
                     iconInset: 0
                 )))
+            case .grokbot:
+                guard showGrokbotBar else { continue }
+                pieces.append(.solid(solid(
+                    used: grokbotSnapshot?.usedPercent,
+                    color: ConcentricUsageRingView.grokbotSRGB.nsColor,
+                    icon: ProviderLogo.grokbot,
+                    iconInset: 0
+                )))
             case .overview, .chatgpt, .openrouter:
                 continue
             }
@@ -220,12 +239,14 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
         providerOrder: [MonitorProvider]
     ) -> NSImage {
         if showSelectedProvider {
@@ -237,6 +258,7 @@ enum MenuBarStatusRenderer {
                 claudeSnapshot: claudeSnapshot,
                 chatGPTSnapshot: chatGPTSnapshot,
                 openRouterSnapshot: openRouterSnapshot,
+                grokbotSnapshot: grokbotSnapshot,
                 isGrokSignedIn: isGrokSignedIn
             )
         }
@@ -294,9 +316,11 @@ enum MenuBarStatusRenderer {
             cursorSnapshot: cursorSnapshot,
             openCodeSnapshot: openCodeSnapshot,
             claudeSnapshot: claudeSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             showCursorBar: showCursorBar,
             showOpenCodeBar: showOpenCodeBar,
             showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder
         )
 
@@ -392,6 +416,7 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool
     ) -> NSImage {
         let height: CGFloat = 22
@@ -418,6 +443,8 @@ enum MenuBarStatusRenderer {
             usedPercent = chatGPTSnapshot?.headlineUsedPercent
         case .openrouter:
             usedPercent = openRouterSnapshot?.usedPercent
+        case .grokbot:
+            usedPercent = grokbotSnapshot?.usedPercent
         }
 
         // Monospaced digits make every "NN%" string the same width; the slot
@@ -493,6 +520,8 @@ enum MenuBarStatusRenderer {
             return SRGB(red: 0.16, green: 0.52, blue: 0.46).nsColor
         case .openrouter:
             return SRGB(red: 0.45, green: 0.36, blue: 0.90).nsColor
+        case .grokbot:
+            return ConcentricUsageRingView.grokbotSRGB.nsColor
         }
     }
 

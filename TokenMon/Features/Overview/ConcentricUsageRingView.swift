@@ -18,6 +18,10 @@ struct ConcentricUsageRingView: View {
     static let claudeColor = claudeSRGB.color.opacity(0.85)
     static let chatgptColor = SRGB(red: 0.16, green: 0.52, blue: 0.46).color.opacity(0.85)
     static let openRouterColor = SRGB(red: 0.45, green: 0.36, blue: 0.90).color.opacity(0.85)
+    /// Grok Bot is a monochrome brand; a graphite that stays legible as a bar fill
+    /// and does not collide with Grok navy or Cursor green.
+    static let grokbotSRGB = SRGB(red: 0.38, green: 0.42, blue: 0.50)
+    static let grokbotColor = grokbotSRGB.color.opacity(0.85)
 
     private let size: CGFloat = 112
     private let lineWidth: CGFloat = 8

@@ -15,6 +15,8 @@ final class MenuBarStatusRendererTests: XCTestCase {
         claude: ClaudeSnapshot? = nil,
         chatGPT: ChatGPTSnapshot? = nil,
         openRouter: OpenRouterSnapshot? = nil,
+        grokbot: GrokbotSnapshot? = nil,
+        showGrokbotBar: Bool = false,
         isGrokSignedIn: Bool = false,
         providerOrder: [MonitorProvider] = MonitorProvider.usageProviders
     ) -> NSImage {
@@ -27,12 +29,14 @@ final class MenuBarStatusRendererTests: XCTestCase {
             claudeSnapshot: claude,
             chatGPTSnapshot: chatGPT,
             openRouterSnapshot: openRouter,
+            grokbotSnapshot: grokbot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: true,
             showGrokCategories: true,
             showOpenCodeBar: true,
             showCursorBar: true,
             showClaudeBar: true,
+            showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
             visibleProductIDs: Set(ProductCatalog.knownIDs)
         )
@@ -80,6 +84,18 @@ final class MenuBarStatusRendererTests: XCTestCase {
         )
         XCTAssertEqual(zero.size.width, full.size.width)
         XCTAssertGreaterThan(hasNonTransparentPixels(zero), 0)
+    }
+
+    func testCompositeModeGrokbotBarWidensLabel() {
+        let without = render(provider: .grok, showSelectedProvider: false, showGrokbotBar: false).size
+        let withBar = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            grokbot: GrokbotSnapshot.preview,
+            showGrokbotBar: true
+        ).size
+        XCTAssertGreaterThan(withBar.width, without.width)
+        XCTAssertEqual(withBar.height, without.height)
     }
 
     func testCompositeModeIgnoresSelectedProvider() {
