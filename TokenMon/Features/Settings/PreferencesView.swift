@@ -17,6 +17,7 @@ struct PreferencesView: View {
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
+    @ObservedObject var grokbotPoller: GrokbotUsagePoller
     let openSignIn: () -> Void
     let openOpenCodeSignIn: () -> Void
     let openCursorSignIn: () -> Void
@@ -24,27 +25,54 @@ struct PreferencesView: View {
     let openChatGPTSignIn: () -> Void
     @State private var exportError: String?
     @State private var openRouterKeyDraft = ""
+    @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
-        Form {
+        List {
             Section {
-                ForEach(MonitorProvider.usageProviders, id: \.id) { provider in
-                    Toggle(provider.displayName, isOn: Binding(
-                        get: { settings.enabledProviderIDs.contains(provider) },
-                        set: { on in
-                            if on {
-                                settings.enabledProviderIDs.insert(provider)
-                            } else {
-                                settings.enabledProviderIDs.remove(provider)
+                ForEach(settings.orderedUsageProviders) { provider in
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 22)
+                            .contentShape(Rectangle())
+                            .onDrag {
+                                draggingProvider = provider
+                                return NSItemProvider(object: NSString(string: provider.rawValue))
                             }
-                        }
-                    ))
-                    .disabled(settings.enabledProviderIDs == [provider])
+                        Image(nsImage: ProviderLogo.image(for: provider))
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                        Toggle(provider.displayName, isOn: Binding(
+                            get: { settings.enabledProviderIDs.contains(provider) },
+                            set: { on in
+                                if on {
+                                    settings.enabledProviderIDs.insert(provider)
+                                } else {
+                                    settings.enabledProviderIDs.remove(provider)
+                                }
+                            }
+                        ))
+                        .disabled(settings.enabledProviderIDs == [provider])
+                    }
+                    .contentShape(Rectangle())
+                    .onDrop(
+                        of: [.utf8PlainText, .text, .plainText],
+                        delegate: ProviderReorderDropDelegate(
+                            target: provider,
+                            dragging: $draggingProvider,
+                            move: settings.moveProvider
+                        )
+                    )
                 }
+                .onMove(perform: settings.moveOrderedProviders)
             } header: {
                 Text("Providers")
             } footer: {
-                Text("Choose which provider tabs appear in the menu dropdown.")
+                Text("Toggle which tabs appear in the menu dropdown. Drag a row (or its handle) to set tab, Overview, and menu-bar graph order.")
             }
 
             Section {
@@ -54,6 +82,7 @@ struct PreferencesView: View {
                 Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
                 Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
                 Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+                Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
             } header: {
                 Text("Menu Bar")
             } footer: {
@@ -300,6 +329,16 @@ struct PreferencesView: View {
                     .foregroundStyle(.red)
                     .font(.caption)
             }
+        case .grokbot:
+            if let last = grokbotPoller.lastRefreshedAt {
+                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if let error = grokbotPoller.lastError {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
         case .overview:
             if let last = openCodePoller.lastRefreshedAt {
                 Text("OpenCode: \(last.formatted(date: .abbreviated, time: .shortened))")
@@ -319,6 +358,10 @@ struct PreferencesView: View {
             }
             if let last = openRouterPoller.lastRefreshedAt {
                 Text("OpenRouter: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if let last = grokbotPoller.lastRefreshedAt {
+                Text("Grokbot: \(last.formatted(date: .abbreviated, time: .shortened))")
                     .foregroundStyle(.secondary)
             }
             if let last = poller.lastRefreshedAt {
@@ -357,5 +400,31 @@ struct PreferencesView: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+}
+
+/// Form rows ignore `onMove` on macOS; this delegate reorders while dragging
+/// a handle over another provider row.
+private struct ProviderReorderDropDelegate: DropDelegate {
+    let target: MonitorProvider
+    @Binding var dragging: MonitorProvider?
+    let move: (MonitorProvider, MonitorProvider) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { true }
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target else { return }
+        withAnimation(.easeInOut(duration: 0.12)) {
+            move(dragging, target)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }

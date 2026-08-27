@@ -14,7 +14,11 @@ final class MenuBarStatusRendererTests: XCTestCase {
         cursor: CursorSnapshot? = nil,
         claude: ClaudeSnapshot? = nil,
         chatGPT: ChatGPTSnapshot? = nil,
-        openRouter: OpenRouterSnapshot? = nil
+        openRouter: OpenRouterSnapshot? = nil,
+        grokbot: GrokbotSnapshot? = nil,
+        showGrokbotBar: Bool = false,
+        isGrokSignedIn: Bool = false,
+        providerOrder: [MonitorProvider] = MonitorProvider.usageProviders
     ) -> NSImage {
         MenuBarStatusRenderer.image(
             selectedProvider: provider,
@@ -25,12 +29,15 @@ final class MenuBarStatusRendererTests: XCTestCase {
             claudeSnapshot: claude,
             chatGPTSnapshot: chatGPT,
             openRouterSnapshot: openRouter,
-            isGrokSignedIn: false,
+            grokbotSnapshot: grokbot,
+            isGrokSignedIn: isGrokSignedIn,
             showGrokBar: true,
             showGrokCategories: true,
             showOpenCodeBar: true,
             showCursorBar: true,
             showClaudeBar: true,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: providerOrder,
             visibleProductIDs: Set(ProductCatalog.knownIDs)
         )
     }
@@ -56,6 +63,41 @@ final class MenuBarStatusRendererTests: XCTestCase {
         XCTAssertEqual(empty.height, withData.height)
     }
 
+    func testCompositeModeRendersVisibleTrackAtZeroUsage() {
+        // Regression: the bar graph used to vanish when usage hit 0 (e.g. right
+        // after a weekly reset) because the fill was dropped and the track was
+        // painted at 0.14 alpha. The track must stay visible so the bar slot is
+        // always drawn, even at an empty (0%) fill.
+        let zeroSnap = WeeklyUsageSnapshot(usedPercent: 0, remainingPercent: 100)
+        let fullSnap = WeeklyUsageSnapshot(usedPercent: 9, remainingPercent: 91)
+        let zero = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            snapshot: zeroSnap,
+            isGrokSignedIn: true
+        )
+        let full = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            snapshot: fullSnap,
+            isGrokSignedIn: true
+        )
+        XCTAssertEqual(zero.size.width, full.size.width)
+        XCTAssertGreaterThan(hasNonTransparentPixels(zero), 0)
+    }
+
+    func testCompositeModeGrokbotBarWidensLabel() {
+        let without = render(provider: .grok, showSelectedProvider: false, showGrokbotBar: false).size
+        let withBar = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            grokbot: GrokbotSnapshot.preview,
+            showGrokbotBar: true
+        ).size
+        XCTAssertGreaterThan(withBar.width, without.width)
+        XCTAssertEqual(withBar.height, without.height)
+    }
+
     func testCompositeModeIgnoresSelectedProvider() {
         let grok = render(provider: .grok, showSelectedProvider: false).size
         let openRouter = render(provider: .openrouter, showSelectedProvider: false).size
@@ -70,6 +112,17 @@ final class MenuBarStatusRendererTests: XCTestCase {
             width = size.width
             height = size.height
         }
+    }
+
+    private func hasNonTransparentPixels(_ image: NSImage) -> Int {
+        guard let rep = NSBitmapImageRep(data: image.tiffRepresentation ?? Data()) else { return 0 }
+        var count = 0
+        for x in 0..<rep.pixelsWide {
+            for y in 0..<rep.pixelsHigh where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0 {
+                count += 1
+            }
+        }
+        return count
     }
 
     private func makeClaudeSnapshot() -> ClaudeSnapshot {

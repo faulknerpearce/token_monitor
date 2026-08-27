@@ -57,4 +57,14 @@ enum JSON {
         }
         return nil
     }
+
+    /// Returns the first boolean among `keys`, in order. Numeric `0`/`1` is
+    /// accepted because some protobuf-JSON encodings emit flags as numbers.
+    static func firstBool(_ dict: [String: Any], keys: [String], fallback: Bool = false) -> Bool {
+        for key in keys {
+            if let value = dict[key] as? Bool { return value }
+            if let value = number(dict[key]) { return value != 0 }
+        }
+        return fallback
+    }
 }

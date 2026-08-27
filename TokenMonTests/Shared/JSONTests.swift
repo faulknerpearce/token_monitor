@@ -68,4 +68,13 @@ final class JSONTests: XCTestCase {
         let result = JSON.firstDecimal(dict, keys: ["value", "val"])
         XCTAssertEqual(result, Decimal(12.0))
     }
+
+    func testFirstBool() {
+        XCTAssertTrue(JSON.firstBool(["flag": true], keys: ["flag"]))
+        XCTAssertFalse(JSON.firstBool(["flag": false], keys: ["flag"]))
+        XCTAssertTrue(JSON.firstBool(["n": 1], keys: ["n"]))
+        XCTAssertFalse(JSON.firstBool(["n": 0], keys: ["n"]))
+        XCTAssertTrue(JSON.firstBool([:], keys: ["missing"], fallback: true))
+        XCTAssertTrue(JSON.firstBool(["snake": true], keys: ["camel", "snake"]))
+    }
 }

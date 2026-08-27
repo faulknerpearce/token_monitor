@@ -44,6 +44,7 @@
 		48F5B17A873190A817646FEF /* Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4D47682593A1EE79DD6A0C /* Domain.swift */; };
 		4CE28448F0C6FAA8AE2C4128 /* ChatGPTSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4A83133D58CA8EFB9E0C82 /* ChatGPTSignInView.swift */; };
 		504EBC85D44DF3DCB5105EE7 /* CursorUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3134A3D28E86BDE453FDADB0 /* CursorUsageClient.swift */; };
+		52D59881A9BEF9BC0A461312 /* GrokbotUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3130D7477D8F9FB9A6A108 /* GrokbotUsagePollerTests.swift */; };
 		545267311016D1B4B9E46D0C /* ProviderSignOutButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70542120C2CDBAA2BA56F63 /* ProviderSignOutButton.swift */; };
 		5BE59C4C3270E6B7727003E5 /* CursorSignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F41AD315BF3B0000052680F /* CursorSignInSheet.swift */; };
 		5D12D94FFDC098F4A7B43357 /* SignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF44D1ED22184587190FAEF /* SignInSheet.swift */; };
@@ -78,15 +79,18 @@
 		931FB5A88F596D1285DE6C5B /* DailyUsageBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030644365BCFFE7A2313E22A /* DailyUsageBuilder.swift */; };
 		93E28817EF25CF8E46C6349E /* OpenCodePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D0AA7D58BAB50E2263A553 /* OpenCodePanelView.swift */; };
 		9537EFEF8921BFCC6A7CDEBD /* ClaudePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C4B1FF750F8B1392D1AC6A /* ClaudePanelView.swift */; };
+		95CAD0ADE8FB8CE73C294113 /* GrokbotUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3168BE9937ECEAE2E723DCD3 /* GrokbotUsageClient.swift */; };
 		962BB066A9FDA634D3F391D9 /* OpenCodeConsoleClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CC9D28BC66E69522E91B11 /* OpenCodeConsoleClientTests.swift */; };
 		99F71EF97E6858B8C96E5B29 /* OverviewHourlyUsageChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31933106A9D643D9A424D46 /* OverviewHourlyUsageChart.swift */; };
 		9DBA6C0086EDE5F17D97846D /* ClaudeAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06706EABCCEE8BFBB27E4D34 /* ClaudeAuthSession.swift */; };
 		9E525790E1BC1878805C99C5 /* WebKitCookieCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68FE75A96E4091616408783 /* WebKitCookieCapture.swift */; };
+		A039610B451F8F952A3EA3BA /* GrokbotUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = F718D05745BB5DDE828E46B0 /* GrokbotUsagePoller.swift */; };
 		A2273C5F2494A76B8EF40B64 /* MetricStat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC589CC50A5A8F5096383C /* MetricStat.swift */; };
 		A37437D20CF0C4022A6497C7 /* GrokPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */; };
 		A3B6205627F823688673DEA1 /* AppSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3236D1884085409D04BB2A13 /* AppSupportTests.swift */; };
 		A993DDAD34F2CC7F0172D43F /* OpenRouterModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F119E47CC0BF956CD51DE1AA /* OpenRouterModels.swift */; };
 		AAE0FC9316DF293EE7C14714 /* ProviderSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B84CFAAB0D7972BDC20C4DB /* ProviderSwitcherView.swift */; };
+		ABC92522313BCD71A9704805 /* GrokbotUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1DD6709DC2A399301F10E8 /* GrokbotUsageClientTests.swift */; };
 		AEBCDAB3A1B0E33D416D3668 /* ClaudeUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53FF46E0F5F38D80A6419B84 /* ClaudeUsageClientTests.swift */; };
 		AF43B2BEC521C9AB15C1F8C5 /* MonitorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5008BEBDDA049505BF06BC7 /* MonitorProvider.swift */; };
 		AFC1A169FAF539B8CB0EF0B3 /* OpenCodeConsoleClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51455BD0A71FEDBAAF5F8591 /* OpenCodeConsoleClient.swift */; };
@@ -95,6 +99,7 @@
 		B5F252E5D89FC411DD3BFBAB /* ChatGPTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E6B6DEDE6CA34ED5AB8E01 /* ChatGPTModels.swift */; };
 		B83613535B40150EB4F89F9B /* ClaudeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3048C8A62D66B3ED0E61C3E0 /* ClaudeModels.swift */; };
 		B9DF46C56214B9FEE96C5127 /* OpenCodeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E32CD2D6C87C59A2BDCAFAB /* OpenCodeModels.swift */; };
+		BADD52E29BBEF66F016C59B2 /* GrokbotModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049A27B3889325FB5DE8FF7F /* GrokbotModels.swift */; };
 		C1795A6C92E0D12F8D0BEB65 /* ChatGPTAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F425A77810D136532C239692 /* ChatGPTAuthSession.swift */; };
 		C3510B9D658997562FCD26B6 /* OpenCodeUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF346B5976F1C2455634F18 /* OpenCodeUsagePoller.swift */; };
 		C4FA2825CB5CA5AB1CA50700 /* OpenRouterAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D990A5674BB462011AB5AF9C /* OpenRouterAuthSession.swift */; };
@@ -109,6 +114,7 @@
 		D37A350E070C4FD59B5025C9 /* ThresholdNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB26C41073DFA4948EA31E64 /* ThresholdNotifier.swift */; };
 		D380AAE7608BA66462E03D34 /* AppLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934A697EDDA16BA55972B23D /* AppLog.swift */; };
 		D46146C0A265B0CDD68F84AC /* AppSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11D27ED5967BC30C7114A5DF /* AppSupport.swift */; };
+		D72B49098D3B6B8482591C22 /* GrokbotPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F502CC9424699B0749EF3D55 /* GrokbotPanelView.swift */; };
 		D7BFCCBDB7EE7DB8C434B723 /* OverviewPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EFE5125A1EF1DFE9803712 /* OverviewPanelView.swift */; };
 		DA58E39BFEF29D0BEB50A10B /* JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = B032B25B8302246F90BA667E /* JSON.swift */; };
 		DDF4ECFB095899864828DE3C /* UsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11611A9328AF1EECD2E0A93C /* UsageModels.swift */; };
@@ -145,6 +151,7 @@
 		030644365BCFFE7A2313E22A /* DailyUsageBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyUsageBuilder.swift; sourceTree = "<group>"; };
 		032915429CC456C18140A256 /* ProviderAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderAuthSession.swift; sourceTree = "<group>"; };
 		03AC589CC50A5A8F5096383C /* MetricStat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricStat.swift; sourceTree = "<group>"; };
+		049A27B3889325FB5DE8FF7F /* GrokbotModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotModels.swift; sourceTree = "<group>"; };
 		06706EABCCEE8BFBB27E4D34 /* ClaudeAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAuthSession.swift; sourceTree = "<group>"; };
 		08662DA61F7BDFBFB4B43515 /* OpenCodeAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeAuthSession.swift; sourceTree = "<group>"; };
 		099FD1BC2A4197A918E08DAC /* PanelTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelTypography.swift; sourceTree = "<group>"; };
@@ -171,9 +178,11 @@
 		2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcentricUsageRingView.swift; sourceTree = "<group>"; };
 		3048C8A62D66B3ED0E61C3E0 /* ClaudeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeModels.swift; sourceTree = "<group>"; };
 		3134A3D28E86BDE453FDADB0 /* CursorUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorUsageClient.swift; sourceTree = "<group>"; };
+		3168BE9937ECEAE2E723DCD3 /* GrokbotUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsageClient.swift; sourceTree = "<group>"; };
 		3236D1884085409D04BB2A13 /* AppSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSupportTests.swift; sourceTree = "<group>"; };
 		36C4B1FF750F8B1392D1AC6A /* ClaudePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudePanelView.swift; sourceTree = "<group>"; };
 		39384E817EE6D493EC3E52DB /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		3A3130D7477D8F9FB9A6A108 /* GrokbotUsagePollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsagePollerTests.swift; sourceTree = "<group>"; };
 		3A6FD45894627C32B2A37E7F /* TokenMon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMon.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C4E9D4A9882DA1D0ECA5BD5 /* DailyUsageChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyUsageChartView.swift; sourceTree = "<group>"; };
 		3ED36AE2584D7EB89D2F38BC /* CursorAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorAuthSession.swift; sourceTree = "<group>"; };
@@ -215,6 +224,7 @@
 		934A697EDDA16BA55972B23D /* AppLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLog.swift; sourceTree = "<group>"; };
 		945C71AC56642FF8A1C1100E /* ProviderSignInButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSignInButton.swift; sourceTree = "<group>"; };
 		96616027EAA5189BC18E97E6 /* OpenCodeSignInSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSignInSheet.swift; sourceTree = "<group>"; };
+		9B1DD6709DC2A399301F10E8 /* GrokbotUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsageClientTests.swift; sourceTree = "<group>"; };
 		9B702888EEE669BE5E778C5F /* DailyQuotaDeltaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyQuotaDeltaStore.swift; sourceTree = "<group>"; };
 		9D9F3805067CAD5F9D7A9F5C /* ProviderLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderLogo.swift; sourceTree = "<group>"; };
 		9DE9ECA5176C08F0FECEABDD /* WebKitCookieCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitCookieCaptureTests.swift; sourceTree = "<group>"; };
@@ -259,8 +269,10 @@
 		EF9B63ACDE0C52F1A1AB1CF8 /* ProviderSignInWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSignInWebView.swift; sourceTree = "<group>"; };
 		F119E47CC0BF956CD51DE1AA /* OpenRouterModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterModels.swift; sourceTree = "<group>"; };
 		F425A77810D136532C239692 /* ChatGPTAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAuthSession.swift; sourceTree = "<group>"; };
+		F502CC9424699B0749EF3D55 /* GrokbotPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotPanelView.swift; sourceTree = "<group>"; };
 		F6070D087A85C991DAFEF49E /* ClaudeSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSignInView.swift; sourceTree = "<group>"; };
 		F70542120C2CDBAA2BA56F63 /* ProviderSignOutButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSignOutButton.swift; sourceTree = "<group>"; };
+		F718D05745BB5DDE828E46B0 /* GrokbotUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsagePoller.swift; sourceTree = "<group>"; };
 		FA55668290D2300298B0BC29 /* DailyBudgetBarsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetBarsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -281,6 +293,17 @@
 				1B047339E04940B83879F808 /* OpenCodeStatsTests.swift */,
 			);
 			path = OpenCode;
+			sourceTree = "<group>";
+		};
+		175A8EB10026B977329F8578 /* Grokbot */ = {
+			isa = PBXGroup;
+			children = (
+				049A27B3889325FB5DE8FF7F /* GrokbotModels.swift */,
+				F502CC9424699B0749EF3D55 /* GrokbotPanelView.swift */,
+				3168BE9937ECEAE2E723DCD3 /* GrokbotUsageClient.swift */,
+				F718D05745BB5DDE828E46B0 /* GrokbotUsagePoller.swift */,
+			);
+			path = Grokbot;
 			sourceTree = "<group>";
 		};
 		189E269EC8C6AF992DED1A6C /* Settings */ = {
@@ -323,6 +346,7 @@
 				E2D368A967B242E35AE1A153 /* Claude */,
 				A3527F2E0E092F9483313FCD /* Cursor */,
 				ABCE3D53980E7B448433F315 /* Grok */,
+				518B10BA9F98A687A27C19A2 /* Grokbot */,
 				14E7E7AC2F14B79ECE853460 /* OpenCode */,
 				ED88AD399BFA57785F462472 /* OpenRouter */,
 				7EF76460DBC5B3DDF26A161D /* Shared */,
@@ -337,6 +361,15 @@
 				6EF44D1ED22184587190FAEF /* SignInSheet.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		518B10BA9F98A687A27C19A2 /* Grokbot */ = {
+			isa = PBXGroup;
+			children = (
+				9B1DD6709DC2A399301F10E8 /* GrokbotUsageClientTests.swift */,
+				3A3130D7477D8F9FB9A6A108 /* GrokbotUsagePollerTests.swift */,
+			);
+			path = Grokbot;
 			sourceTree = "<group>";
 		};
 		520E89ED22BB7BFF48EE41F6 /* Shared */ = {
@@ -531,6 +564,7 @@
 				7D8F3B5D0C6F746A5C3BDE02 /* Claude */,
 				9D8622823D193617612E1255 /* Cursor */,
 				323C7534A25213DF30BAB67A /* Grok */,
+				175A8EB10026B977329F8578 /* Grokbot */,
 				B5B3F963958BE61A1E05005E /* MenuBar */,
 				AFD0AD18078048D22D3606A1 /* OpenCode */,
 				35B7E7BD0BDB2B520766D600 /* OpenRouter */,
@@ -724,6 +758,8 @@
 				F343F1F69EF51F172B713978 /* DailyBudgetTests.swift in Sources */,
 				3F4D8F82AFD4D3993B37CC29 /* DailyQuotaDeltaStoreTests.swift in Sources */,
 				74281CAC0D8F8FAC72694DCE /* FormatTests.swift in Sources */,
+				ABC92522313BCD71A9704805 /* GrokbotUsageClientTests.swift in Sources */,
+				52D59881A9BEF9BC0A461312 /* GrokbotUsagePollerTests.swift in Sources */,
 				86208DBEB0D029C1E2E2603D /* HistoryStoreTests.swift in Sources */,
 				C66EA68B69D41BE27419E22C /* HourlyDeltaActivityStoreTests.swift in Sources */,
 				0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */,
@@ -784,6 +820,10 @@
 				404713A354B6A8F71295AF31 /* FileBackedStringStore.swift in Sources */,
 				C5A045CB89D69EC25265DE64 /* Format.swift in Sources */,
 				A37437D20CF0C4022A6497C7 /* GrokPanelView.swift in Sources */,
+				BADD52E29BBEF66F016C59B2 /* GrokbotModels.swift in Sources */,
+				D72B49098D3B6B8482591C22 /* GrokbotPanelView.swift in Sources */,
+				95CAD0ADE8FB8CE73C294113 /* GrokbotUsageClient.swift in Sources */,
+				A039610B451F8F952A3EA3BA /* GrokbotUsagePoller.swift in Sources */,
 				811665EA3B9506975CF1C6D7 /* HistoryStore.swift in Sources */,
 				299B5762DBAA0D2EED375F6D /* HourlyDeltaActivityStore.swift in Sources */,
 				5D7A7A76F3B84FD799EC60D6 /* ISO8601.swift in Sources */,
@@ -980,12 +1020,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 7;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.3.2;
+				MARKETING_VERSION = 1.4.0;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
@@ -1000,11 +1040,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.3.2;
+				MARKETING_VERSION = 1.4.0;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;

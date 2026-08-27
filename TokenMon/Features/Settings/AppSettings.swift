@@ -45,6 +45,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Grokbot usage % + bar in the menu bar.
+    @Published var showGrokbotBarInMenuBar: Bool {
+        didSet {
+            guard showGrokbotBarInMenuBar != oldValue else { return }
+            defaults.set(showGrokbotBarInMenuBar, forKey: Keys.showGrokbotBar)
+        }
+    }
+
     /// When on, the menu bar shows only the selected provider (icon + % + bar)
     /// instead of the pinned graph composite.
     @Published var showSelectedProviderInMenuBar: Bool {
@@ -86,7 +94,26 @@ final class AppSettings: ObservableObject {
 
     /// Usage providers shown as tabs in the dropdown switcher (Overview always present).
     var visibleUsageProviders: [MonitorProvider] {
-        MonitorProvider.usageProviders.filter { enabledProviderIDs.contains($0) }
+        orderedUsageProviders.filter { enabledProviderIDs.contains($0) }
+    }
+
+    /// All usage providers in the user-chosen display order.
+    var orderedUsageProviders: [MonitorProvider] {
+        MonitorProvider.normalizedOrder(providerOrder)
+    }
+
+    /// Saved permutation of usage providers; drives tab order, Overview cards,
+    /// and composite menu-bar graph order.
+    @Published var providerOrder: [MonitorProvider] {
+        didSet {
+            guard providerOrder != oldValue else { return }
+            let normalized = MonitorProvider.normalizedOrder(providerOrder)
+            if providerOrder != normalized {
+                providerOrder = normalized
+                return
+            }
+            defaults.set(providerOrder.map(\.rawValue), forKey: Keys.providerOrder)
+        }
     }
 
     @Published var enabledProviderIDs: Set<MonitorProvider> {
@@ -144,6 +171,11 @@ final class AppSettings: ObservableObject {
         selectedProvider.pollsOpenRouter
     }
 
+    /// Whether Grokbot should be polled (panel tab or menu-bar graph).
+    var needsGrokbotPolling: Bool {
+        selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar
+    }
+
     /// Guards against recursive `didSet` when registration fails and we revert.
     private var isRevertingLaunchAtLogin = false
 
@@ -154,6 +186,7 @@ final class AppSettings: ObservableObject {
         showOpenCodeBarInMenuBar = defaults.object(forKey: Keys.showOpenCodeBar) as? Bool ?? false
         showCursorBarInMenuBar = defaults.object(forKey: Keys.showCursorBar) as? Bool ?? false
         showClaudeBarInMenuBar = defaults.object(forKey: Keys.showClaudeBar) as? Bool ?? false
+        showGrokbotBarInMenuBar = defaults.object(forKey: Keys.showGrokbotBar) as? Bool ?? false
         showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
         // Clamp on load — didSet does not run during init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
@@ -161,6 +194,9 @@ final class AppSettings: ObservableObject {
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? true
         thresholdPercent = defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
+        let savedOrder = (defaults.stringArray(forKey: Keys.providerOrder) ?? [])
+            .compactMap(MonitorProvider.init(rawValue:))
+        providerOrder = MonitorProvider.normalizedOrder(savedOrder)
         if let saved = defaults.stringArray(forKey: Keys.enabledProviders) {
             let parsed = Set(saved.compactMap(MonitorProvider.init(rawValue:)))
                 .intersection(Set(MonitorProvider.usageProviders))
@@ -202,6 +238,7 @@ final class AppSettings: ObservableObject {
         static let showOpenCodeBar = "showOpenCodeBarInMenuBar"
         static let showCursorBar = "showCursorBarInMenuBar"
         static let showClaudeBar = "showClaudeBarInMenuBar"
+        static let showGrokbotBar = "showGrokbotBarInMenuBar"
         static let showSelectedProvider = "showSelectedProviderInMenuBar"
         static let activePoll = "activePollSeconds"
         static let idlePoll = "idlePollSeconds"
@@ -209,6 +246,35 @@ final class AppSettings: ObservableObject {
         static let thresholdPercent = "thresholdPercent"
         static let selectedProvider = "selectedProvider"
         static let enabledProviders = "enabledProviderIDs"
+        static let providerOrder = "providerOrder"
         static let visibleProducts = "visibleProductIDs"
+    }
+
+    /// Drag-reorder of the currently visible (enabled) providers.
+    func moveVisibleProviders(from source: IndexSet, to destination: Int) {
+        providerOrder = MonitorProvider.movingVisible(
+            order: providerOrder,
+            visible: visibleUsageProviders,
+            from: source,
+            to: destination
+        )
+    }
+
+    /// Drag-reorder of the full usage-provider list (Preferences).
+    func moveOrderedProviders(from source: IndexSet, to destination: Int) {
+        var order = orderedUsageProviders
+        order.move(fromOffsets: source, toOffset: destination)
+        providerOrder = order
+    }
+
+    /// Live drag: move `moving` to the slot currently occupied by `target`.
+    func moveProvider(_ moving: MonitorProvider, to target: MonitorProvider) {
+        var order = orderedUsageProviders
+        guard moving != target,
+              let from = order.firstIndex(of: moving),
+              let to = order.firstIndex(of: target)
+        else { return }
+        order.move(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
+        providerOrder = order
     }
 }

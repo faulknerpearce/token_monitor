@@ -46,11 +46,13 @@ final class AppSettingsTests: XCTestCase {
         first.activePollSeconds = 45
         first.showCursorBarInMenuBar = true
         first.showClaudeBarInMenuBar = true
+        first.showGrokbotBarInMenuBar = true
 
         let second = makeSettings()
         XCTAssertEqual(second.activePollSeconds, 45)
         XCTAssertTrue(second.showCursorBarInMenuBar)
         XCTAssertTrue(second.showClaudeBarInMenuBar)
+        XCTAssertTrue(second.showGrokbotBarInMenuBar)
     }
 
     func testShowSelectedProviderDefaultsOffAndPersists() throws {
@@ -89,8 +91,27 @@ final class AppSettingsTests: XCTestCase {
         settings.selectedProvider = .grok
         settings.showCursorBarInMenuBar = false
         settings.showOpenCodeBarInMenuBar = false
+        settings.showGrokbotBarInMenuBar = false
         XCTAssertFalse(settings.needsCursorPolling)
         XCTAssertFalse(settings.needsOpenCodePolling)
+        XCTAssertFalse(settings.needsGrokbotPolling)
+    }
+
+    func testNeedsGrokbotPollingFollowsBarAndProvider() {
+        let settings = makeSettings()
+        settings.selectedProvider = .cursor
+        settings.showGrokbotBarInMenuBar = false
+        XCTAssertFalse(settings.needsGrokbotPolling)
+
+        settings.showGrokbotBarInMenuBar = true
+        XCTAssertTrue(settings.needsGrokbotPolling)
+
+        settings.showGrokbotBarInMenuBar = false
+        settings.selectedProvider = .grokbot
+        XCTAssertTrue(settings.needsGrokbotPolling)
+
+        settings.selectedProvider = .overview
+        XCTAssertTrue(settings.needsGrokbotPolling)
     }
 
     func testNeedsClaudePollingFollowsBarAndProvider() {
@@ -119,6 +140,49 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         settings.enabledProviderIDs = [.opencode, .grok]
         XCTAssertEqual(settings.visibleUsageProviders, [.grok, .opencode])
+    }
+
+    func testProviderOrderDefaultsToUsageProviders() {
+        XCTAssertEqual(makeSettings().providerOrder, MonitorProvider.usageProviders)
+        XCTAssertEqual(makeSettings().orderedUsageProviders, MonitorProvider.usageProviders)
+    }
+
+    func testProviderOrderPersistsAndAppendsNewProviders() {
+        defaults.set(["claude", "grok"], forKey: "providerOrder")
+        let settings = makeSettings()
+        XCTAssertEqual(settings.orderedUsageProviders.first, .claude)
+        XCTAssertEqual(settings.orderedUsageProviders[1], .grok)
+        for provider in MonitorProvider.usageProviders {
+            XCTAssertTrue(settings.orderedUsageProviders.contains(provider))
+        }
+        XCTAssertEqual(settings.orderedUsageProviders.count, MonitorProvider.usageProviders.count)
+    }
+
+    func testMoveVisibleProvidersLeavesDisabledInPlace() {
+        let settings = makeSettings()
+        settings.providerOrder = [.grok, .cursor, .opencode, .claude]
+        settings.enabledProviderIDs = [.grok, .opencode, .claude]
+        settings.moveVisibleProviders(from: IndexSet(integer: 2), to: 0)
+        XCTAssertEqual(settings.visibleUsageProviders, [.claude, .grok, .opencode])
+        XCTAssertEqual(
+            Array(settings.orderedUsageProviders.prefix(4)),
+            [.claude, .cursor, .grok, .opencode]
+        )
+    }
+
+    func testMoveProviderInsertsAtTargetSlot() {
+        let settings = makeSettings()
+        settings.moveProvider(.claude, to: .grok)
+        XCTAssertEqual(settings.orderedUsageProviders.first, .claude)
+        XCTAssertEqual(settings.orderedUsageProviders[1], .grok)
+    }
+
+    func testNormalizedOrderDropsOverviewAndDuplicates() {
+        let order = MonitorProvider.normalizedOrder([.overview, .grok, .grok, .claude])
+        XCTAssertEqual(order.first, .grok)
+        XCTAssertEqual(order.filter { $0 == .grok }.count, 1)
+        XCTAssertFalse(order.contains(.overview))
+        XCTAssertEqual(order.count, MonitorProvider.usageProviders.count)
     }
 
     func testEnabledProvidersPersistAcrossInstances() throws {

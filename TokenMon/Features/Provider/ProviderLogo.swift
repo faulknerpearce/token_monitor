@@ -13,6 +13,7 @@ enum ProviderLogo {
         case .claude: return claude
         case .chatgpt: return chatgpt
         case .openrouter: return openRouter
+        case .grokbot: return grokbot
         }
     }
 
@@ -59,6 +60,15 @@ enum ProviderLogo {
     static let openRouter: NSImage = {
         let image = (NSImage(named: "OpenRouterLogo")?.copy() as? NSImage)
             ?? NSImage(systemSymbolName: "network", accessibilityDescription: "OpenRouter")
+            ?? NSImage(size: NSSize(width: 16, height: 16))
+        image.isTemplate = true
+        return image
+    }()
+
+    /// Grok Bot logomark from the asset catalog (template for menu-bar tinting).
+    static let grokbot: NSImage = {
+        let image = (NSImage(named: "GrokbotLogo")?.copy() as? NSImage)
+            ?? NSImage(systemSymbolName: "circle.dashed", accessibilityDescription: "Grokbot")
             ?? NSImage(size: NSSize(width: 16, height: 16))
         image.isTemplate = true
         return image

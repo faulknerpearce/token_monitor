@@ -8,11 +8,55 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case claude
     case chatgpt
     case openrouter
+    case grokbot
 
     var id: String { rawValue }
 
-    /// Concrete usage providers in dropdown / menu-bar order (Overview excluded).
-    static var usageProviders: [MonitorProvider] { [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter] }
+    /// Concrete usage providers in default dropdown / menu-bar order (Overview excluded).
+    static var usageProviders: [MonitorProvider] {
+        [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot]
+    }
+
+    /// Drops Overview and unknowns, de-duplicates, then appends any usage
+    /// providers the saved list does not yet know about so new providers appear
+    /// without wiping a user's order.
+    static func normalizedOrder(_ raw: [MonitorProvider]) -> [MonitorProvider] {
+        var seen = Set<MonitorProvider>()
+        var result: [MonitorProvider] = []
+        result.reserveCapacity(usageProviders.count)
+        for provider in raw {
+            guard provider != .overview, !seen.contains(provider),
+                  usageProviders.contains(provider)
+            else { continue }
+            seen.insert(provider)
+            result.append(provider)
+        }
+        for provider in usageProviders where !seen.contains(provider) {
+            result.append(provider)
+        }
+        return result
+    }
+
+    /// Reorders the visible subsequence in `order` while leaving hidden
+    /// providers in their existing slots.
+    static func movingVisible(
+        order: [MonitorProvider],
+        visible: [MonitorProvider],
+        from source: IndexSet,
+        to destination: Int
+    ) -> [MonitorProvider] {
+        let normalized = normalizedOrder(order)
+        var moved = visible
+        moved.move(fromOffsets: source, toOffset: destination)
+        var iterator = moved.makeIterator()
+        let visibleSet = Set(visible)
+        return normalized.map { provider in
+            guard visibleSet.contains(provider), let next = iterator.next() else {
+                return provider
+            }
+            return next
+        }
+    }
 
     var displayName: String {
         switch self {
@@ -23,6 +67,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         case .claude: return "Claude"
         case .chatgpt: return "ChatGPT"
         case .openrouter: return "OpenRouter"
+        case .grokbot: return "Grokbot"
         }
     }
 
@@ -30,7 +75,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     var switcherLabel: String {
         switch self {
         case .overview: return "All"
-        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter: return displayName
+        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot: return displayName
         }
     }
 
@@ -64,6 +109,11 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         self == .openrouter || self == .overview
     }
 
+    /// Whether this mode should refresh Grokbot usage.
+    var pollsGrokbot: Bool {
+        self == .grokbot || self == .overview
+    }
+
     /// Public dashboard / console URL for “Visit website”.
     var websiteURL: URL? {
         switch self {
@@ -81,6 +131,8 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
             return URL(string: "https://chatgpt.com/codex")
         case .openrouter:
             return URL(string: "https://openrouter.ai/credits")
+        case .grokbot:
+            return URL(string: "https://cursor.com/bot")
         }
     }
 }

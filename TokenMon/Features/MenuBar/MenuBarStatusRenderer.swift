@@ -4,8 +4,8 @@ import SwiftUI
 /// Renders the menu bar status as a single bitmap.
 /// MenuBarExtra drops GeometryReader / Circle SwiftUI, so we draw explicitly.
 ///
-/// Composites enabled provider segments in dropdown order:
-/// Grok (always) + optional Cursor + optional OpenCode.
+/// Composites enabled provider segments in `providerOrder`:
+/// Grok (always) + optional Cursor / OpenCode / Claude / Grokbot.
 ///
 /// The mutable statics (image cache, cached appearance, observer) are isolated
 /// to the main actor since rendering drives off SwiftUI's main-actor label.
@@ -29,12 +29,15 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
+        providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>
     ) -> NSImage {
         ensureAppearanceObserver()
@@ -54,12 +57,15 @@ enum MenuBarStatusRenderer {
             claudeSnapshot: claudeSnapshot,
             chatGPTSnapshot: chatGPTSnapshot,
             openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: showGrokBar,
             showGrokCategories: showGrokCategories,
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: providerOrder,
             visibleProductIDs: visibleProductIDs
         )
         if let cached = _cache.object(forKey: cacheKey as NSString) {
@@ -76,12 +82,15 @@ enum MenuBarStatusRenderer {
             claudeSnapshot: claudeSnapshot,
             chatGPTSnapshot: chatGPTSnapshot,
             openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
             isGrokSignedIn: isGrokSignedIn,
             showGrokBar: showGrokBar,
             showGrokCategories: showGrokCategories,
             showOpenCodeBar: showOpenCodeBar,
             showCursorBar: showCursorBar,
-            showClaudeBar: showClaudeBar
+            showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: providerOrder
         )
         _cache.setObject(image, forKey: cacheKey as NSString)
         return image
@@ -98,12 +107,15 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
         showClaudeBar: Bool,
+        showGrokbotBar: Bool,
+        providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>
     ) -> String {
         let chrome = menuBarAppearanceName
@@ -113,17 +125,107 @@ enum MenuBarStatusRenderer {
         let claude = claudeSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
         let chatGPT = chatGPTSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
         let openRouter = openRouterSnapshot?.usedPercent.map { Int($0.rounded()) } ?? -1
+        let grokbot = grokbotSnapshot.map { Int($0.usedPercent.rounded()) } ?? -1
 
         let productKey = grokProducts
             .map { "\($0.id):\(Int($0.percentOfPool.rounded()))" }
             .joined(separator: ",")
         let productIDs = visibleProductIDs.sorted().joined(separator: ",")
         let parts = [
-            "mb-\(showSelectedProvider ? 1 : 0)-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)-\(claude)-\(chatGPT)-\(openRouter)",
-            "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
+            "mb-\(showSelectedProvider ? 1 : 0)-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)"
+                + "-\(claude)-\(chatGPT)-\(openRouter)-\(grokbot)",
+            "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)-\(showGrokbotBar)",
+            "\(providerOrder.map(\.rawValue).joined(separator: ","))",
             "\(productKey)-\(productIDs)-\(chrome)"
         ]
         return parts.joined(separator: "-")
+    }
+
+    private struct CompositeSolidSegment {
+        let usedPercent: Double?
+        let text: String
+        let textSize: NSSize
+        let color: NSColor
+        let icon: NSImage
+        let iconInset: CGFloat
+    }
+
+    private enum CompositePiece {
+        case grok
+        case solid(CompositeSolidSegment)
+    }
+
+    private static func compositePieces(
+        usedAttrs: [NSAttributedString.Key: Any],
+        cursorSnapshot: CursorSnapshot?,
+        openCodeSnapshot: OpenCodeSnapshot?,
+        claudeSnapshot: ClaudeSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
+        showCursorBar: Bool,
+        showOpenCodeBar: Bool,
+        showClaudeBar: Bool,
+        showGrokbotBar: Bool,
+        providerOrder: [MonitorProvider]
+    ) -> [CompositePiece] {
+        func solid(
+            used: Double?,
+            color: NSColor,
+            icon: NSImage,
+            iconInset: CGFloat
+        ) -> CompositeSolidSegment {
+            let text = used.map { "\(Int($0.rounded()))%" } ?? "—"
+            return CompositeSolidSegment(
+                usedPercent: used,
+                text: text,
+                textSize: text.size(withAttributes: usedAttrs),
+                color: color,
+                icon: icon,
+                iconInset: iconInset
+            )
+        }
+
+        var pieces: [CompositePiece] = []
+        for provider in MonitorProvider.normalizedOrder(providerOrder) {
+            switch provider {
+            case .grok:
+                pieces.append(.grok)
+            case .cursor:
+                guard showCursorBar else { continue }
+                pieces.append(.solid(solid(
+                    used: cursorSnapshot?.usedPercent,
+                    color: ConcentricUsageRingView.cursorSRGB.nsColor,
+                    icon: ProviderLogo.cursor,
+                    iconInset: 0
+                )))
+            case .opencode:
+                guard showOpenCodeBar else { continue }
+                pieces.append(.solid(solid(
+                    used: openCodeSnapshot?.primaryUsedPercent,
+                    color: NSColor(calibratedRed: 0.90, green: 0.45, blue: 0.20, alpha: 1),
+                    icon: ProviderLogo.openCode,
+                    iconInset: 2.5
+                )))
+            case .claude:
+                guard showClaudeBar else { continue }
+                pieces.append(.solid(solid(
+                    used: claudeSnapshot?.headlineUsedPercent,
+                    color: ConcentricUsageRingView.claudeSRGB.nsColor,
+                    icon: ProviderLogo.claude,
+                    iconInset: 0
+                )))
+            case .grokbot:
+                guard showGrokbotBar else { continue }
+                pieces.append(.solid(solid(
+                    used: grokbotSnapshot?.usedPercent,
+                    color: ConcentricUsageRingView.grokbotSRGB.nsColor,
+                    icon: ProviderLogo.grokbot,
+                    iconInset: 0
+                )))
+            case .overview, .chatgpt, .openrouter:
+                continue
+            }
+        }
+        return pieces
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -137,12 +239,15 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool,
         showGrokBar: Bool,
         showGrokCategories: Bool,
         showOpenCodeBar: Bool,
         showCursorBar: Bool,
-        showClaudeBar: Bool
+        showClaudeBar: Bool,
+        showGrokbotBar: Bool,
+        providerOrder: [MonitorProvider]
     ) -> NSImage {
         if showSelectedProvider {
             return renderSelectedProvider(
@@ -153,6 +258,7 @@ enum MenuBarStatusRenderer {
                 claudeSnapshot: claudeSnapshot,
                 chatGPTSnapshot: chatGPTSnapshot,
                 openRouterSnapshot: openRouterSnapshot,
+                grokbotSnapshot: grokbotSnapshot,
                 isGrokSignedIn: isGrokSignedIn
             )
         }
@@ -176,8 +282,6 @@ enum MenuBarStatusRenderer {
             .foregroundColor: textColor
         ]
 
-        var width: CGFloat = 0
-
         let grokSigned = isGrokSignedIn && snapshot != nil
         let grokUsedText: String
         let grokUsedSize: NSSize
@@ -191,141 +295,108 @@ enum MenuBarStatusRenderer {
                     return (label, label.size(withAttributes: labelAttrs))
                 }
                 : []
-            width += iconSize + gap + grokUsedSize.width
-            if showGrokBar { width += gap + barWidth }
-            if showGrokCategories {
-                for item in categoryLabels {
-                    width += gap + dotSize + 4 + item.size.width
-                }
-            }
         } else {
             grokUsedText = "Grok"
             grokUsedSize = grokUsedText.size(withAttributes: usedAttrs)
             categoryLabels = []
-            width += iconSize + gap + grokUsedSize.width
         }
 
-        struct SolidSegment {
-            let usedPercent: Double?
-            let text: String
-            let textSize: NSSize
-            let color: NSColor
-            let icon: NSImage
-            let iconInset: CGFloat
+        var grokBlockWidth = iconSize + gap + grokUsedSize.width
+        // Keep the bar slot even before the first snapshot / after sign-out so
+        // the status item width does not collapse (that read as the graph vanishing).
+        if showGrokBar { grokBlockWidth += gap + barWidth }
+        if grokSigned, showGrokCategories {
+            for item in categoryLabels {
+                grokBlockWidth += gap + dotSize + 4 + item.size.width
+            }
         }
 
-        var solidSegments: [SolidSegment] = []
-        for provider in MonitorProvider.usageProviders where provider != .grok {
-            switch provider {
-            case .cursor:
-                guard showCursorBar else { continue }
-                let used = cursorSnapshot?.usedPercent
-                let text = used.map { "\(Int($0.rounded()))%" } ?? "—"
-                let size = text.size(withAttributes: usedAttrs)
-                solidSegments.append(SolidSegment(
-                    usedPercent: used,
-                    text: text,
-                    textSize: size,
-                    color: ConcentricUsageRingView.cursorSRGB.nsColor,
-                    icon: ProviderLogo.cursor,
-                    iconInset: 0
-                ))
-                width += segmentGap + iconSize + gap + size.width + gap + barWidth
-            case .opencode:
-                guard showOpenCodeBar else { continue }
-                let used = openCodeSnapshot?.primaryUsedPercent
-                let text = used.map { "\(Int($0.rounded()))%" } ?? "—"
-                let size = text.size(withAttributes: usedAttrs)
-                solidSegments.append(SolidSegment(
-                    usedPercent: used,
-                    text: text,
-                    textSize: size,
-                    color: NSColor(calibratedRed: 0.90, green: 0.45, blue: 0.20, alpha: 1),
-                    icon: ProviderLogo.openCode,
-                    iconInset: 2.5
-                ))
-                width += segmentGap + iconSize + gap + size.width + gap + barWidth
-            case .claude:
-                guard showClaudeBar else { continue }
-                let used = claudeSnapshot?.headlineUsedPercent
-                let text = used.map { "\(Int($0.rounded()))%" } ?? "—"
-                let size = text.size(withAttributes: usedAttrs)
-                solidSegments.append(SolidSegment(
-                    usedPercent: used,
-                    text: text,
-                    textSize: size,
-                    color: ConcentricUsageRingView.claudeSRGB.nsColor,
-                    icon: ProviderLogo.claude,
-                    iconInset: 0
-                ))
-                width += segmentGap + iconSize + gap + size.width + gap + barWidth
-            case .grok, .overview, .chatgpt, .openrouter:
-                continue
+        let pieces = compositePieces(
+            usedAttrs: usedAttrs,
+            cursorSnapshot: cursorSnapshot,
+            openCodeSnapshot: openCodeSnapshot,
+            claudeSnapshot: claudeSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
+            showCursorBar: showCursorBar,
+            showOpenCodeBar: showOpenCodeBar,
+            showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: providerOrder
+        )
+
+        var width: CGFloat = 0
+        for (index, piece) in pieces.enumerated() {
+            if index > 0 { width += segmentGap }
+            switch piece {
+            case .grok:
+                width += grokBlockWidth
+            case let .solid(segment):
+                width += iconSize + gap + segment.textSize.width + gap + barWidth
             }
         }
 
         width = ceil(width + 2)
-        let image = NSImage(size: NSSize(width: max(width, 20), height: height))
-        image.isTemplate = false
-        image.lockFocus()
-        defer { image.unlockFocus() }
-        NSGraphicsContext.current?.imageInterpolation = .high
+        let size = NSSize(width: max(width, 20), height: height)
+        return makeImage(size: size) {
+            var x: CGFloat = 0
+            let midY = height / 2
 
-        var x: CGFloat = 0
-        let midY = height / 2
-
-        // --- Grok ---
-        drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
-        x += iconSize + gap
-
-        grokUsedText.draw(
-            at: NSPoint(x: x, y: midY - grokUsedSize.height / 2 - 0.5),
-            withAttributes: usedAttrs
-        )
-        x += grokUsedSize.width
-
-        if grokSigned, let snap = snapshot {
-            if showGrokBar {
-                x += gap
-                let barRect = NSRect(x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight)
-                drawSolidBar(in: barRect, usedPercent: snap.usedPercent, color: nsColor(.chat))
-                x += barWidth
-            }
-
-            if showGrokCategories {
-                for (product, item) in zip(grokProducts, categoryLabels) {
-                    x += gap
-                    let dotRect = NSRect(x: x, y: midY - dotSize / 2, width: dotSize, height: dotSize)
-                    nsColor(product.colorToken).setFill()
-                    NSBezierPath(ovalIn: dotRect).fill()
-                    x += dotSize + 4
-                    item.label.draw(
-                        at: NSPoint(x: x, y: midY - item.size.height / 2 - 0.5),
-                        withAttributes: labelAttrs
+            for (index, piece) in pieces.enumerated() {
+                if index > 0 { x += segmentGap }
+                switch piece {
+                case .grok:
+                    drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
+                    x += iconSize + gap
+                    grokUsedText.draw(
+                        at: NSPoint(x: x, y: midY - grokUsedSize.height / 2 - 0.5),
+                        withAttributes: usedAttrs
                     )
-                    x += item.size.width
+                    x += grokUsedSize.width
+                    if showGrokBar {
+                        x += gap
+                        let barRect = NSRect(
+                            x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight
+                        )
+                        drawSolidBar(
+                            in: barRect,
+                            usedPercent: grokSigned ? (snapshot?.usedPercent ?? 0) : 0,
+                            color: nsColor(.chat)
+                        )
+                        x += barWidth
+                    }
+                    if grokSigned, showGrokCategories {
+                        for (product, item) in zip(grokProducts, categoryLabels) {
+                            x += gap
+                            let dotRect = NSRect(
+                                x: x, y: midY - dotSize / 2, width: dotSize, height: dotSize
+                            )
+                            nsColor(product.colorToken).setFill()
+                            NSBezierPath(ovalIn: dotRect).fill()
+                            x += dotSize + 4
+                            item.label.draw(
+                                at: NSPoint(x: x, y: midY - item.size.height / 2 - 0.5),
+                                withAttributes: labelAttrs
+                            )
+                            x += item.size.width
+                        }
+                    }
+                case let .solid(segment):
+                    let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
+                    drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
+                    x += iconSize + gap
+                    segment.text.draw(
+                        at: NSPoint(x: x, y: midY - segment.textSize.height / 2 - 0.5),
+                        withAttributes: usedAttrs
+                    )
+                    x += segment.textSize.width + gap
+                    let barRect = NSRect(
+                        x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight
+                    )
+                    drawSolidBar(in: barRect, usedPercent: segment.usedPercent ?? 0, color: segment.color)
+                    x += barWidth
                 }
             }
         }
-
-        for segment in solidSegments {
-            x += segmentGap
-            let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
-            drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
-            x += iconSize + gap
-
-            segment.text.draw(
-                at: NSPoint(x: x, y: midY - segment.textSize.height / 2 - 0.5),
-                withAttributes: usedAttrs
-            )
-            x += segment.textSize.width + gap
-
-            let barRect = NSRect(x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight)
-            drawSolidBar(in: barRect, usedPercent: segment.usedPercent ?? 0, color: segment.color)
-            x += barWidth
-        }
-
-        return image
     }
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
@@ -345,6 +416,7 @@ enum MenuBarStatusRenderer {
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool
     ) -> NSImage {
         let height: CGFloat = 22
@@ -371,6 +443,8 @@ enum MenuBarStatusRenderer {
             usedPercent = chatGPTSnapshot?.headlineUsedPercent
         case .openrouter:
             usedPercent = openRouterSnapshot?.usedPercent
+        case .grokbot:
+            usedPercent = grokbotSnapshot?.usedPercent
         }
 
         // Monospaced digits make every "NN%" string the same width; the slot
@@ -380,23 +454,52 @@ enum MenuBarStatusRenderer {
         let barX = textX + textSlotWidth + gap
         let width = ceil(barX + barWidth + 2)
 
-        let image = NSImage(size: NSSize(width: max(width, 20), height: height))
-        image.isTemplate = false
-        image.lockFocus()
-        defer { image.unlockFocus() }
-        NSGraphicsContext.current?.imageInterpolation = .high
+        let size = NSSize(width: max(width, 20), height: height)
+        return makeImage(size: size) {
+            let midY = height / 2
+            let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
+            drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
+            let text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "—"
+            let textSize = text.size(withAttributes: attrs)
+            text.draw(at: NSPoint(x: textX, y: midY - textSize.height / 2 - 0.5), withAttributes: attrs)
+            drawSolidBar(
+                in: NSRect(x: barX, y: midY - barHeight / 2, width: barWidth, height: barHeight),
+                usedPercent: usedPercent ?? 0,
+                color: providerAccent(provider)
+            )
+        }
+    }
 
-        let midY = height / 2
-        let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
-        drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
-        let text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "—"
-        let textSize = text.size(withAttributes: attrs)
-        text.draw(at: NSPoint(x: textX, y: midY - textSize.height / 2 - 0.5), withAttributes: attrs)
-        drawSolidBar(
-            in: NSRect(x: barX, y: midY - barHeight / 2, width: barWidth, height: barHeight),
-            usedPercent: usedPercent ?? 0,
-            color: providerAccent(provider)
-        )
+    /// Bake a bitmap via `NSBitmapImageRep` instead of `lockFocus`. MenuBarExtra
+    /// often has no focused graphics context; `lockFocus` then produced an empty
+    /// image that got cached, so the graph vanished until the cache key changed.
+    private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
+        let scale: CGFloat = 2
+        let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
+        let pixelsHigh = max(1, Int((size.height * scale).rounded(.up)))
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return NSImage(size: size)
+        }
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        draw()
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        image.isTemplate = false
         return image
     }
 
@@ -417,13 +520,18 @@ enum MenuBarStatusRenderer {
             return SRGB(red: 0.16, green: 0.52, blue: 0.46).nsColor
         case .openrouter:
             return SRGB(red: 0.45, green: 0.36, blue: 0.90).nsColor
+        case .grokbot:
+            return ConcentricUsageRingView.grokbotSRGB.nsColor
         }
     }
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
-        guard usedPercent > 0 else { return }
-        let fillWidth = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
+        // Keep a 2pt sliver at 0% so the brand fill never collapses to nothing
+        // after a weekly reset (fillWidth was 0, so the "always draw a fill"
+        // path still skipped, leaving only a washed-out track).
+        let raw = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
+        let fillWidth = max(2, raw)
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
         color.setFill()
         let clip = NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2)
@@ -434,7 +542,9 @@ enum MenuBarStatusRenderer {
     }
 
     private static func drawBarTrack(in barRect: NSRect) {
-        chromeColor.withAlphaComponent(0.14).setFill()
+        // Opaque enough to read as a visible empty graph slot against a
+        // translucent menu bar, unlike the previous 0.14 alpha which washed out.
+        chromeColor.withAlphaComponent(0.22).setFill()
         NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2).fill()
     }
 
@@ -502,13 +612,20 @@ enum MenuBarStatusRenderer {
     }
 
     private static func menuBarAppearance() -> NSAppearance {
+        // Prefer the status item, never the dropdown panel. Matching
+        // "MenuBarExtra" first flipped chrome to the panel appearance when the
+        // menu opened, which washed out (or cached) the graph until it closed.
+        var extra: NSAppearance?
         for window in NSApp.windows {
             let name = window.className
-            if name.contains("StatusBar") || name.contains("MenuBarExtra") || name.contains("NSStatusItem") {
+            if name.contains("StatusBar") || name.contains("NSStatusItem") {
                 return window.effectiveAppearance
             }
+            if extra == nil, name.contains("MenuBarExtra") {
+                extra = window.effectiveAppearance
+            }
         }
-        return NSApp.effectiveAppearance
+        return extra ?? NSApp.effectiveAppearance
     }
 
     private static func ensureAppearanceObserver() {

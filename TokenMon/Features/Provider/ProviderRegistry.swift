@@ -15,7 +15,8 @@ struct ProviderRegistry {
         cursor: CursorUsagePoller,
         claude: ClaudeUsagePoller,
         chatGPT: ChatGPTUsagePoller,
-        openRouter: OpenRouterUsagePoller
+        openRouter: OpenRouterUsagePoller,
+        grokbot: GrokbotUsagePoller
     ) {
         self.pollers = [
             .grok: grok,
@@ -23,7 +24,8 @@ struct ProviderRegistry {
             .cursor: cursor,
             .claude: claude,
             .chatgpt: chatGPT,
-            .openrouter: openRouter
+            .openrouter: openRouter,
+            .grokbot: grokbot
         ]
     }
 
