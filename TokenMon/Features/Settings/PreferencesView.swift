@@ -33,9 +33,9 @@ struct PreferencesView: View {
                 ForEach(settings.orderedUsageProviders) { provider in
                     HStack(spacing: 8) {
                         Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.secondary)
-                            .frame(width: 18, height: 22)
+                            .frame(width: 20, height: 24)
                             .contentShape(Rectangle())
                             .onDrag {
                                 draggingProvider = provider
@@ -45,7 +45,7 @@ struct PreferencesView: View {
                             .resizable()
                             .interpolation(.high)
                             .scaledToFit()
-                            .frame(width: 14, height: 14)
+                            .frame(width: 16, height: 16)
                         Toggle(provider.displayName, isOn: Binding(
                             get: { settings.enabledProviderIDs.contains(provider) },
                             set: { on in
@@ -56,6 +56,7 @@ struct PreferencesView: View {
                                 }
                             }
                         ))
+                        .toggleStyle(.switch)
                         .disabled(settings.enabledProviderIDs == [provider])
                     }
                     .contentShape(Rectangle())
@@ -77,12 +78,19 @@ struct PreferencesView: View {
 
             Section {
                 Toggle("Show selected provider", isOn: $settings.showSelectedProviderInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+                    .toggleStyle(.switch)
                 Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
+                    .toggleStyle(.switch)
             } header: {
                 Text("Menu Bar")
             } footer: {
@@ -223,6 +231,7 @@ struct PreferencesView: View {
 
             Section("Alerts") {
                 Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
+                    .toggleStyle(.switch)
                 if settings.thresholdEnabled {
                     Slider(value: $settings.thresholdPercent, in: 50...99, step: 1) {
                         Text("Threshold")
@@ -244,11 +253,13 @@ struct PreferencesView: View {
                             if on { settings.visibleProductIDs.insert(id) } else { settings.visibleProductIDs.remove(id) }
                         }
                     ))
+                    .toggleStyle(.switch)
                 }
             }
 
             Section("System") {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
+                    .toggleStyle(.switch)
             }
 
             Section("Data") {
@@ -269,6 +280,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .font(.system(size: 14))
         .padding()
         .frame(minWidth: 440, minHeight: 520)
         .onDisappear {
