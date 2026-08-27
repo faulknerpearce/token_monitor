@@ -14,7 +14,8 @@ final class MenuBarStatusRendererTests: XCTestCase {
         cursor: CursorSnapshot? = nil,
         claude: ClaudeSnapshot? = nil,
         chatGPT: ChatGPTSnapshot? = nil,
-        openRouter: OpenRouterSnapshot? = nil
+        openRouter: OpenRouterSnapshot? = nil,
+        isGrokSignedIn: Bool = false
     ) -> NSImage {
         MenuBarStatusRenderer.image(
             selectedProvider: provider,
@@ -25,7 +26,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
             claudeSnapshot: claude,
             chatGPTSnapshot: chatGPT,
             openRouterSnapshot: openRouter,
-            isGrokSignedIn: false,
+            isGrokSignedIn: isGrokSignedIn,
             showGrokBar: true,
             showGrokCategories: true,
             showOpenCodeBar: true,
@@ -61,9 +62,20 @@ final class MenuBarStatusRendererTests: XCTestCase {
         // after a weekly reset) because the fill was dropped and the track was
         // painted at 0.14 alpha. The track must stay visible so the bar slot is
         // always drawn, even at an empty (0%) fill.
-        let zero = render(provider: .grok, showSelectedProvider: false)
-        let full = render(provider: .grok, showSelectedProvider: false)
-        // The empty track should cover the same area as the filled bar.
+        let zeroSnap = WeeklyUsageSnapshot(usedPercent: 0, remainingPercent: 100)
+        let fullSnap = WeeklyUsageSnapshot(usedPercent: 9, remainingPercent: 91)
+        let zero = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            snapshot: zeroSnap,
+            isGrokSignedIn: true
+        )
+        let full = render(
+            provider: .grok,
+            showSelectedProvider: false,
+            snapshot: fullSnap,
+            isGrokSignedIn: true
+        )
         XCTAssertEqual(zero.size.width, full.size.width)
         XCTAssertGreaterThan(hasNonTransparentPixels(zero), 0)
     }

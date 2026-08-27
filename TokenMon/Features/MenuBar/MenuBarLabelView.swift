@@ -20,23 +20,8 @@ struct MenuBarLabelView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var labelID: String {
-        let products = visibleProductIDs.sorted().joined(separator: ",")
-        let used = snapshot.map { Int($0.usedPercent.rounded()) } ?? -1
-        let openCodeUsed = openCodeSnapshot.map { Int($0.primaryUsedPercent.rounded()) } ?? -1
-        let cursorUsed = cursorSnapshot.map { Int($0.usedPercent.rounded()) } ?? -1
-        let claudeUsed = claudeSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
-        let chatGPTUsed = chatGPTSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
-        let openRouterUsed = openRouterSnapshot?.usedPercent.map { Int($0.rounded()) } ?? -1
-        let parts = [
-            "\(selectedProvider)-\(showSelectedProvider)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
-            "\(products)-\(used)-\(openCodeUsed)-\(cursorUsed)-\(claudeUsed)-\(chatGPTUsed)-\(openRouterUsed)-\(isGrokSignedIn)-\(colorScheme)"
-        ]
-        return parts.joined(separator: "-")
-    }
-
     var body: some View {
-        Image(nsImage: MenuBarStatusRenderer.image(
+        let image = MenuBarStatusRenderer.image(
             selectedProvider: selectedProvider,
             showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
@@ -52,8 +37,11 @@ struct MenuBarLabelView: View {
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
             visibleProductIDs: visibleProductIDs
-        ))
-        .renderingMode(.original)
-        .id(labelID)
+        )
+        Image(nsImage: image)
+            .renderingMode(.original)
+            .frame(width: image.size.width, height: image.size.height)
+            .transaction { $0.animation = nil }
+            .animation(nil, value: colorScheme)
     }
 }

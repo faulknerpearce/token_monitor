@@ -191,18 +191,20 @@ enum MenuBarStatusRenderer {
                     return (label, label.size(withAttributes: labelAttrs))
                 }
                 : []
-            width += iconSize + gap + grokUsedSize.width
-            if showGrokBar { width += gap + barWidth }
-            if showGrokCategories {
-                for item in categoryLabels {
-                    width += gap + dotSize + 4 + item.size.width
-                }
-            }
         } else {
             grokUsedText = "Grok"
             grokUsedSize = grokUsedText.size(withAttributes: usedAttrs)
             categoryLabels = []
-            width += iconSize + gap + grokUsedSize.width
+        }
+
+        // Keep the bar slot even before the first snapshot / after sign-out so
+        // the status item width does not collapse (that read as the graph vanishing).
+        width += iconSize + gap + grokUsedSize.width
+        if showGrokBar { width += gap + barWidth }
+        if grokSigned, showGrokCategories {
+            for item in categoryLabels {
+                width += gap + dotSize + 4 + item.size.width
+            }
         }
 
         struct SolidSegment {
@@ -265,34 +267,33 @@ enum MenuBarStatusRenderer {
         }
 
         width = ceil(width + 2)
-        let image = NSImage(size: NSSize(width: max(width, 20), height: height))
-        image.isTemplate = false
-        image.lockFocus()
-        defer { image.unlockFocus() }
-        NSGraphicsContext.current?.imageInterpolation = .high
+        let size = NSSize(width: max(width, 20), height: height)
+        return makeImage(size: size) {
+            var x: CGFloat = 0
+            let midY = height / 2
 
-        var x: CGFloat = 0
-        let midY = height / 2
+            // --- Grok ---
+            drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
+            x += iconSize + gap
 
-        // --- Grok ---
-        drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
-        x += iconSize + gap
+            grokUsedText.draw(
+                at: NSPoint(x: x, y: midY - grokUsedSize.height / 2 - 0.5),
+                withAttributes: usedAttrs
+            )
+            x += grokUsedSize.width
 
-        grokUsedText.draw(
-            at: NSPoint(x: x, y: midY - grokUsedSize.height / 2 - 0.5),
-            withAttributes: usedAttrs
-        )
-        x += grokUsedSize.width
-
-        if grokSigned, let snap = snapshot {
             if showGrokBar {
                 x += gap
                 let barRect = NSRect(x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight)
-                drawSolidBar(in: barRect, usedPercent: snap.usedPercent, color: nsColor(.chat))
+                drawSolidBar(
+                    in: barRect,
+                    usedPercent: grokSigned ? (snapshot?.usedPercent ?? 0) : 0,
+                    color: nsColor(.chat)
+                )
                 x += barWidth
             }
 
-            if showGrokCategories {
+            if grokSigned, showGrokCategories {
                 for (product, item) in zip(grokProducts, categoryLabels) {
                     x += gap
                     let dotRect = NSRect(x: x, y: midY - dotSize / 2, width: dotSize, height: dotSize)
@@ -306,26 +307,24 @@ enum MenuBarStatusRenderer {
                     x += item.size.width
                 }
             }
+
+            for segment in solidSegments {
+                x += segmentGap
+                let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
+                drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
+                x += iconSize + gap
+
+                segment.text.draw(
+                    at: NSPoint(x: x, y: midY - segment.textSize.height / 2 - 0.5),
+                    withAttributes: usedAttrs
+                )
+                x += segment.textSize.width + gap
+
+                let barRect = NSRect(x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight)
+                drawSolidBar(in: barRect, usedPercent: segment.usedPercent ?? 0, color: segment.color)
+                x += barWidth
+            }
         }
-
-        for segment in solidSegments {
-            x += segmentGap
-            let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
-            drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
-            x += iconSize + gap
-
-            segment.text.draw(
-                at: NSPoint(x: x, y: midY - segment.textSize.height / 2 - 0.5),
-                withAttributes: usedAttrs
-            )
-            x += segment.textSize.width + gap
-
-            let barRect = NSRect(x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight)
-            drawSolidBar(in: barRect, usedPercent: segment.usedPercent ?? 0, color: segment.color)
-            x += barWidth
-        }
-
-        return image
     }
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
@@ -380,23 +379,52 @@ enum MenuBarStatusRenderer {
         let barX = textX + textSlotWidth + gap
         let width = ceil(barX + barWidth + 2)
 
-        let image = NSImage(size: NSSize(width: max(width, 20), height: height))
-        image.isTemplate = false
-        image.lockFocus()
-        defer { image.unlockFocus() }
-        NSGraphicsContext.current?.imageInterpolation = .high
+        let size = NSSize(width: max(width, 20), height: height)
+        return makeImage(size: size) {
+            let midY = height / 2
+            let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
+            drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
+            let text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "—"
+            let textSize = text.size(withAttributes: attrs)
+            text.draw(at: NSPoint(x: textX, y: midY - textSize.height / 2 - 0.5), withAttributes: attrs)
+            drawSolidBar(
+                in: NSRect(x: barX, y: midY - barHeight / 2, width: barWidth, height: barHeight),
+                usedPercent: usedPercent ?? 0,
+                color: providerAccent(provider)
+            )
+        }
+    }
 
-        let midY = height / 2
-        let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
-        drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
-        let text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "—"
-        let textSize = text.size(withAttributes: attrs)
-        text.draw(at: NSPoint(x: textX, y: midY - textSize.height / 2 - 0.5), withAttributes: attrs)
-        drawSolidBar(
-            in: NSRect(x: barX, y: midY - barHeight / 2, width: barWidth, height: barHeight),
-            usedPercent: usedPercent ?? 0,
-            color: providerAccent(provider)
-        )
+    /// Bake a bitmap via `NSBitmapImageRep` instead of `lockFocus`. MenuBarExtra
+    /// often has no focused graphics context; `lockFocus` then produced an empty
+    /// image that got cached, so the graph vanished until the cache key changed.
+    private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
+        let scale: CGFloat = 2
+        let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
+        let pixelsHigh = max(1, Int((size.height * scale).rounded(.up)))
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return NSImage(size: size)
+        }
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        draw()
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        image.isTemplate = false
         return image
     }
 
@@ -422,12 +450,11 @@ enum MenuBarStatusRenderer {
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
-        // Always draw a fill once a percent is present, even when it rounds to
-        // 0 (e.g. right after a weekly reset). Dropping the fill at 0 made the
-        // bar vanish behind a near-invisible track; the track stays on screen
-        // so the bar slot is always visible as a graph.
-        let fillWidth = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
-        guard fillWidth > 0 else { return }
+        // Keep a 2pt sliver at 0% so the brand fill never collapses to nothing
+        // after a weekly reset (fillWidth was 0, so the "always draw a fill"
+        // path still skipped, leaving only a washed-out track).
+        let raw = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
+        let fillWidth = max(2, raw)
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
         color.setFill()
         let clip = NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2)
@@ -508,13 +535,20 @@ enum MenuBarStatusRenderer {
     }
 
     private static func menuBarAppearance() -> NSAppearance {
+        // Prefer the status item, never the dropdown panel. Matching
+        // "MenuBarExtra" first flipped chrome to the panel appearance when the
+        // menu opened, which washed out (or cached) the graph until it closed.
+        var extra: NSAppearance?
         for window in NSApp.windows {
             let name = window.className
-            if name.contains("StatusBar") || name.contains("MenuBarExtra") || name.contains("NSStatusItem") {
+            if name.contains("StatusBar") || name.contains("NSStatusItem") {
                 return window.effectiveAppearance
             }
+            if extra == nil, name.contains("MenuBarExtra") {
+                extra = window.effectiveAppearance
+            }
         }
-        return NSApp.effectiveAppearance
+        return extra ?? NSApp.effectiveAppearance
     }
 
     private static func ensureAppearanceObserver() {
