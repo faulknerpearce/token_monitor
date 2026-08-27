@@ -9,8 +9,8 @@ struct ClaudeSignInView: View {
             auth: auth,
             config: ProviderSignInConfig(
                 title: "Sign in to Claude",
-                initialStatus: "Sign in to your Claude account. When you reach claude.ai, click Capture Session.",
-                authHostStatus: "Complete sign-in. When you land back on claude.ai, click Capture Session.",
+                initialStatus: "Sign in to your Claude account. The session is captured automatically when you return to claude.ai.",
+                authHostStatus: "Complete sign-in. When you land back on claude.ai, the session is captured automatically.",
                 capturingStatus: "Back on Claude — capturing session…",
                 startURL: URL(string: "https://claude.ai/new")!,
                 isAuthHost: { host, path in

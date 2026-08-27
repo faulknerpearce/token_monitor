@@ -36,7 +36,7 @@ final class AuthSessionService: ProviderAuthSession {
                 return cookie.isSecure || cookie.isHTTPOnly
             },
             includeAllDomainCookiesWhenSessionFound: true,
-            maxAttempts: 1,
+            maxAttempts: 4,
             failureMessage: "No session cookies found. Finish signing in, then click Capture Session."
         )
     }

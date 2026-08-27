@@ -11,6 +11,7 @@
 		06229CC9A8E3CA8B2FEF0312 /* ProviderUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7532E728359574D2F985E60E /* ProviderUsagePoller.swift */; };
 		076A8034DCB0D156E353E9D6 /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA281FA162A6CB5D1F2A2904 /* ExportService.swift */; };
 		08E55E6E8941B7800D091106 /* ConcentricUsageRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */; };
+		0A05E33E0D64AE786F3D5B2A /* SignInBrowserNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */; };
 		0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45F0294D7F6833156223A81 /* UsageErrorTests.swift */; };
 		0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF58255DAC5BC7E940010E74 /* JSONTests.swift */; };
 		0EF555B6CAAA225A6003760A /* CursorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF1A4C740FAB8D1701D593C /* CursorPanelView.swift */; };
@@ -29,9 +30,11 @@
 		2F6B2B0C96F59867B928808B /* BillingPeriodWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3A7943BED7C1C7868926A /* BillingPeriodWindowTests.swift */; };
 		2F72BB40935919BF6E176BA2 /* UsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5C44595A52641A03B41C72 /* UsageClient.swift */; };
 		2FC7F4B60CAD4CCC34BB0D2A /* ClaudeSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6070D087A85C991DAFEF49E /* ClaudeSignInView.swift */; };
+		31B1C94CEEF999E34017791D /* SignInBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF13067B271A7D698F451DA6 /* SignInBrowserView.swift */; };
 		325174C5874016ADB435FD33 /* OpenRouterUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5302334350270C0A547C5C75 /* OpenRouterUsageClient.swift */; };
 		32D1E185274A0A66DDF9F8B4 /* AuthSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75358DA29FB869146E6164A1 /* AuthSessionService.swift */; };
 		36D3EEAB4EBE83485D790F09 /* ClaudeUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 143BF16874370C0F29819E10 /* ClaudeUsagePollerTests.swift */; };
+		38ADEEF601C40BAB714AEE62 /* SignInBrowserNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A56B7777DF3F15D254F4F7 /* SignInBrowserNavigationTests.swift */; };
 		3D1CA4A9AF09623D3E343004 /* CursorAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED36AE2584D7EB89D2F38BC /* CursorAuthSession.swift */; };
 		3F4D8F82AFD4D3993B37CC29 /* DailyQuotaDeltaStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06D2986FD8F4702604E852D /* DailyQuotaDeltaStoreTests.swift */; };
 		404713A354B6A8F71295AF31 /* FileBackedStringStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */; };
@@ -186,6 +189,7 @@
 		3A6FD45894627C32B2A37E7F /* TokenMon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMon.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C4E9D4A9882DA1D0ECA5BD5 /* DailyUsageChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyUsageChartView.swift; sourceTree = "<group>"; };
 		3ED36AE2584D7EB89D2F38BC /* CursorAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorAuthSession.swift; sourceTree = "<group>"; };
+		41A56B7777DF3F15D254F4F7 /* SignInBrowserNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserNavigationTests.swift; sourceTree = "<group>"; };
 		44726362E79D6B6307501588 /* DailyBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetTests.swift; sourceTree = "<group>"; };
 		44E0A6C9D9FC29FAD3F35CC2 /* OpenRouterAuthSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterAuthSessionTests.swift; sourceTree = "<group>"; };
 		452B08F89E54262C8C8C4BD9 /* ChatGPTUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTUsageClientTests.swift; sourceTree = "<group>"; };
@@ -203,6 +207,7 @@
 		58689ED2BD6AFB3896556E97 /* OpenCodeLocalStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalStats.swift; sourceTree = "<group>"; };
 		5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoopTests.swift; sourceTree = "<group>"; };
 		59A75CD9EEFE026263DFB293 /* TokenMonTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserNavigation.swift; sourceTree = "<group>"; };
 		6477629704DECD1265006252 /* OpenRouterUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsagePoller.swift; sourceTree = "<group>"; };
 		67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusRendererTests.swift; sourceTree = "<group>"; };
 		6AA910F6DC60F8FD9C4B9487 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
@@ -258,6 +263,7 @@
 		DBA32D7858CB4723209A8A77 /* TokenMon.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TokenMon.entitlements; sourceTree = "<group>"; };
 		DC4A83133D58CA8EFB9E0C82 /* ChatGPTSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTSignInView.swift; sourceTree = "<group>"; };
 		DDE9B2E5E834AAC33179D1D0 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		DF13067B271A7D698F451DA6 /* SignInBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserView.swift; sourceTree = "<group>"; };
 		E45F0294D7F6833156223A81 /* UsageErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageErrorTests.swift; sourceTree = "<group>"; };
 		E5685652948176D011F6AD18 /* ProductCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalogTests.swift; sourceTree = "<group>"; };
 		E5BCCDA1B3628DD8C3055CD5 /* PanelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelCard.swift; sourceTree = "<group>"; };
@@ -400,6 +406,8 @@
 				EF9B63ACDE0C52F1A1AB1CF8 /* ProviderSignInWebView.swift */,
 				F70542120C2CDBAA2BA56F63 /* ProviderSignOutButton.swift */,
 				7532E728359574D2F985E60E /* ProviderUsagePoller.swift */,
+				5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */,
+				DF13067B271A7D698F451DA6 /* SignInBrowserView.swift */,
 				B295E6C1B0146F0086543DCB /* SlimUsageTrack.swift */,
 				AD751090B98E360ADFBE6CFC /* UsageError.swift */,
 				B68FE75A96E4091616408783 /* WebKitCookieCapture.swift */,
@@ -459,6 +467,7 @@
 				67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */,
 				5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */,
 				585A7CA4EC26E9EC85F11B08 /* ProviderAuthSessionTests.swift */,
+				41A56B7777DF3F15D254F4F7 /* SignInBrowserNavigationTests.swift */,
 				E45F0294D7F6833156223A81 /* UsageErrorTests.swift */,
 				9DE9ECA5176C08F0FECEABDD /* WebKitCookieCaptureTests.swift */,
 			);
@@ -771,6 +780,7 @@
 				91BA6407EED2CB169F464C1E /* PollingLoopTests.swift in Sources */,
 				6D3C3BF5E179DD1B60147EEB /* ProductCatalogTests.swift in Sources */,
 				43AD17BBF1053D89C6FC6425 /* ProviderAuthSessionTests.swift in Sources */,
+				38ADEEF601C40BAB714AEE62 /* SignInBrowserNavigationTests.swift in Sources */,
 				67CB3BAF2D6D0B348912F873 /* ThresholdNotifierTests.swift in Sources */,
 				0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */,
 				FCAA4923ECFBDE36BFA3CA32 /* UsageParsingTests.swift in Sources */,
@@ -865,6 +875,8 @@
 				AAE0FC9316DF293EE7C14714 /* ProviderSwitcherView.swift in Sources */,
 				06229CC9A8E3CA8B2FEF0312 /* ProviderUsagePoller.swift in Sources */,
 				EAF6DBB0C67989D2A7900BF1 /* SegmentedUsageBar.swift in Sources */,
+				0A05E33E0D64AE786F3D5B2A /* SignInBrowserNavigation.swift in Sources */,
+				31B1C94CEEF999E34017791D /* SignInBrowserView.swift in Sources */,
 				5D12D94FFDC098F4A7B43357 /* SignInSheet.swift in Sources */,
 				87F758D86BCA5AABC2B9959F /* SlimUsageTrack.swift in Sources */,
 				D37A350E070C4FD59B5025C9 /* ThresholdNotifier.swift in Sources */,
@@ -1020,12 +1032,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.4.0;
+				MARKETING_VERSION = 1.4.1;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
@@ -1040,11 +1052,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.4.0;
+				MARKETING_VERSION = 1.4.1;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;

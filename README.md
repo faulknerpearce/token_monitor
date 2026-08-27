@@ -70,7 +70,7 @@ Select the **TokenMon** scheme → **My Mac** → Run (⌘R). The app appears in
 
 1. Click the menu bar item and pick a provider from the switcher (or start on **Overview**)
 2. Click **Sign In…** and complete the login on that provider's official sign-in page
-3. If capture does not happen automatically, click **I'm signed in — Capture Session**
+3. If capture does not happen automatically, click **Capture Session**. Use **Back** in the sign-in window (or **Close popup**) to leave an OAuth popup.
 4. Usage appears after the first successful refresh — repeat for any other providers you want to track
 
 ## Build from the command line

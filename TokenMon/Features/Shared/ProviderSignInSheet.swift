@@ -46,7 +46,7 @@ struct ProviderSignInConfig {
     }
 }
 
-/// Shared sign-in chrome: title, status, WebKit host, Capture / Done.
+/// Shared sign-in chrome: title, nav (Back / popup), WebKit host, Capture / Done.
 struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
     @ObservedObject var auth: Auth
     let config: ProviderSignInConfig
@@ -54,8 +54,10 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
     /// Runs after a successful cookie capture, before dismiss.
     var afterCapture: (() async -> Void)?
 
+    @StateObject private var browser = SignInBrowserController()
     @State private var statusMessage: String
     @State private var isCapturing = false
+    @State private var isDismissed = false
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -97,9 +99,13 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
                     .padding(.top, 4)
             }
 
+            SignInNavigationBar(browser: browser)
+            Divider()
+
             ProviderSignInWebView(
                 startURL: config.startURL,
                 dataStore: auth.signInDataStore,
+                controller: browser,
                 isAuthHost: config.isAuthHost,
                 isReturnPage: config.isReturnPage,
                 onAuthHostSeen: {
@@ -108,22 +114,22 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
                 onReturned: { url in
                     config.onReturned?(url)
                     statusMessage = config.capturingStatus
-                    Task {
-                        if config.returnDelayNanoseconds > 0 {
-                            try? await Task.sleep(nanoseconds: config.returnDelayNanoseconds)
-                        }
-                        await capture()
-                    }
+                    Task { await captureAfterReturn() }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(spacing: 12) {
-                Button("I'm signed in — Capture Session") {
-                    Task { await capture() }
+                Button(isCapturing ? "Capturing session…" : "Capture Session") {
+                    Task { _ = await capture() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(isCapturing)
+
+                if isCapturing {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
                 Spacer()
 
@@ -138,9 +144,37 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
         .onAppear {
             NSApp.activate()
         }
+        .onDisappear {
+            isDismissed = true
+        }
+        .onChange(of: browser.popupDepth) { _, depth in
+            if depth > 0 {
+                statusMessage =
+                    "Complete sign-in in the popup. Back or Close popup returns to the provider page."
+            }
+        }
     }
 
-    private func capture() async {
+    /// Wait for an OAuth popup to close, then capture; retry once if cookies are late.
+    private func captureAfterReturn() async {
+        guard !isDismissed, !isCapturing else { return }
+        for _ in 0..<40 where browser.hasPopup {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            if isDismissed { return }
+        }
+        if config.returnDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: config.returnDelayNanoseconds)
+        }
+        if isDismissed { return }
+        if await capture() { return }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        if isDismissed { return }
+        _ = await capture()
+    }
+
+    @discardableResult
+    private func capture() async -> Bool {
+        guard !isDismissed, !isCapturing else { return false }
         isCapturing = true
         defer { isCapturing = false }
         let ok = await auth.captureCookiesFromWebKit()
@@ -151,9 +185,67 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
             statusMessage = "Session captured."
             onComplete()
             dismiss()
-        } else {
-            statusMessage = auth.lastAuthError
-                ?? "No session cookies found yet. Finish signing in, then click Capture Session."
+            return true
         }
+        statusMessage = auth.lastAuthError
+            ?? "No session cookies found yet. Finish signing in, then click Capture Session."
+        return false
+    }
+}
+
+/// Back / Forward / Reload / Close popup chrome for the sign-in WebKit host.
+private struct SignInNavigationBar: View {
+    @ObservedObject var browser: SignInBrowserController
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: browser.goBack) {
+                Image(systemName: "chevron.backward")
+            }
+            .disabled(!browser.backIsEnabled)
+            .help(browser.hasPopup && !browser.canGoBack ? "Back to the sign-in page" : "Back")
+            .accessibilityLabel("Back")
+
+            Button(action: browser.goForward) {
+                Image(systemName: "chevron.forward")
+            }
+            .disabled(!browser.canGoForward)
+            .help("Forward")
+            .accessibilityLabel("Forward")
+
+            Button(action: browser.reload) {
+                Image(systemName: browser.isLoading ? "xmark" : "arrow.clockwise")
+            }
+            .help(browser.isLoading ? "Stop" : "Reload")
+            .accessibilityLabel(browser.isLoading ? "Stop" : "Reload")
+
+            Text(browser.hasPopup ? "Sign-in popup" : displayURL)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(browser.currentURL)
+
+            if browser.hasPopup {
+                Button("Close popup", action: browser.closePopup)
+                    .help("Return to the provider sign-in page")
+            }
+
+            if browser.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var displayURL: String {
+        guard let url = URL(string: browser.currentURL), let host = url.host else {
+            return browser.currentURL
+        }
+        return host + url.path
     }
 }
