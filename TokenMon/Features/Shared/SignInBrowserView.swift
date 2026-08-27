@@ -23,7 +23,11 @@ final class SignInBrowserController: ObservableObject {
 
     fileprivate weak var browser: SignInBrowserView?
 
+    /// Wire this controller to its AppKit browser. Idempotent: re-attaching the
+    /// same view must not publish, or a SwiftUI update that re-attaches would
+    /// feed itself and spin the main thread.
     func attach(_ browser: SignInBrowserView) {
+        guard self.browser !== browser else { return }
         self.browser = browser
         browser.controller = self
         browser.publishChrome()
@@ -34,18 +38,25 @@ final class SignInBrowserController: ObservableObject {
     func reload() { browser?.reloadOrStop() }
     func closePopup() { browser?.closeTopPopup() }
 
-    fileprivate func apply(
+    /// Allow auto-capture to fire again after a capture attempt found no cookies.
+    func rearmReturn() { browser?.rearmReturn() }
+
+    /// Publish live web view state. Only changed values are assigned: `@Published`
+    /// emits on every assignment even when the value is identical, and the sheet
+    /// observes this object, so unconditional writes create an endless
+    /// publish -> body -> updateNSView -> publish cycle.
+    func apply(
         canGoBack: Bool,
         canGoForward: Bool,
         isLoading: Bool,
         currentURL: String,
         popupDepth: Int
     ) {
-        self.canGoBack = canGoBack
-        self.canGoForward = canGoForward
-        self.isLoading = isLoading
-        self.currentURL = currentURL
-        self.popupDepth = popupDepth
+        if self.canGoBack != canGoBack { self.canGoBack = canGoBack }
+        if self.canGoForward != canGoForward { self.canGoForward = canGoForward }
+        if self.isLoading != isLoading { self.isLoading = isLoading }
+        if self.currentURL != currentURL { self.currentURL = currentURL }
+        if self.popupDepth != popupDepth { self.popupDepth = popupDepth }
     }
 }
 
@@ -71,10 +82,12 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     var onReturned: (URL) -> Void
     weak var controller: SignInBrowserController?
 
-    private let mainWebView: WKWebView
+    /// The provider page's web view. Readable for tests; popups stay private.
+    let mainWebView: WKWebView
     private var popups: [WKWebView] = []
     private var observations: [NSKeyValueObservation] = []
     private var returnGate: SignInReturnGate
+    private var didFireReturn = false
 
     init(
         startURL: URL,
@@ -95,9 +108,12 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
 
+        // No `customUserAgent` here on purpose. This is an interactive browser,
+        // not an API client: WebKit's default Safari User-Agent is what OAuth
+        // providers expect, and Google refuses sign-in from a UA that does not
+        // look like a browser. `AppIdentity.userAgent` is for our own API calls.
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = AppIdentity.userAgent
         self.mainWebView = webView
 
         super.init(frame: .zero)
@@ -151,9 +167,7 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     func closeTopPopup() {
         guard let popup = popups.last else { return }
         dismiss(popup)
-        if let url = mainWebView.url, returnGate.matchesReturnPage(url) {
-            onReturned(url)
-        }
+        fireReturnIfOnReturnPage()
     }
 
     func publishChrome() {
@@ -203,7 +217,6 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         popup.navigationDelegate = self
         popup.uiDelegate = self
         popup.allowsBackForwardNavigationGestures = true
-        popup.customUserAgent = mainWebView.customUserAgent
         popup.autoresizingMask = [.width, .height]
         popups.append(popup)
         addSubview(popup)
@@ -216,9 +229,7 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     func webViewDidClose(_ webView: WKWebView) {
         guard popups.contains(where: { $0 === webView }) else { return }
         dismiss(webView)
-        if let url = mainWebView.url, returnGate.matchesReturnPage(url) {
-            onReturned(url)
-        }
+        fireReturnIfOnReturnPage()
     }
 
     // MARK: - Private
@@ -231,10 +242,41 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
             // Wait until the OAuth popup is gone so cookies are committed and
             // window.opener can finish. Manual Capture Session still works.
             guard !isPopup, popups.isEmpty else { return }
-            onReturned(url)
+            fireReturn(url)
         case .none:
             break
         }
+    }
+
+    /// Fire the return callback once the popup is gone and the main page is the return page.
+    private func fireReturnIfOnReturnPage() {
+        guard popups.isEmpty, let url = mainWebView.url, returnGate.matchesReturnPage(url) else {
+            return
+        }
+        fireReturn(url)
+    }
+
+    /// Deliver `onReturned` at most once per sign-in.
+    ///
+    /// The gate reports `.returnPage` on every finished navigation, and provider
+    /// pages navigate client-side after login, so without this latch auto-capture
+    /// would be kicked off repeatedly. The latch lives here, not in the gate: the
+    /// gate's first `.returnPage` is deliberately swallowed while a popup is open
+    /// so the popup-dismiss paths can fire it later.
+    private func fireReturn(_ url: URL) {
+        guard !didFireReturn else { return }
+        didFireReturn = true
+        onReturned(url)
+    }
+
+    /// Re-arm auto-capture after a capture attempt came back empty.
+    ///
+    /// The return page can load before the session cookie is committed, or the
+    /// user can land back on the provider page without having finished signing
+    /// in. Without this the one-shot latch would stay closed for the rest of the
+    /// window and every later landing would need a manual Capture Session.
+    func rearmReturn() {
+        didFireReturn = false
     }
 
     private func dismiss(_ popup: WKWebView) {

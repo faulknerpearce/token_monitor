@@ -189,6 +189,9 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
         }
         statusMessage = auth.lastAuthError
             ?? "No session cookies found yet. Finish signing in, then click Capture Session."
+        // Cookies may simply be late, or the user may not have finished signing
+        // in yet. Let a later landing on the return page auto-capture again.
+        browser.rearmReturn()
         return false
     }
 }
