@@ -10,6 +10,14 @@ enum WebKitCookieCapture {
         var looksLikeAuthCookie: @Sendable (HTTPCookie) -> Bool
         /// When preferred session is found, include all domain cookies if non-empty.
         var includeAllDomainCookiesWhenSessionFound: Bool
+        /// Lowercased names of the only cookies this provider actually sends.
+        ///
+        /// When non-empty and the preferred session cookie is among them, just
+        /// these are persisted — the rest of the domain jar (analytics, feature
+        /// flags, marketing ids) never touches disk. Empty means "keep the old
+        /// broad behaviour", and a set that fails to yield the preferred cookie
+        /// falls back to it too, so narrowing can never silently break sign-in.
+        var essentialCookieNames: Set<String>
         var maxAttempts: Int
         var retryDelayNanoseconds: UInt64
         var failureMessage: String
@@ -19,6 +27,7 @@ enum WebKitCookieCapture {
             isPreferredSessionCookie: @escaping @Sendable (HTTPCookie) -> Bool = { _ in false },
             looksLikeAuthCookie: @escaping @Sendable (HTTPCookie) -> Bool,
             includeAllDomainCookiesWhenSessionFound: Bool = true,
+            essentialCookieNames: Set<String> = [],
             maxAttempts: Int = 1,
             retryDelayNanoseconds: UInt64 = 400_000_000,
             failureMessage: String
@@ -27,6 +36,7 @@ enum WebKitCookieCapture {
             self.isPreferredSessionCookie = isPreferredSessionCookie
             self.looksLikeAuthCookie = looksLikeAuthCookie
             self.includeAllDomainCookiesWhenSessionFound = includeAllDomainCookiesWhenSessionFound
+            self.essentialCookieNames = Set(essentialCookieNames.map { $0.lowercased() })
             self.maxAttempts = maxAttempts
             self.retryDelayNanoseconds = retryDelayNanoseconds
             self.failureMessage = failureMessage
@@ -44,26 +54,7 @@ enum WebKitCookieCapture {
         let attempts = max(1, policy.maxAttempts)
         for attempt in 1...attempts {
             let cookies = await WKWebsiteDataStoreBridge.shared.allCookies(in: dataStore)
-            let relevant = cookies.filter { policy.isDomain($0.domain) }
-            let preferred = relevant.first(where: policy.isPreferredSessionCookie)
-            let authish = relevant.filter { policy.looksLikeAuthCookie($0) }
-
-            let chosen: [HTTPCookie]?
-            if preferred != nil {
-                if policy.includeAllDomainCookiesWhenSessionFound, !relevant.isEmpty {
-                    chosen = relevant
-                } else if let preferred {
-                    chosen = [preferred]
-                } else {
-                    chosen = nil
-                }
-            } else if !authish.isEmpty {
-                chosen = policy.includeAllDomainCookiesWhenSessionFound && !relevant.isEmpty
-                    ? relevant
-                    : authish
-            } else {
-                chosen = nil
-            }
+            let chosen = select(from: cookies, policy: policy)
 
             if let chosen, !chosen.isEmpty {
                 let header = chosen.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
@@ -77,6 +68,38 @@ enum WebKitCookieCapture {
             if attempt < attempts {
                 try? await Task.sleep(nanoseconds: policy.retryDelayNanoseconds)
             }
+        }
+        return nil
+    }
+
+    /// Picks the cookies to persist out of everything the sign-in web view holds.
+    ///
+    /// Pure and synchronous so the policy can be exercised without a WebKit
+    /// data store. Prefers the provider's `essentialCookieNames` allowlist and
+    /// only widens to the whole domain jar when that yields nothing usable.
+    static func select(from cookies: [HTTPCookie], policy: Policy) -> [HTTPCookie]? {
+        let relevant = cookies.filter { policy.isDomain($0.domain) }
+        guard !relevant.isEmpty else { return nil }
+
+        // Store only what the requests actually send, when the provider says so
+        // and the session cookie is really in there.
+        if !policy.essentialCookieNames.isEmpty {
+            let essential = relevant.filter {
+                policy.essentialCookieNames.contains($0.name.lowercased())
+            }
+            if essential.contains(where: policy.isPreferredSessionCookie) {
+                return essential
+            }
+        }
+
+        let preferred = relevant.first(where: policy.isPreferredSessionCookie)
+        let authish = relevant.filter { policy.looksLikeAuthCookie($0) }
+
+        if let preferred {
+            return policy.includeAllDomainCookiesWhenSessionFound ? relevant : [preferred]
+        }
+        if !authish.isEmpty {
+            return policy.includeAllDomainCookiesWhenSessionFound ? relevant : authish
         }
         return nil
     }

@@ -205,6 +205,11 @@ struct DailyBudgetBarsView: View {
 
         return VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
+                // Track stays at full strength on every day, matching Grok's
+                // DailyUsageChartView. Dimming the whole column (track
+                // included) dropped an empty future day to ~5% alpha, which
+                // reads as "no bar at all" on the dark panel — only the fill
+                // should fade.
                 Color.primary.opacity(0.12)
 
                 if fraction > 0.005 && !isFuture {
@@ -215,7 +220,6 @@ struct DailyBudgetBarsView: View {
             .frame(width: Self.stemWidth, height: trackHeight)
             .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
             .frame(maxWidth: .infinity)
-            .opacity(isFuture ? 0.4 : 1)
             .help(dayHelp(day))
 
             VStack(spacing: 1) {
@@ -231,6 +235,7 @@ struct DailyBudgetBarsView: View {
                     .foregroundStyle(.tertiary)
             }
             .frame(height: 26)
+            .opacity(isFuture ? 0.5 : 1)
         }
         .frame(maxWidth: .infinity)
     }

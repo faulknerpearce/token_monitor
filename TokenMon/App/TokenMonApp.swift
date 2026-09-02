@@ -121,6 +121,7 @@ final class AppModel: ObservableObject {
     let openRouterPoller: OpenRouterUsagePoller
     let grokbotPoller: GrokbotUsagePoller
     let providers: ProviderRegistry
+    let updateChecker: UpdateChecker
 
     private var cancellables = Set<AnyCancellable>()
     private var terminateObserver: NSObjectProtocol?
@@ -163,6 +164,7 @@ final class AppModel: ObservableObject {
             hourly: grokbotHourly,
             daily: grokbotDaily
         )
+        updateChecker = UpdateChecker(settings: settings)
         providers = ProviderRegistry(
             grok: poller,
             openCode: openCodePoller,
@@ -188,9 +190,15 @@ final class AppModel: ObservableObject {
         forwardChanges(from: claudeAuth)
         forwardChanges(from: chatGPTAuth)
         forwardChanges(from: openRouterAuth)
+        forwardChanges(from: updateChecker)
+        settings.$checksForUpdates
+            .dropFirst()
+            .sink { [weak self] _ in self?.updateChecker.settingChanged() }
+            .store(in: &cancellables)
         guard !Self.isRunningTests else { return }
         notifier.requestAuthorizationIfNeeded()
         providers.startAll()
+        updateChecker.start()
         observeTermination()
     }
 
@@ -237,6 +245,7 @@ struct MenuBarRoot: View {
             openRouterAuth: model.openRouterAuth,
             openRouterPoller: model.openRouterPoller,
             grokbotPoller: model.grokbotPoller,
+            updateChecker: model.updateChecker,
             settings: model.settings,
             history: model.history,
             grokHourly: model.grokHourly,

@@ -117,6 +117,30 @@ final class GrokbotUsageClientTests: XCTestCase {
         }
     }
 
+    /// proto3 JSON drops default-valued fields, so an unused period arrives with
+    /// no `usagePercent` at all. That is 0% — the section must still draw its
+    /// (empty) bars rather than falling back to the no-data placeholder.
+    func testMissingUsagePercentWithAllowanceFieldsIsZero() throws {
+        let snapshot = try parse("""
+        {
+          "currentPeriodStart": "2026-08-20T11:00:00Z",
+          "nextResetTimestampUtc": "2026-08-27T11:00:00Z",
+          "hasNonZeroIncludedLimit": true
+        }
+        """)
+        XCTAssertEqual(snapshot.usedPercent, 0, accuracy: 1e-9)
+        XCTAssertTrue(snapshot.hasIncludedAllowance)
+        XCTAssertNotNil(snapshot.resetsAt)
+    }
+
+    /// Same tolerance on the snake_case proto spelling.
+    func testMissingUsagePercentSnakeCaseAllowanceFieldsIsZero() throws {
+        let snapshot = try parse("""
+        { "next_reset_timestamp_utc": "2026-08-27T11:00:00Z" }
+        """)
+        XCTAssertEqual(snapshot.usedPercent, 0, accuracy: 1e-9)
+    }
+
     func testPercentIsClampedToPoolBounds() throws {
         XCTAssertEqual(try parse(#"{"usagePercent": 140}"#).usedPercent, 100, accuracy: 1e-9)
         XCTAssertEqual(try parse(#"{"usagePercent": -8}"#).usedPercent, 0, accuracy: 1e-9)

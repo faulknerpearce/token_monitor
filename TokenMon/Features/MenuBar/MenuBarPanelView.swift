@@ -15,6 +15,7 @@ struct MenuBarPanelView: View {
     @ObservedObject var openRouterAuth: OpenRouterAuthSession
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var grokbotPoller: GrokbotUsagePoller
+    @ObservedObject var updateChecker: UpdateChecker
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
@@ -294,6 +295,12 @@ struct MenuBarPanelView: View {
             }
 
             Divider().padding(.vertical, 4)
+
+            if let release = updateChecker.availableRelease {
+                panelButton("Update to \(release.version.description)…", shortcut: nil) {
+                    NSWorkspace.shared.open(release.pageURL)
+                }
+            }
 
             panelButton("Settings", shortcut: "⌘O", action: openPreferences)
                 .keyboardShortcut("o", modifiers: [.command])

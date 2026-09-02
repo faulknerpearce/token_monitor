@@ -260,6 +260,12 @@ struct PreferencesView: View {
             Section("System") {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                     .toggleStyle(.switch)
+                Toggle("Check for Updates", isOn: $settings.checksForUpdates)
+                    .toggleStyle(.switch)
+                Text("Checks GitHub for a newer release and shows a link in the menu. "
+                    + "Nothing is downloaded or installed automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Data") {
