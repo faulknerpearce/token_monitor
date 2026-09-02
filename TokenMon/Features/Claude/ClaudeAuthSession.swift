@@ -20,6 +20,9 @@ final class ClaudeAuthSession: ProviderAuthSession {
                 return hints.contains { name.contains($0) }
             },
             includeAllDomainCookiesWhenSessionFound: true,
+            // `sessionKey` authenticates; `lastActiveOrg` carries the org UUID
+            // that ClaudeUsageClient parses back out of the header.
+            essentialCookieNames: ["sessionkey", "lastactiveorg"],
             maxAttempts: 4,
             failureMessage: "No Claude session cookie found. Finish signing in to claude.ai, then click Capture Session."
         )

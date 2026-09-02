@@ -53,6 +53,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// When on, TokenMon checks GitHub for a newer release and shows a row in
+    /// the menu when one exists. Notify-only — nothing is downloaded.
+    @Published var checksForUpdates: Bool {
+        didSet {
+            guard checksForUpdates != oldValue else { return }
+            defaults.set(checksForUpdates, forKey: Keys.checksForUpdates)
+        }
+    }
+
     /// When on, the menu bar shows only the selected provider (icon + % + bar)
     /// instead of the pinned graph composite.
     @Published var showSelectedProviderInMenuBar: Bool {
@@ -188,6 +197,7 @@ final class AppSettings: ObservableObject {
         showClaudeBarInMenuBar = defaults.object(forKey: Keys.showClaudeBar) as? Bool ?? false
         showGrokbotBarInMenuBar = defaults.object(forKey: Keys.showGrokbotBar) as? Bool ?? false
         showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
+        checksForUpdates = defaults.object(forKey: Keys.checksForUpdates) as? Bool ?? true
         // Clamp on load — didSet does not run during init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
@@ -240,6 +250,7 @@ final class AppSettings: ObservableObject {
         static let showClaudeBar = "showClaudeBarInMenuBar"
         static let showGrokbotBar = "showGrokbotBarInMenuBar"
         static let showSelectedProvider = "showSelectedProviderInMenuBar"
+        static let checksForUpdates = "checksForUpdates"
         static let activePoll = "activePollSeconds"
         static let idlePoll = "idlePollSeconds"
         static let thresholdEnabled = "thresholdEnabled"

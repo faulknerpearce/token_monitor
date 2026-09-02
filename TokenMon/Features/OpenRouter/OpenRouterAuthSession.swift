@@ -13,14 +13,16 @@ final class OpenRouterAuthSession: ObservableObject {
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
 
-    private let store: FileBackedStringStore
+    private let store: any CredentialStore
     private let logger = Logger(category: "OpenRouter")
 
-    init(directory: URL? = nil) {
-        if let directory {
-            store = FileBackedStringStore(directory: directory, filenamePrefix: "openrouter_auth_")
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        if let store {
+            self.store = store
+        } else if let directory {
+            self.store = FileBackedCredentialStore(directory: directory, filenamePrefix: "openrouter_auth_")
         } else {
-            store = FileBackedStringStore(filenamePrefix: "openrouter_auth_")
+            self.store = FileBackedCredentialStore(filenamePrefix: "openrouter_auth_")
         }
         refreshFromDisk()
     }

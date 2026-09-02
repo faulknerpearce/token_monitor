@@ -25,6 +25,8 @@ final class CursorAuthSession: ProviderAuthSession {
                 return hints.contains { name.contains($0) }
             },
             includeAllDomainCookiesWhenSessionFound: true,
+            // The dashboard requests authenticate on this one cookie.
+            essentialCookieNames: ["workoscursorsessiontoken"],
             maxAttempts: 4,
             failureMessage: "No Cursor session cookie found. Finish signing in until you see the usage dashboard, then click Capture Session."
         )

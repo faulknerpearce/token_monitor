@@ -44,16 +44,18 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// are invisible to it.
     let signInDataStore = WKWebsiteDataStore.nonPersistent()
 
-    private let store: FileBackedStringStore
+    private let store: any CredentialStore
     private let logger: Logger
 
-    init(config: ProviderAuthConfig, directory: URL? = nil) {
+    init(config: ProviderAuthConfig, directory: URL? = nil, store: (any CredentialStore)? = nil) {
         self.config = config
         self.logger = Logger(category: config.logCategory)
-        if let directory {
-            self.store = FileBackedStringStore(directory: directory, filenamePrefix: config.storeFilenamePrefix)
+        if let store {
+            self.store = store
+        } else if let directory {
+            self.store = FileBackedCredentialStore(directory: directory, filenamePrefix: config.storeFilenamePrefix)
         } else {
-            self.store = FileBackedStringStore(filenamePrefix: config.storeFilenamePrefix)
+            self.store = FileBackedCredentialStore(filenamePrefix: config.storeFilenamePrefix)
         }
         self.needsSignIn = config.startsSignedOut
         refreshFromDisk()

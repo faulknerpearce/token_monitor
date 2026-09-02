@@ -56,7 +56,19 @@ struct GrokbotUsageClient: Sendable {
 
         // protobuf-es emits camelCase over JSON; accept the proto field names too
         // so a transport switch does not silently blank the panel.
-        guard let percent = JSON.firstDouble(root, keys: ["usagePercent", "usage_percent"]) else {
+        //
+        // proto3 JSON omits default-valued fields, so a period with no Bot usage
+        // yet arrives *without* `usage_percent` — that is 0%, not "no access".
+        // Only a payload carrying no allowance fields at all means the account
+        // has no Bot entitlement. Without this the section blanked exactly when
+        // usage was empty, instead of drawing an empty track like every other
+        // provider does at 0%.
+        let percent: Double
+        if let reported = JSON.firstDouble(root, keys: ["usagePercent", "usage_percent"]) {
+            percent = reported
+        } else if hasAllowanceFields(root) {
+            percent = 0
+        } else {
             throw GrokbotUsageError.noBotAccess(
                 "No Grok Bot allowance on this account. Grokbot needs a Cursor or SuperGrok plan that includes it."
             )
@@ -74,6 +86,21 @@ struct GrokbotUsageClient: Sendable {
             accountEmail: accountEmail,
             hasIncludedAllowance: hasIncludedAllowance
         )
+    }
+
+    /// Fields that only appear once the account actually has a Bot allowance.
+    /// Their presence lets a missing `usage_percent` be read as 0% rather than
+    /// as "no entitlement".
+    private static func hasAllowanceFields(_ root: [String: Any]) -> Bool {
+        let keys = [
+            "currentPeriodStart", "current_period_start",
+            "nextResetTimestampUtc", "next_reset_timestamp_utc",
+            "includedLimitZero", "included_limit_zero",
+            "hasNonZeroIncludedLimit", "has_non_zero_included_limit",
+            "includedUsageSuperGrokPlan", "included_usage_super_grok_plan",
+            "grokPlanLabel", "grok_plan_label"
+        ]
+        return keys.contains { root[$0] != nil }
     }
 
     /// SuperGrok-funded accounts report their plan; everything else is Cursor-funded.

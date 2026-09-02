@@ -67,7 +67,13 @@ struct GrokbotSnapshot: Codable, Hashable, Sendable {
     func daysInPeriod(calendar: Calendar = .current) -> Int {
         guard let periodStart, let resetsAt, resetsAt > periodStart else { return 7 }
         let days = DailyBudget.daysInBillingCycle(start: periodStart, end: resetsAt, calendar: calendar)
-        return min(31, max(1, days))
+        // On reset day the payload reports `current_period_start` on the same
+        // calendar day as `next_reset_timestamp_utc`, so the derived span
+        // rounds down to a single day. Taking that literally collapses the
+        // chart to one bar at a 100%/day budget — the pool is a weekly one, so
+        // a sub-2-day span means "unreliable", not "one-day plan".
+        guard days >= 2 else { return 7 }
+        return min(31, days)
     }
 
     static let preview = GrokbotSnapshot(
