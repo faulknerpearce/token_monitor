@@ -40,7 +40,8 @@ struct PanelSectionHeader: View {
     }
 }
 
-/// A section header with an optional trailing usage pill (e.g. `42% used`).
+/// A section header with an optional trailing usage figure, shown as plain
+/// text (the bars carry the detail; the Overview cards keep `PanelPill`).
 struct PanelSectionHeaderRow: View {
     let title: String
     var trailing: String?
@@ -50,7 +51,10 @@ struct PanelSectionHeaderRow: View {
             PanelSectionHeader(title: title)
             Spacer()
             if let trailing {
-                PanelPill(text: trailing)
+                Text(trailing)
+                    .font(PanelTypography.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
         }
     }

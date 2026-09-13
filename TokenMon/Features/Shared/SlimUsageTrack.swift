@@ -19,7 +19,10 @@ struct SlimUsageTrack: View {
                         .font(PanelTypography.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    PanelPill(text: "\(Int(Percent.clamp(percent).rounded()))% used")
+                    Text("\(Int(Percent.clamp(percent).rounded()))% used")
+                        .font(PanelTypography.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
             }
 
