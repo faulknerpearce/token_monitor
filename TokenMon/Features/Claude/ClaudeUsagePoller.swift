@@ -18,6 +18,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
     private let logger = Logger(category: "Claude")
+    private var cancellables = Set<AnyCancellable>()
 
     /// Last observed `seven_day.resets_at`; tracks weekly-pool rollovers so the
     /// day-delta history can be cleared when a new period begins, and anchors
@@ -34,6 +35,13 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         self.auth = auth
         self.hourly = hourly
         self.daily = daily
+        auth.$isSignedIn
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] signedIn in
+                if !signedIn { self?.clearSnapshot() }
+            }
+            .store(in: &cancellables)
     }
 
     func start() {
@@ -49,6 +57,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         dailyBudgetDays = nil
         weeklyResetsAt = nil
         lastError = nil
+        lastRefreshedAt = nil
+        hourly.clear()
+        daily.clear()
     }
 
     func refreshNow() async {

@@ -77,6 +77,28 @@ final class HourlyDeltaActivityStore: ObservableObject {
         hourWeights = next
     }
 
+    /// Drops the accumulated series and utilization baseline. Called on
+    /// sign-out / account switch so one account's growth never leaks into the
+    /// chart of the next account signed in on the same provider.
+    func clear() {
+        let today = Calendar.current.startOfDay(for: Date())
+        dayStart = today
+        hourWeights = Array(repeating: 0, count: 24)
+        lastUsedPercent = nil
+        persist()
+    }
+
+    /// Drops the finished window's hourly growth because the provider's quota
+    /// window rolled over, and resets the utilization baseline so the first
+    /// sample of the fresh window is credited in full. Without resetting the
+    /// baseline, a new window that is already above the old window's last value
+    /// would be understated by the old baseline.
+    func beginNewWindow() {
+        hourWeights = Array(repeating: 0, count: 24)
+        lastUsedPercent = 0
+        persist()
+    }
+
     private func loadOrReset(for today: Date) {
         let raw = store.value(forKey: storageKey)
         guard let raw,

@@ -68,6 +68,7 @@ struct OverviewPanelView: View {
 
         let openCodeWeights: (openCodeGo: [Double], openCodeZen: [Double]) = {
             guard settings.enabledProviderIDs.contains(.opencode),
+                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
                   let hourly = openCodePoller.dayHourlyUsage,
                   calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
                   hourly.hours.count == 24
@@ -83,6 +84,7 @@ struct OverviewPanelView: View {
 
         let openCodeCostWeights: (openCodeGo: [Double], openCodeZen: [Double]) = {
             guard settings.enabledProviderIDs.contains(.opencode),
+                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
                   let hourly = openCodePoller.dayHourlyUsage,
                   calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
                   hourly.hours.count == 24
@@ -96,6 +98,7 @@ struct OverviewPanelView: View {
 
         let openCodeTokenWeights: (openCodeGo: [Int64], openCodeZen: [Int64]) = {
             guard settings.enabledProviderIDs.contains(.opencode),
+                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
                   let hourly = openCodePoller.dayHourlyUsage,
                   calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
                   hourly.hours.count == 24
@@ -108,7 +111,8 @@ struct OverviewPanelView: View {
         }()
 
         let grokPollWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.grok) else {
+            guard settings.enabledProviderIDs.contains(.grok),
+                  grokAuth.isSignedIn, !grokAuth.needsSignIn else {
                 return Array(repeating: 0, count: 24)
             }
             if calendar.isDate(grokHourly.dayStart, inSameDayAs: dayStart),
@@ -120,6 +124,7 @@ struct OverviewPanelView: View {
 
         let cursorWeights: [Double] = {
             guard settings.enabledProviderIDs.contains(.cursor),
+                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn,
                   let hourly = cursorPoller.dayHourlyUsage,
                   calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
                   hourly.quotaHourWeights.count == 24
@@ -130,7 +135,8 @@ struct OverviewPanelView: View {
         }()
 
         let claudeWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.claude) else {
+            guard settings.enabledProviderIDs.contains(.claude),
+                  claudeAuth.isSignedIn, !claudeAuth.needsSignIn else {
                 return Array(repeating: 0, count: 24)
             }
             if calendar.isDate(claudeHourly.dayStart, inSameDayAs: dayStart),
@@ -141,7 +147,8 @@ struct OverviewPanelView: View {
         }()
 
         let grokbotWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.grokbot) else {
+            guard settings.enabledProviderIDs.contains(.grokbot),
+                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn else {
                 return Array(repeating: 0, count: 24)
             }
             if calendar.isDate(grokbotHourly.dayStart, inSameDayAs: dayStart),
@@ -153,6 +160,7 @@ struct OverviewPanelView: View {
 
         let cursorTokenWeights: [Int64] = {
             guard settings.enabledProviderIDs.contains(.cursor),
+                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn,
                   let hourly = cursorPoller.dayHourlyUsage,
                   calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
                   hourly.hourTokenWeights.count == 24

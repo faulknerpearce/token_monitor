@@ -68,4 +68,34 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(storeA.hourWeights[8], 10, accuracy: 0.001)
         XCTAssertEqual(storeB.hourWeights[8], 1, accuracy: 0.001)
     }
+
+    /// Sign-out / account switch must wipe the series and baseline so one
+    /// account's growth never appears in the next account's chart.
+    func testClearResetsSeriesAndBaseline() {
+        let (activity, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        activity.record(usedPercent: 10, at: date(hour: 9))
+        activity.record(usedPercent: 40, at: date(hour: 9, minute: 30))
+        activity.clear()
+        XCTAssertEqual(activity.hourWeights, Array(repeating: 0, count: 24))
+
+        // A new account's first sample after clear is not compared to the old 40.
+        activity.record(usedPercent: 5, at: date(hour: 10))
+        XCTAssertEqual(activity.hourWeights[10], 0, accuracy: 0.001)
+        activity.record(usedPercent: 12, at: date(hour: 11))
+        XCTAssertEqual(activity.hourWeights[11], 7, accuracy: 0.001)
+    }
+
+    /// A known window rollover credits the first sample whole even when it is
+    /// already above the old window's last value.
+    func testBeginNewWindowCreditsRisingFirstSample() {
+        let (activity, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        activity.record(usedPercent: 20, at: date(hour: 9))
+        activity.beginNewWindow()
+        activity.record(usedPercent: 30, at: date(hour: 10))
+        XCTAssertEqual(activity.hourWeights[10], 30, accuracy: 0.001)
+    }
 }

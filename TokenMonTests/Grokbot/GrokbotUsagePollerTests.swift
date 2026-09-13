@@ -133,4 +133,31 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertTrue(MonitorProvider.overview.pollsGrokbot)
         XCTAssertFalse(MonitorProvider.cursor.pollsGrokbot)
     }
+
+    /// A reset instant that jumps forward by ~a whole period is a new window;
+    /// small forward drift within the same period is not.
+    func testIsNewWindowDetectsRollover() {
+        let previous = date(2026, 8, 20, hour: 11)
+        XCTAssertTrue(GrokbotUsagePoller.isNewWindow(
+            previousResetsAt: previous,
+            nextResetsAt: date(2026, 8, 27, hour: 11),
+            periodDays: 7
+        ))
+        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+            previousResetsAt: previous,
+            nextResetsAt: date(2026, 8, 21, hour: 11),
+            periodDays: 7
+        ))
+        // No prior anchor, or a backwards move, is never a rollover.
+        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+            previousResetsAt: nil,
+            nextResetsAt: previous,
+            periodDays: 7
+        ))
+        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+            previousResetsAt: previous,
+            nextResetsAt: date(2026, 8, 19, hour: 11),
+            periodDays: 7
+        ))
+    }
 }

@@ -102,6 +102,20 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[today] ?? 0, 25, accuracy: 0.001)
     }
 
+    /// A known rollover credits the fresh window's first sample whole even when
+    /// it is already above the old window's last value (20% → 30%).
+    func testBeginNewWindowCreditsRisingFirstSample() {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        store.record(windowUsedPercent: 20, at: date(dayOffset: 0, hour: 9))
+        store.beginNewWindow()
+        store.record(windowUsedPercent: 30, at: date(dayOffset: 0, hour: 10))
+
+        let today = Calendar.current.startOfDay(for: date(dayOffset: 0, hour: 0))
+        XCTAssertEqual(store.spentByDay[today] ?? 0, 30, accuracy: 0.001)
+    }
+
     func testReloadRestoresPersistedDaysAndBaseline() {
         let (store, dir) = makeStore()
         store.record(windowUsedPercent: 10, at: date(dayOffset: 0, hour: 9))
