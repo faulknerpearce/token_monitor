@@ -24,7 +24,18 @@ struct FileBackedStringStore {
 
     func set(_ value: String, forKey key: String) {
         let url = fileURL(forKey: key)
-        try? Data(value.utf8).write(to: url, options: .atomic)
+        let data = Data(value.utf8)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? data.write(to: url, options: .atomic)
+        } else {
+            // Create user-only from the start; the directory is already 0700, so
+            // there is no window where a umask-default file holds a credential.
+            FileManager.default.createFile(
+                atPath: url.path,
+                contents: data,
+                attributes: [.posixPermissions: 0o600]
+            )
+        }
         try? FileManager.default.setAttributes(
             [.posixPermissions: 0o600],
             ofItemAtPath: url.path

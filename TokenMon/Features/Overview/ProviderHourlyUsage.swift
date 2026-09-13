@@ -83,19 +83,20 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         cursorHourTokens: [Int64] = Array(repeating: 0, count: 24),
         claudeHourTokens: [Int64]? = nil
     ) -> ProviderDayHourlyUsage {
-        precondition(grokHourWeights.count == 24)
-        precondition(openCodeGoHourWeights.count == 24)
-        precondition(openCodeZenHourWeights.count == 24)
-        precondition(cursorHourWeights.count == 24)
-        precondition(claudeHourWeights.count == 24)
-        precondition(grokbotHourWeights.count == 24)
-        let costs = hourCostUSD ?? Array(repeating: 0.0, count: 24)
-        precondition(costs.count == 24)
-        if let grokHourTokens { precondition(grokHourTokens.count == 24) }
-        if let claudeHourTokens { precondition(claudeHourTokens.count == 24) }
-        precondition(openCodeGoHourTokens.count == 24)
-        precondition(openCodeZenHourTokens.count == 24)
-        precondition(cursorHourTokens.count == 24)
+        // Pad/truncate to 24 instead of trapping: a malformed caller should
+        // degrade to a zeroed hour, never crash the menu bar.
+        let grokHourWeights = Self.normalized(grokHourWeights)
+        let openCodeGoHourWeights = Self.normalized(openCodeGoHourWeights)
+        let openCodeZenHourWeights = Self.normalized(openCodeZenHourWeights)
+        let cursorHourWeights = Self.normalized(cursorHourWeights)
+        let claudeHourWeights = Self.normalized(claudeHourWeights)
+        let grokbotHourWeights = Self.normalized(grokbotHourWeights)
+        let costs = Self.normalized(hourCostUSD ?? [])
+        let grokHourTokens = Self.normalized(grokHourTokens)
+        let claudeHourTokens = Self.normalized(claudeHourTokens)
+        let openCodeGoHourTokens = Self.normalized(openCodeGoHourTokens)
+        let openCodeZenHourTokens = Self.normalized(openCodeZenHourTokens)
+        let cursorHourTokens = Self.normalized(cursorHourTokens)
 
         let hours: [ProviderHourUsage] = (0..<24).map { hour in
             let grokDelta = max(0, grokHourWeights[hour])
@@ -130,5 +131,25 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         }
 
         return ProviderDayHourlyUsage(dayStart: dayStart, hours: hours)
+    }
+
+    private static func normalized(_ values: [Double]) -> [Double] {
+        if values.count == 24 { return values }
+        if values.count > 24 { return Array(values.prefix(24)) }
+        return values + Array(repeating: 0.0, count: 24 - values.count)
+    }
+
+    private static func normalized(_ values: [Int64]) -> [Int64] {
+        if values.count == 24 { return values }
+        if values.count > 24 { return Array(values.prefix(24)) }
+        return values + Array(repeating: 0, count: 24 - values.count)
+    }
+
+    private static func normalized(_ values: [Double]?) -> [Double]? {
+        values.map { normalized($0) }
+    }
+
+    private static func normalized(_ values: [Int64]?) -> [Int64]? {
+        values.map { normalized($0) }
     }
 }
