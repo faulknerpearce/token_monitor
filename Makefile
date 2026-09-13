@@ -127,9 +127,17 @@ build: ## Build Debug configuration (ad-hoc signed)
 
 run: build ## Build Debug and launch the app
 	$(call say,Launching $(APP_NAME)…)
-	@# Menu bar agent — kill any previous instance first
-	@pkill -x "$(APP_NAME)" 2>/dev/null || true
-	@open "$(DEBUG_APP)"
+	@# Menu bar agent — kill any previous instance and wait for it to exit.
+	@# Reopening before the old process finishes makes LaunchServices return
+	@# -600 (procNotFound), so bound the wait and retry once after re-registering.
+	@pkill -x "$(APP_NAME)" 2>/dev/null || true; \
+	i=0; while pgrep -x "$(APP_NAME)" >/dev/null 2>&1 && [ $$i -lt 25 ]; do sleep 0.2; i=$$((i + 1)); done
+	@open "$(DEBUG_APP)" 2>/dev/null || { \
+		printf "$(YELL)⚠️  open failed; re-registering $(APP_NAME) and retrying…$(RESET)\n"; \
+		/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(DEBUG_APP)" >/dev/null 2>&1 || true; \
+		sleep 1; \
+		open "$(DEBUG_APP)"; \
+	}
 	$(call ok,Launched (menu bar — no Dock icon))
 
 # ----------------------------------------------------------------------------------------------------------------------
