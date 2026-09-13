@@ -31,10 +31,7 @@ struct CursorPanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeaderRow(
-                        title: snapshot.usagePool.sectionTitle,
-                        trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
-                    )
+                    PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
                     SlimUsageTrack(
                         label: "Cursor Models",
                         percent: cursorModelsPercent,
