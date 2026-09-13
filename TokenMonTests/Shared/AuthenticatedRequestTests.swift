@@ -45,8 +45,18 @@ final class AuthenticatedRequestTests: XCTestCase {
     func testNon2xxMapsToBadResponse() throws {
         XCTAssertEqual(
             AuthenticatedRequest.mapError(for: self.response(500), data: Data()),
-            UsageError.badResponse("HTTP 500 ")
+            UsageError.badResponse("HTTP 500")
         )
+    }
+
+    /// The raw response body must never reach the user-facing error message.
+    func testNon2xxDoesNotLeakResponseBody() throws {
+        let body = Data("{\"token\":\"secret-value\"}".utf8)
+        guard case let .badResponse(message)? = AuthenticatedRequest.mapError(for: self.response(500), data: body) else {
+            return XCTFail("expected badResponse")
+        }
+        XCTAssertFalse(message.contains("secret-value"))
+        XCTAssertEqual(message, "HTTP 500")
     }
 
     func testNoErrorOnSuccessRange() {

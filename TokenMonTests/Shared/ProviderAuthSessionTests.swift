@@ -7,7 +7,6 @@ final class ProviderAuthSessionTests: XCTestCase {
         ProviderAuthConfig(
             storeFilenamePrefix: filenamePrefix,
             logCategory: "TestAuth",
-            startsSignedOut: true,
             usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: ["example.com"],
@@ -60,5 +59,8 @@ final class ProviderAuthSessionTests: XCTestCase {
         XCTAssertFalse(auth.isSignedIn)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertEqual(auth.lastAuthError, "401")
+        // Disk key is removed, so the in-memory email must be cleared too —
+        // otherwise stale PII remains readable while signed out.
+        XCTAssertNil(auth.accountEmail)
     }
 }
