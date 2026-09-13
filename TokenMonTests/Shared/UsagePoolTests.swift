@@ -86,4 +86,37 @@ final class UsagePoolTests: XCTestCase {
         )
         XCTAssertEqual(snapshot.usagePool, .monthly)
     }
+
+    private func openCodeWindow(_ kind: OpenCodeWindowKind) -> OpenCodeWindowUsage {
+        OpenCodeWindowUsage(kind: kind, usedUSD: 0, limitUSD: 100, resetsAt: nil, sessionCount: 0)
+    }
+
+    private func openCodeSnapshot(_ windows: [OpenCodeWindowUsage]) -> OpenCodeSnapshot {
+        OpenCodeSnapshot(
+            windows: windows,
+            models: [],
+            modelsWindowLabel: "",
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            totalSessions: 0
+        )
+    }
+
+    func testOpenCodeMixedPools() {
+        let snapshot = openCodeSnapshot([
+            openCodeWindow(.rolling5h),
+            openCodeWindow(.weekly),
+            openCodeWindow(.monthly)
+        ])
+        XCTAssertEqual(snapshot.usagePool, .mixed)
+        XCTAssertEqual(snapshot.usagePool.sectionTitle, "Usage Pool Mixed")
+    }
+
+    func testOpenCodeSingleWindowKeepsItsCadence() {
+        XCTAssertEqual(openCodeSnapshot([openCodeWindow(.monthly)]).usagePool, .monthly)
+        XCTAssertEqual(openCodeSnapshot([openCodeWindow(.weekly)]).usagePool, .weekly)
+        XCTAssertEqual(openCodeSnapshot([openCodeWindow(.rolling5h)]).usagePool, .hourly)
+    }
 }

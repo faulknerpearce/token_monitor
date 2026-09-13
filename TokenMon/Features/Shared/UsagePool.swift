@@ -71,3 +71,20 @@ extension CursorSnapshot {
     /// Monthly billing cycle.
     var usagePool: UsagePool { .monthly }
 }
+
+extension OpenCodeSnapshot {
+    /// Stacked 5-hour + weekly + monthly limits.
+    var usagePool: UsagePool {
+        .combining(windows.map(\.kind.usagePool))
+    }
+}
+
+extension OpenCodeWindowKind {
+    var usagePool: UsagePool {
+        switch self {
+        case .rolling5h: return .hourly
+        case .weekly: return .weekly
+        case .monthly: return .monthly
+        }
+    }
+}
