@@ -244,6 +244,43 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(events.count, 2)
     }
 
+    /// A renamed/omitted total must read as unknown (0), not silently stop after
+    /// one page, and a numeric string must still parse.
+    func testParseUsageEventsPageCoercesTotal() throws {
+        let stringTotal = Data(#"{"totalUsageEventsCount":"1234","usageEventsDisplay":[]}"#.utf8)
+        XCTAssertEqual(try CursorUsageClient.parseUsageEventsPage(data: stringTotal).total, 1234)
+
+        let missing = Data(#"{"usageEventsDisplay":[]}"#.utf8)
+        XCTAssertEqual(try CursorUsageClient.parseUsageEventsPage(data: missing).total, 0)
+    }
+
+    /// Out-of-range/NaN token counts must clamp instead of trapping in `Int64`.
+    func testSafeIntegerConversionDoesNotTrap() {
+        XCTAssertEqual(CursorUsageClient.safeInt64(1e30), Int64.max)
+        XCTAssertEqual(CursorUsageClient.safeInt64(-1e30), Int64.min)
+        XCTAssertEqual(CursorUsageClient.safeInt64(.nan), 0)
+        XCTAssertEqual(CursorUsageClient.safeInt64(.infinity), 0)
+        XCTAssertEqual(CursorUsageClient.safeInt(1e30), Int.max)
+    }
+
+    func testTokenCountHandlesHugeValues() {
+        let event: [String: Any] = ["tokenUsage": ["inputTokens": 1e30, "outputTokens": 2.0]]
+        XCTAssertEqual(CursorUsageClient.tokenCount(event), Int64.max)
+    }
+
+    /// The String timestamp branch must honour the same seconds/ms heuristic as
+    /// the numeric branches, and reject implausible values.
+    func testEventTimestampStringUnits() {
+        let ms = CursorUsageClient.eventTimestamp(["timestamp": "1775418973898"])
+        XCTAssertEqual(ms?.timeIntervalSince1970 ?? 0, 1_775_418_973.898, accuracy: 0.01)
+
+        let seconds = CursorUsageClient.eventTimestamp(["timestamp": "1775418973"])
+        XCTAssertEqual(seconds?.timeIntervalSince1970 ?? 0, 1_775_418_973, accuracy: 0.01)
+
+        XCTAssertNil(CursorUsageClient.eventTimestamp(["timestamp": "0"]))
+        XCTAssertNil(CursorUsageClient.eventTimestamp(["timestamp": "-5"]))
+    }
+
     func testCursorDomainFilter() {
         XCTAssertTrue(CursorAuthSession.isCursorDomain("cursor.com"))
         XCTAssertTrue(CursorAuthSession.isCursorDomain(".cursor.com"))

@@ -369,13 +369,24 @@ struct OpenCodeConsoleClient: Sendable {
 
     private static func firstNumber(after marker: String, in text: String) -> Double? {
         guard let range = text.range(of: marker) else { return nil }
-        let rest = text[range.upperBound...]
+        var rest = text[range.upperBound...]
+        // Skip insignificant whitespace/quotes before the value so
+        // `"usagePercent": 0.5` parses the same as `usagePercent:0.5`.
+        rest = rest.drop { $0 == " " || $0 == "\"" || $0 == "\t" }
+        // A literal null/undefined is not a number — do not walk past it into
+        // the next field's numeric value.
+        if rest.hasPrefix("null") || rest.hasPrefix("undefined") { return nil }
+
         var digits = ""
         for ch in rest {
-            if ch.isNumber || ch == "." || ch == "-" {
+            if ch.isNumber || ch == "." || ch == "-" || ch == "+" || ch == "e" || ch == "E" {
                 digits.append(ch)
             } else if !digits.isEmpty {
                 break
+            } else {
+                // First meaningful character is not numeric: give up rather
+                // than latching onto a later number.
+                return nil
             }
         }
         return Double(digits)

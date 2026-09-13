@@ -522,9 +522,10 @@ enum GRPCWebParser {
                 index += 8
             case 2:
                 guard let len = readVarint(bytes, index: &index),
-                      index + Int(len) <= end else { return products }
+                      len <= UInt64(end - index),
+                      let intLen = Int(exactly: len) else { return products }
                 let subStart = index
-                let subEnd = index + Int(len)
+                let subEnd = index + intLen
                 if fieldNumber == 7 {
                     if let product = parseProductSubMessage(bytes: bytes, start: subStart, end: subEnd) {
                         products.append(product)
@@ -574,8 +575,9 @@ enum GRPCWebParser {
                 index += 4
             case 2:
                 guard let nl = readVarint(bytes, index: &index),
-                      index + Int(nl) <= end else { return nil }
-                index += Int(nl)
+                      nl <= UInt64(end - index),
+                      let intNl = Int(exactly: nl) else { return nil }
+                index += intNl
             default:
                 // Unknown wire type — abort this product rather than spin.
                 return nil
