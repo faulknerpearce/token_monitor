@@ -14,15 +14,12 @@ struct SlimUsageTrack: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             if showsLabel {
-                HStack {
+                HStack(spacing: 8) {
                     Text(label)
                         .font(PanelTypography.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(Int(Percent.clamp(percent).rounded()))% used")
-                        .font(PanelTypography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                    PanelPill(text: "\(Int(Percent.clamp(percent).rounded()))% used")
                 }
             }
 
