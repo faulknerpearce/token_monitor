@@ -19,10 +19,7 @@ struct ChatGPTPanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeaderRow(
-                        title: snapshot.usagePool.sectionTitle,
-                        pill: "\(Int(snapshot.headlineUsedPercent.rounded()))% used"
-                    )
+                    PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
                     SlimUsageTrack(
                         label: "5-Hour Window",
                         percent: snapshot.primary?.usedPercent ?? 0,

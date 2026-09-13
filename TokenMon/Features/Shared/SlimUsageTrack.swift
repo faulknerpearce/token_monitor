@@ -1,23 +1,29 @@
 import SwiftUI
 
 /// Used-percent track: label left, percent right, 8px fill (matches Grok weekly bar).
+///
+/// Set `showsLabel` to `false` when the enclosing card's header already names
+/// the pool and shows the percent in a pill, so the figure is not repeated.
 struct SlimUsageTrack: View {
     let label: String
     let percent: Double
     var color: Color
     var caption: String?
+    var showsLabel: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(label)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(Int(Percent.clamp(percent).rounded()))%")
-                    .font(PanelTypography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
+            if showsLabel {
+                HStack {
+                    Text(label)
+                        .font(PanelTypography.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(Int(Percent.clamp(percent).rounded()))%")
+                        .font(PanelTypography.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
+                }
             }
 
             GeometryReader { geo in

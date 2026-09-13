@@ -30,7 +30,8 @@ struct OpenRouterPanelView: View {
                             percent: percent,
                             color: ConcentricUsageRingView.openRouterColor,
                             caption: "\(Format.usd(snapshot.usedUSD)) of \(Format.usd(snapshot.budgetUSD ?? 0))"
-                                + " · \(Format.usd(snapshot.remainingUSD ?? 0)) left"
+                                + " · \(Format.usd(snapshot.remainingUSD ?? 0)) left",
+                            showsLabel: false
                         )
                     } else {
                         Text("This key has no credit limit, so usage shows as spend only.")

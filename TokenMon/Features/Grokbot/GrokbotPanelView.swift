@@ -35,7 +35,8 @@ struct GrokbotPanelView: View {
                             color: ConcentricUsageRingView.grokbotColor,
                             caption: snapshot.resetsAt.map {
                                 "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))"
-                            }
+                            },
+                            showsLabel: false
                         )
                     } else {
                         Text("This plan has no included Bot allowance — usage bills on demand.")
