@@ -324,10 +324,11 @@ format-fix: ## Auto-format all Swift sources
 	@swiftformat .
 	$(call ok,Formatted)
 
-secrets: ## Secret scan gate — gitleaks detects committed credentials/tokens
+secrets: ## Secret scan gate — working tree and full git history
 	$(call say,Running gitleaks (secret scan)…)
 	@command -v gitleaks >/dev/null || { printf "$(RED)🚨 gitleaks not installed. brew install gitleaks$(RESET)\n"; exit 1; }
 	@gitleaks dir . --no-banner
+	@gitleaks detect --no-banner --log-opts="--all"
 	$(call ok,No secrets found)
 
 # ----------------------------------------------------------------------------------------------------------------------
