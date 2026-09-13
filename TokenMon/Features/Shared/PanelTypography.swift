@@ -39,3 +39,21 @@ struct PanelSectionHeader: View {
             .foregroundStyle(.tertiary)
     }
 }
+
+/// A section header with an optional trailing usage pill (e.g. `42% used`),
+/// used on every provider's main usage card so the headline figure reads the
+/// same in each section.
+struct PanelSectionHeaderRow: View {
+    let title: String
+    var pill: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            PanelSectionHeader(title: title)
+            Spacer()
+            if let pill {
+                PanelPill(text: pill)
+            }
+        }
+    }
+}

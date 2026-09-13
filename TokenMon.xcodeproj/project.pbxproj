@@ -82,6 +82,7 @@
 		8C1B8D193D5C61242DCE5B6B /* WebKitCookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D9F017AB73B92AB3B01F10 /* WebKitCookieStore.swift */; };
 		8C924889FB306E348C39D678 /* ChatGPTUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF9E8622D6F29F6FEC1979D /* ChatGPTUsageClient.swift */; };
 		8D1DCED4BEC7DE66DEF30C47 /* ChatGPTPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482D0A6CA3D74D6C4CCD6F24 /* ChatGPTPanelView.swift */; };
+		8FC2EEC9CCCCA5582EADE1B8 /* UsagePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06742749E8A68FB53E52895 /* UsagePoolTests.swift */; };
 		91BA6407EED2CB169F464C1E /* PollingLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */; };
 		9258AEEEF37565B8C4592A54 /* PanelTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099FD1BC2A4197A918E08DAC /* PanelTypography.swift */; };
 		931FB5A88F596D1285DE6C5B /* DailyUsageBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030644365BCFFE7A2313E22A /* DailyUsageBuilder.swift */; };
@@ -112,6 +113,7 @@
 		B83613535B40150EB4F89F9B /* ClaudeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3048C8A62D66B3ED0E61C3E0 /* ClaudeModels.swift */; };
 		B9DF46C56214B9FEE96C5127 /* OpenCodeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E32CD2D6C87C59A2BDCAFAB /* OpenCodeModels.swift */; };
 		BADD52E29BBEF66F016C59B2 /* GrokbotModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049A27B3889325FB5DE8FF7F /* GrokbotModels.swift */; };
+		BB7D4AA50E76D37455681040 /* UsagePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60E5C23F95F43085893DF0B /* UsagePool.swift */; };
 		C1795A6C92E0D12F8D0BEB65 /* ChatGPTAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F425A77810D136532C239692 /* ChatGPTAuthSession.swift */; };
 		C3510B9D658997562FCD26B6 /* OpenCodeUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF346B5976F1C2455634F18 /* OpenCodeUsagePoller.swift */; };
 		C4FA2825CB5CA5AB1CA50700 /* OpenRouterAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D990A5674BB462011AB5AF9C /* OpenRouterAuthSession.swift */; };
@@ -269,11 +271,13 @@
 		C16C9B6ED2EA4419F6622D08 /* HourlyDeltaActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlyDeltaActivityStore.swift; sourceTree = "<group>"; };
 		C31933106A9D643D9A424D46 /* OverviewHourlyUsageChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewHourlyUsageChart.swift; sourceTree = "<group>"; };
 		C3E3A7943BED7C1C7868926A /* BillingPeriodWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingPeriodWindowTests.swift; sourceTree = "<group>"; };
+		C60E5C23F95F43085893DF0B /* UsagePool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsagePool.swift; sourceTree = "<group>"; };
 		CC222617652A6DEB37620B31 /* CategoryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryRow.swift; sourceTree = "<group>"; };
 		CCF1A4C740FAB8D1701D593C /* CursorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorPanelView.swift; sourceTree = "<group>"; };
 		CD4C88DCF208BC0FCA1749B3 /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
 		CEBEC9D064C56FD2ADDD4ED5 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		CF9FC52F5B876054D131A89B /* AuthenticatedRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedRequest.swift; sourceTree = "<group>"; };
+		D06742749E8A68FB53E52895 /* UsagePoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsagePoolTests.swift; sourceTree = "<group>"; };
 		D186C3CB20B54DDB51682D2A /* ProviderSignInSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSignInSheet.swift; sourceTree = "<group>"; };
 		D5008BEBDDA049505BF06BC7 /* MonitorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorProvider.swift; sourceTree = "<group>"; };
 		D78FE8D9B9D2534DD07FB991 /* TokenMonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenMonApp.swift; sourceTree = "<group>"; };
@@ -433,6 +437,7 @@
 				DF13067B271A7D698F451DA6 /* SignInBrowserView.swift */,
 				B295E6C1B0146F0086543DCB /* SlimUsageTrack.swift */,
 				AD751090B98E360ADFBE6CFC /* UsageError.swift */,
+				C60E5C23F95F43085893DF0B /* UsagePool.swift */,
 				B68FE75A96E4091616408783 /* WebKitCookieCapture.swift */,
 				16D9F017AB73B92AB3B01F10 /* WebKitCookieStore.swift */,
 			);
@@ -494,6 +499,7 @@
 				8FECDCB7D2B094D9CF9ABB6C /* ProviderCookieAllowlistTests.swift */,
 				41A56B7777DF3F15D254F4F7 /* SignInBrowserNavigationTests.swift */,
 				E45F0294D7F6833156223A81 /* UsageErrorTests.swift */,
+				D06742749E8A68FB53E52895 /* UsagePoolTests.swift */,
 				9DE9ECA5176C08F0FECEABDD /* WebKitCookieCaptureTests.swift */,
 			);
 			path = Shared;
@@ -844,6 +850,7 @@
 				4A3663B9181037817F954687 /* UpdateCheckerTests.swift in Sources */,
 				0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */,
 				FCAA4923ECFBDE36BFA3CA32 /* UsageParsingTests.swift in Sources */,
+				8FC2EEC9CCCCA5582EADE1B8 /* UsagePoolTests.swift in Sources */,
 				6FA1E641E5442AE0067C6D40 /* WebKitCookieCaptureTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -949,6 +956,7 @@
 				C8D1DC73D55A2557D3CDB7D0 /* UsageError.swift in Sources */,
 				DDF4ECFB095899864828DE3C /* UsageModels.swift in Sources */,
 				1C8C2B06991E9E56434FCC73 /* UsagePoller.swift in Sources */,
+				BB7D4AA50E76D37455681040 /* UsagePool.swift in Sources */,
 				9E525790E1BC1878805C99C5 /* WebKitCookieCapture.swift in Sources */,
 				8C1B8D193D5C61242DCE5B6B /* WebKitCookieStore.swift in Sources */,
 			);

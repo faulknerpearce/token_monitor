@@ -20,7 +20,10 @@ struct OpenRouterPanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeader(title: "Credit Budget")
+                    PanelSectionHeaderRow(
+                        title: "Credit Budget",
+                        pill: snapshot.usedPercent.map { "\(Int($0.rounded()))% used" }
+                    )
                     if let percent = snapshot.usedPercent {
                         SlimUsageTrack(
                             label: "Credits used",

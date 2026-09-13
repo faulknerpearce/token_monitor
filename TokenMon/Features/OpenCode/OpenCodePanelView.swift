@@ -22,7 +22,10 @@ struct OpenCodePanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeader(title: "Limits")
+                    PanelSectionHeaderRow(
+                        title: "Limits",
+                        pill: "\(Int(snapshot.primaryUsedPercent.rounded()))% used"
+                    )
                     ForEach(snapshot.windows) { window in
                         OpenCodeLimitBar(window: window)
                     }
