@@ -26,7 +26,7 @@ struct GrokbotPanelView: View {
                 PanelCard {
                     PanelSectionHeaderRow(
                         title: snapshot.usagePool.sectionTitle,
-                        pill: "\(Int(snapshot.usedPercent.rounded()))% used"
+                        trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
                     )
                     if snapshot.hasIncludedAllowance {
                         SlimUsageTrack(

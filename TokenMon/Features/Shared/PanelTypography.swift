@@ -40,19 +40,23 @@ struct PanelSectionHeader: View {
     }
 }
 
-/// A section header with an optional trailing usage pill (e.g. `42% used`),
-/// used on every provider's main usage card so the headline figure reads the
-/// same in each section.
+/// A section header with an optional trailing usage figure.
+///
+/// The provider panels show the figure as plain text (the bars carry the
+/// detail); the Overview cards keep the pill treatment via `PanelPill`.
 struct PanelSectionHeaderRow: View {
     let title: String
-    var pill: String?
+    var trailing: String?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PanelSectionHeader(title: title)
             Spacer()
-            if let pill {
-                PanelPill(text: pill)
+            if let trailing {
+                Text(trailing)
+                    .font(PanelTypography.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
         }
     }

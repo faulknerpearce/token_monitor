@@ -39,7 +39,7 @@ struct SlimUsageTrack: View {
 
             if let caption, !caption.isEmpty {
                 Text(caption)
-                    .font(PanelTypography.micro)
+                    .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
         }

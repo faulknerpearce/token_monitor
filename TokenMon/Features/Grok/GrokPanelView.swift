@@ -71,7 +71,7 @@ struct GrokPanelView: View {
             PanelCard {
                 PanelSectionHeaderRow(
                     title: snapshot.usagePool.sectionTitle,
-                    pill: "\(Int(snapshot.usedPercent.rounded()))% used"
+                    trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
                 )
 
                 SegmentedUsageBar(products: products, height: 8)
