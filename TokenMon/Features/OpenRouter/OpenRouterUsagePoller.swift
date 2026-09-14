@@ -73,7 +73,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             } else {
                 logger.info("OpenRouter refresh: \(Format.usd(snap.usedUSD), privacy: .public) spent (no credit limit)")
             }
-        } catch let error as OpenRouterUsageError {
+        } catch let error as ProviderError {
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)

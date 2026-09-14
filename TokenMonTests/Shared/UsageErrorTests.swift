@@ -17,13 +17,13 @@ final class UsageErrorTests: XCTestCase {
     }
 
     func testClientMappingsToCommonAuthCases() {
-        XCTAssertEqual(CursorUsageError.unauthorized.usageError, .unauthorized)
-        XCTAssertEqual(CursorUsageError.notSignedIn.usageError, .notSignedIn)
+        XCTAssertEqual(ProviderError.unauthorized(.cursor).usageError, .unauthorized)
+        XCTAssertEqual(ProviderError.notSignedIn(.cursor).usageError, .notSignedIn)
 
-        XCTAssertEqual(OpenCodeConsoleError.unauthorized.usageError, .unauthorized)
-        XCTAssertEqual(OpenCodeConsoleError.notSignedIn.usageError, .notSignedIn)
+        XCTAssertEqual(ProviderError.unauthorized(.openCode).usageError, .unauthorized)
+        XCTAssertEqual(ProviderError.notSignedIn(.openCode).usageError, .notSignedIn)
 
-        XCTAssertEqual(UsageClientError.unauthorized.usageError, .unauthorized)
-        XCTAssertEqual(UsageClientError.notSignedIn.usageError, .notSignedIn)
+        XCTAssertEqual(ProviderError.unauthorized(.grok).usageError, .unauthorized)
+        XCTAssertEqual(ProviderError.notSignedIn(.grok).usageError, .notSignedIn)
     }
 }

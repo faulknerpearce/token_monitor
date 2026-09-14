@@ -98,21 +98,21 @@ final class GrokbotUsageClientTests: XCTestCase {
     /// so a non-JSON body means "signed out", not "malformed response".
     func testHTMLBodyIsTreatedAsUnauthorized() {
         XCTAssertThrowsError(try parse("<!doctype html><html><body>Sign in</body></html>")) { error in
-            XCTAssertEqual(error as? GrokbotUsageError, .unauthorized)
+            XCTAssertEqual(error as? ProviderError, .unauthorized(.grokbot))
         }
     }
 
     func testNotAuthenticatedErrorPayloadIsUnauthorized() {
         XCTAssertThrowsError(try parse(#"{"error":"not_authenticated"}"#)) { error in
-            XCTAssertEqual(error as? GrokbotUsageError, .unauthorized)
+            XCTAssertEqual(error as? ProviderError, .unauthorized(.grokbot))
         }
     }
 
     /// An account with no Bot entitlement reports no percent at all.
     func testMissingUsagePercentReportsNoBotAccess() {
         XCTAssertThrowsError(try parse(#"{"hasAvailableUsage":false}"#)) { error in
-            guard case .noBotAccess = error as? GrokbotUsageError else {
-                return XCTFail("expected .noBotAccess, got \(error)")
+            guard case .custom = error as? ProviderError else {
+                return XCTFail("expected a custom no-access error, got \(error)")
             }
         }
     }

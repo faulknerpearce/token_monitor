@@ -1,34 +1,5 @@
 import Foundation
 
-enum ChatGPTUsageError: LocalizedError, ProviderUsageError {
-    case notSignedIn
-    case unauthorized
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case let .badResponse(message): return .badResponse(message)
-        case let .network(message): return .network(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to ChatGPT to load usage."
-        case .unauthorized:
-            return "ChatGPT session expired. Sign in again."
-        case let .badResponse(message):
-            return "ChatGPT response error: \(message)"
-        case let .network(message):
-            return "ChatGPT network error: \(message)"
-        }
-    }
-}
-
 /// Fetches Codex/ChatGPT rate-limit usage.
 ///
 /// Two-step flow: the captured session cookie exchanges for a short-lived web
@@ -56,52 +27,31 @@ struct ChatGPTUsageClient: Sendable {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let token = JSON.string(root["accessToken"]), !token.isEmpty
         else {
-            throw ChatGPTUsageError.unauthorized
+            throw ProviderError.unauthorized(.chatGPT)
         }
         return token
     }
 
     private func fetchAccessToken() async throws -> String {
-        var request = URLRequest(url: Self.baseURL.appendingPathComponent("api/auth/session"))
-        request.httpMethod = "GET"
-        AuthenticatedRequest.applyHeaders(
-            to: &request,
+        let data = try await ProviderHTTP.get(
+            "api/auth/session",
+            baseURL: Self.baseURL,
+            context: .chatGPT,
             cookieHeader: cookieHeader,
-            bearerToken: nil,
             referer: "https://chatgpt.com/"
         )
-        let data = try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .notSignedIn: return ChatGPTUsageError.notSignedIn
-            case .unauthorized: return ChatGPTUsageError.unauthorized
-            case let .network(message): return ChatGPTUsageError.network(message)
-            case let .badResponse(message): return ChatGPTUsageError.badResponse(message)
-            }
-        }
         return try Self.parseSessionToken(data)
     }
 
     private func whamUsage(accessToken: String, accountID: String?) async throws -> Data {
-        var request = URLRequest(
-            url: URL(string: "/backend-api/wham/usage", relativeTo: Self.baseURL)!.absoluteURL
-        )
-        request.httpMethod = "GET"
-        AuthenticatedRequest.applyHeaders(
-            to: &request,
+        try await ProviderHTTP.get(
+            "/backend-api/wham/usage",
+            baseURL: Self.baseURL,
+            context: .chatGPT,
             cookieHeader: cookieHeader,
             bearerToken: accessToken,
-            referer: "https://chatgpt.com/"
+            referer: "https://chatgpt.com/",
+            headers: accountID.map { ["ChatGPT-Account-Id": $0] } ?? [:]
         )
-        if let accountID {
-            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
-        }
-        return try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .notSignedIn: return ChatGPTUsageError.notSignedIn
-            case .unauthorized: return ChatGPTUsageError.unauthorized
-            case let .network(message): return ChatGPTUsageError.network(message)
-            case let .badResponse(message): return ChatGPTUsageError.badResponse(message)
-            }
-        }
     }
 }

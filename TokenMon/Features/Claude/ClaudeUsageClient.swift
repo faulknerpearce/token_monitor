@@ -1,38 +1,5 @@
 import Foundation
 
-enum ClaudeUsageError: LocalizedError, ProviderUsageError {
-    case notSignedIn
-    case unauthorized
-    case missingOrganization
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case .missingOrganization: return .notSignedIn
-        case let .badResponse(message): return .badResponse(message)
-        case let .network(message): return .network(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to Claude to load usage."
-        case .unauthorized:
-            return "Claude session expired. Sign in again."
-        case .missingOrganization:
-            return "Claude organization id not found in session. Sign in again."
-        case let .badResponse(message):
-            return "Claude response error: \(message)"
-        case let .network(message):
-            return "Claude network error: \(message)"
-        }
-    }
-}
-
 /// Fetches claude.ai rate-limit usage via the cookie-authenticated internal endpoint.
 struct ClaudeUsageClient: Sendable {
     static let baseURL = URL(string: "https://claude.ai")!
@@ -45,9 +12,18 @@ struct ClaudeUsageClient: Sendable {
 
     func fetchUsage(now: Date = Date()) async throws -> (ClaudeUsageResponse, Date) {
         guard let organizationID = Self.organizationID(fromCookieHeader: cookieHeader) else {
-            throw ClaudeUsageError.missingOrganization
+            throw ProviderError.custom(
+                message: "Claude organization id not found in session. Sign in again.",
+                usage: .notSignedIn
+            )
         }
-        let data = try await get(path: "/api/organizations/\(organizationID)/usage")
+        let data = try await ProviderHTTP.get(
+            "/api/organizations/\(organizationID)/usage",
+            baseURL: Self.baseURL,
+            context: .claude,
+            cookieHeader: cookieHeader,
+            referer: "https://claude.ai/"
+        )
         let response = try ClaudeUsageResponse.parse(data)
         return (response, now)
     }
@@ -63,27 +39,5 @@ struct ClaudeUsageClient: Sendable {
             return value.isEmpty ? nil : value
         }
         return nil
-    }
-
-    private func get(path: String) async throws -> Data {
-        guard let resolved = URL(string: path, relativeTo: Self.baseURL)?.absoluteURL else {
-            throw ClaudeUsageError.badResponse("Invalid path \(path)")
-        }
-        var request = URLRequest(url: resolved)
-        request.httpMethod = "GET"
-        AuthenticatedRequest.applyHeaders(
-            to: &request,
-            cookieHeader: cookieHeader,
-            bearerToken: nil,
-            referer: "https://claude.ai/"
-        )
-        return try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .notSignedIn: return ClaudeUsageError.notSignedIn
-            case .unauthorized: return ClaudeUsageError.unauthorized
-            case let .network(message): return ClaudeUsageError.network(message)
-            case let .badResponse(message): return ClaudeUsageError.badResponse(message)
-            }
-        }
     }
 }

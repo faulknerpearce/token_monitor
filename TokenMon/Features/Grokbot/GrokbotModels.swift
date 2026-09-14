@@ -80,36 +80,3 @@ struct GrokbotSnapshot: Codable, Hashable, Sendable {
         accountEmail: "user@example.com"
     )
 }
-
-enum GrokbotUsageError: LocalizedError, ProviderUsageError, Equatable {
-    case notSignedIn
-    case unauthorized
-    case noBotAccess(String)
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case let .network(message): return .network(message)
-        case let .noBotAccess(message): return .badResponse(message)
-        case let .badResponse(message): return .badResponse(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to Cursor to load your Grokbot allowance."
-        case .unauthorized:
-            return "Cursor session expired. Sign in again."
-        case let .noBotAccess(message):
-            return message
-        case let .badResponse(message):
-            return "Grokbot response error: \(message)"
-        case let .network(message):
-            return "Grokbot network error: \(message)"
-        }
-    }
-}

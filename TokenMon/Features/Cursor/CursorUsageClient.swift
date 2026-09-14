@@ -1,35 +1,6 @@
 import Foundation
 import os
 
-enum CursorUsageError: LocalizedError, ProviderUsageError {
-    case notSignedIn
-    case unauthorized
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case let .badResponse(message): return .badResponse(message)
-        case let .network(message): return .network(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to Cursor to load usage."
-        case .unauthorized:
-            return "Cursor session expired. Sign in again."
-        case let .badResponse(message):
-            return "Cursor response error: \(message)"
-        case let .network(message):
-            return "Cursor network error: \(message)"
-        }
-    }
-}
-
 /// Fetches Cursor dashboard usage via cookie-authenticated unofficial endpoints.
 struct CursorUsageClient: Sendable {
     static let baseURL = URL(string: "https://cursor.com")!
@@ -137,7 +108,7 @@ struct CursorUsageClient: Sendable {
 
     static func parseSummary(data: Data, fetchedAt: Date = Date()) throws -> CursorSnapshot {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CursorUsageError.badResponse("Expected JSON object")
+            throw ProviderError.badResponse(.cursor, "Expected JSON object")
         }
 
         let cycleStart = parseISO8601(root["billingCycleStart"] as? String)
@@ -262,7 +233,7 @@ struct CursorUsageClient: Sendable {
 
     static func parseUsageEventsPage(data: Data) throws -> (events: [[String: Any]], total: Int) {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CursorUsageError.badResponse("Expected events JSON object")
+            throw ProviderError.badResponse(.cursor, "Expected events JSON object")
         }
         // Coerce strings and numbers alike; a missing/renamed field yields 0,
         // which the pager treats as "unknown" rather than "no more pages".
@@ -518,50 +489,35 @@ struct CursorUsageClient: Sendable {
     }
 
     private func get(path: String) async throws -> Data {
-        guard let resolved = URL(string: path, relativeTo: Self.baseURL)?.absoluteURL else {
-            throw CursorUsageError.badResponse("Invalid path \(path)")
-        }
-        var request = URLRequest(url: resolved)
-        request.httpMethod = "GET"
-        applyCommonHeaders(to: &request)
-        return try await perform(request)
+        let data = try await ProviderHTTP.get(
+            path,
+            baseURL: Self.baseURL,
+            context: .cursor,
+            cookieHeader: cookieHeader,
+            referer: "https://cursor.com"
+        )
+        return try Self.rejectUnauthorizedBody(data)
     }
 
     private func post(path: String, json: [String: Any]) async throws -> Data {
-        guard let resolved = URL(string: path, relativeTo: Self.baseURL)?.absoluteURL else {
-            throw CursorUsageError.badResponse("Invalid path \(path)")
-        }
-        var request = URLRequest(url: resolved)
-        request.httpMethod = "POST"
-        applyCommonHeaders(to: &request)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("https://cursor.com", forHTTPHeaderField: "Origin")
-        request.httpBody = try JSONSerialization.data(withJSONObject: json)
-        return try await perform(request)
-    }
-
-    private func applyCommonHeaders(to request: inout URLRequest) {
-        AuthenticatedRequest.applyHeaders(
-            to: &request,
+        let data = try await ProviderHTTP.post(
+            path,
+            baseURL: Self.baseURL,
+            context: .cursor,
+            json: json,
             cookieHeader: cookieHeader,
-            bearerToken: nil,
-            referer: "https://cursor.com"
+            referer: "https://cursor.com",
+            origin: "https://cursor.com"
         )
+        return try Self.rejectUnauthorizedBody(data)
     }
 
-    private func perform(_ request: URLRequest) async throws -> Data {
-        let data = try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .notSignedIn: return CursorUsageError.notSignedIn
-            case .unauthorized: return CursorUsageError.unauthorized
-            case let .network(message): return CursorUsageError.network(message)
-            case let .badResponse(message): return CursorUsageError.badResponse(message)
-            }
-        }
+    /// A 200 response can still carry a `not_authenticated` error body.
+    private static func rejectUnauthorizedBody(_ data: Data) throws -> Data {
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let err = obj["error"] as? String,
            err.lowercased().contains("not_authenticated") || err.lowercased().contains("unauthor") {
-            throw CursorUsageError.unauthorized
+            throw ProviderError.unauthorized(.cursor)
         }
         return data
     }

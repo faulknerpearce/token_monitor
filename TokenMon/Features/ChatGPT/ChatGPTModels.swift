@@ -23,7 +23,7 @@ struct ChatGPTUsageResponse: Hashable, Sendable {
     /// Parses the raw usage JSON (`primary_window` = 5h, `secondary_window` = weekly).
     static func parse(_ data: Data) throws -> ChatGPTUsageResponse {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ChatGPTUsageError.badResponse("Unexpected usage payload")
+            throw ProviderError.badResponse(.chatGPT, "Unexpected usage payload")
         }
         let rateLimit = root["rate_limit"] as? [String: Any] ?? root
         return ChatGPTUsageResponse(

@@ -1,42 +1,6 @@
 import Foundation
 import os
 
-enum OpenCodeConsoleError: LocalizedError, ProviderUsageError {
-    case notSignedIn
-    case unauthorized
-    case noWorkspace
-    case serverFunctionMissing
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case .noWorkspace, .serverFunctionMissing: return .badResponse(localizedDescription)
-        case let .badResponse(message): return .badResponse(message)
-        case let .network(message): return .network(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to the OpenCode console to load official Go usage."
-        case .unauthorized:
-            return "OpenCode console session expired. Sign in again."
-        case .noWorkspace:
-            return "Could not find an OpenCode workspace. Sign in at opencode.ai, then try again."
-        case .serverFunctionMissing:
-            return "Could not resolve OpenCode console usage endpoint (site may have updated)."
-        case let .badResponse(message):
-            return "OpenCode console response error: \(message)"
-        case let .network(message):
-            return "OpenCode console network error: \(message)"
-        }
-    }
-}
-
 /// Fetches authoritative OpenCode Go usage from the console SolidStart server functions.
 ///
 /// Protocol:
@@ -71,7 +35,7 @@ struct OpenCodeConsoleClient: Sendable {
             do {
                 let payload = try await fetchValidatedPayload(serverID: serverID, workspaceID: known)
                 return (makeSnapshot(from: payload), known)
-            } catch let error as OpenCodeConsoleError {
+            } catch let error as ProviderError {
                 switch error {
                 case .unauthorized, .notSignedIn:
                     throw error
@@ -98,7 +62,8 @@ struct OpenCodeConsoleClient: Sendable {
     private func fetchValidatedPayload(serverID: String, workspaceID: String) async throws -> LitePayload {
         let payload = try await callLiteSubscription(serverID: serverID, workspaceID: workspaceID)
         guard payload.mine || payload.hasUsage else {
-            throw OpenCodeConsoleError.badResponse(
+            throw ProviderError.badResponse(
+                .openCode,
                 "No Go subscription on this account (or another member holds the Go seat)."
             )
         }
@@ -134,10 +99,10 @@ struct OpenCodeConsoleClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw OpenCodeConsoleError.network("invalid response")
+            throw ProviderError.network(.openCode, "invalid response")
         }
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw OpenCodeConsoleError.unauthorized
+            throw ProviderError.unauthorized(.openCode)
         }
 
         if let final = http.url, let id = Self.workspaceID(from: final) {
@@ -149,7 +114,8 @@ struct OpenCodeConsoleClient: Sendable {
             return String(body[match])
         }
 
-        throw OpenCodeConsoleError.noWorkspace
+        let message = "Could not find an OpenCode workspace. Sign in at opencode.ai, then try again."
+        throw ProviderError.custom(message: message, usage: .badResponse(message))
     }
 
     // MARK: - Server function discovery
@@ -200,7 +166,8 @@ struct OpenCodeConsoleClient: Sendable {
         ) {
             return String(html[range])
         }
-        throw OpenCodeConsoleError.serverFunctionMissing
+        let message = "Could not resolve OpenCode console usage endpoint (site may have updated)."
+        throw ProviderError.custom(message: message, usage: .badResponse(message))
     }
 
     /// Bundle lists the go route module import *before* the path string; match on `go/index.tsx`.
@@ -267,7 +234,7 @@ struct OpenCodeConsoleClient: Sendable {
             URLQueryItem(name: "args", value: String(data: try JSONSerialization.data(withJSONObject: [workspaceID]), encoding: .utf8))
         ]
         guard let url = components.url else {
-            throw OpenCodeConsoleError.network("bad server url")
+            throw ProviderError.network(.openCode, "bad server url")
         }
 
         var request = URLRequest(url: url)
@@ -280,34 +247,35 @@ struct OpenCodeConsoleClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw OpenCodeConsoleError.network("invalid response")
+            throw ProviderError.network(.openCode, "invalid response")
         }
 
         let body = String(data: data, encoding: .utf8) ?? ""
 
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw OpenCodeConsoleError.unauthorized
+            throw ProviderError.unauthorized(.openCode)
         }
         if let loc = http.value(forHTTPHeaderField: "Location"), loc.contains("auth") {
-            throw OpenCodeConsoleError.unauthorized
+            throw ProviderError.unauthorized(.openCode)
         }
         if body.contains("/auth/authorize") && body.contains("location") {
-            throw OpenCodeConsoleError.unauthorized
+            throw ProviderError.unauthorized(.openCode)
         }
         if http.statusCode >= 400 {
             if http.statusCode == 404 || body.contains("Cannot find") {
                 Self.cachedServerID = nil
             }
-            throw OpenCodeConsoleError.badResponse("HTTP \(http.statusCode): \(body.prefix(200))")
+            throw ProviderError.badResponse(.openCode, "HTTP \(http.statusCode): \(body.prefix(200))")
         }
         if let xerr = http.value(forHTTPHeaderField: "X-Error"), !xerr.isEmpty {
             if xerr.lowercased().contains("auth") || xerr.lowercased().contains("account") {
                 // Account-without-workspace usually means bad args.
             }
-            throw OpenCodeConsoleError.badResponse(xerr)
+            throw ProviderError.badResponse(.openCode, xerr)
         }
         if body.contains("actor of type") && body.contains("workspace") {
-            throw OpenCodeConsoleError.badResponse(
+            throw ProviderError.badResponse(
+                .openCode,
                 "Console could not bind workspace (session or workspace id issue)."
             )
         }
@@ -346,7 +314,7 @@ struct OpenCodeConsoleClient: Sendable {
             let weekly = windowFields(named: "weeklyUsage", in: body),
             let monthly = windowFields(named: "monthlyUsage", in: body)
         else {
-            throw OpenCodeConsoleError.badResponse("could not parse usage windows from console response")
+            throw ProviderError.badResponse(.openCode, "could not parse usage windows from console response")
         }
 
         return LitePayload(mine: mine, rolling: rolling, weekly: weekly, monthly: monthly)
@@ -395,12 +363,12 @@ struct OpenCodeConsoleClient: Sendable {
         let url: URL
         if path.hasPrefix("http") {
             guard let absolute = URL(string: path) else {
-                throw OpenCodeConsoleError.network("malformed URL: \(path)")
+                throw ProviderError.network(.openCode, "malformed URL: \(path)")
             }
             url = absolute
         } else {
             guard let relative = URL(string: path, relativeTo: Self.baseURL) else {
-                throw OpenCodeConsoleError.network("malformed path: \(path)")
+                throw ProviderError.network(.openCode, "malformed path: \(path)")
             }
             url = relative.absoluteURL
         }
@@ -409,10 +377,10 @@ struct OpenCodeConsoleClient: Sendable {
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-            throw OpenCodeConsoleError.network("HTTP \(http.statusCode) for \(path)")
+            throw ProviderError.network(.openCode, "HTTP \(http.statusCode) for \(path)")
         }
         guard let text = String(data: data, encoding: .utf8) else {
-            throw OpenCodeConsoleError.network("non-utf8 body for \(path)")
+            throw ProviderError.network(.openCode, "non-utf8 body for \(path)")
         }
         return text
     }

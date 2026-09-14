@@ -24,6 +24,8 @@ TARGET="${SWIFT_TARGET:-$(uname -m)-apple-macos14.0}"
   "$ROOT/TokenMon/Features/Shared/ColorPalette.swift" \
   "$ROOT/TokenMon/Features/Shared/ISO8601.swift" \
   "$ROOT/TokenMon/Features/Shared/UsageError.swift" \
+  "$ROOT/TokenMon/Features/Shared/AuthenticatedRequest.swift" \
+  "$ROOT/TokenMon/Features/Shared/ProviderError.swift" \
   "$ROOT/Tests/Manual/CoreTestsMain.swift"
 
 "$OUT/CoreTests"

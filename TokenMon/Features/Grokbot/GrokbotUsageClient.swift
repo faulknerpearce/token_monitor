@@ -47,10 +47,10 @@ struct GrokbotUsageClient: Sendable {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             // An expired session redirects to WorkOS and lands on an HTML page,
             // so a non-JSON body here means "signed out", not "malformed".
-            throw GrokbotUsageError.unauthorized
+            throw ProviderError.unauthorized(.grokbot)
         }
         if let error = JSON.string(root["error"]), isUnauthorized(error) {
-            throw GrokbotUsageError.unauthorized
+            throw ProviderError.unauthorized(.grokbot)
         }
 
         // protobuf-es emits camelCase over JSON; accept the proto field names too
@@ -65,9 +65,8 @@ struct GrokbotUsageClient: Sendable {
         } else if hasAllowanceFields(root) {
             percent = 0
         } else {
-            throw GrokbotUsageError.noBotAccess(
-                "No Grok Bot allowance on this account. Grokbot needs a Cursor or SuperGrok plan that includes it."
-            )
+            let message = "No Grok Bot allowance on this account. Grokbot needs a Cursor or SuperGrok plan that includes it."
+            throw ProviderError.custom(message: message, usage: .badResponse(message))
         }
 
         let hasIncludedAllowance = !JSON.firstBool(root, keys: ["includedLimitZero", "included_limit_zero"])
@@ -135,28 +134,14 @@ struct GrokbotUsageClient: Sendable {
     // MARK: - HTTP
 
     private func post(path: String, json: [String: Any]) async throws -> Data {
-        guard let resolved = URL(string: path, relativeTo: Self.baseURL)?.absoluteURL else {
-            throw GrokbotUsageError.badResponse("Invalid path \(path)")
-        }
-        var request = URLRequest(url: resolved)
-        request.httpMethod = "POST"
-        AuthenticatedRequest.applyHeaders(
-            to: &request,
+        try await ProviderHTTP.post(
+            path,
+            baseURL: Self.baseURL,
+            context: .grokbot,
+            json: json,
             cookieHeader: cookieHeader,
-            bearerToken: nil,
-            referer: "https://cursor.com/bot"
+            referer: "https://cursor.com/bot",
+            origin: "https://cursor.com"
         )
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("https://cursor.com", forHTTPHeaderField: "Origin")
-        request.httpBody = try JSONSerialization.data(withJSONObject: json)
-
-        return try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .notSignedIn: return GrokbotUsageError.notSignedIn
-            case .unauthorized: return GrokbotUsageError.unauthorized
-            case let .network(message): return GrokbotUsageError.network(message)
-            case let .badResponse(message): return GrokbotUsageError.badResponse(message)
-            }
-        }
     }
 }
