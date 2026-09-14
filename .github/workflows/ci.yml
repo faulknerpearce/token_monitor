@@ -50,10 +50,15 @@ jobs:
       - name: Install SwiftFormat (pinned)
         run: |
           set -euo pipefail
-          curl -sSL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o /tmp/swiftformat.zip
+          curl -fsSL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o /tmp/swiftformat.zip
           unzip -q -o /tmp/swiftformat.zip -d /tmp/swiftformat
-          sudo install "$(find /tmp/swiftformat -type f -name swiftformat | head -1)" /usr/local/bin/swiftformat
-          test "$(swiftformat --version)" = "$SWIFTFORMAT_VERSION"
+          BIN="$(find /tmp/swiftformat -type f -name swiftformat | head -1)"
+          sudo install "$BIN" /usr/local/bin/swiftformat
+          # The macos-15 image ships a newer SwiftFormat in /opt/homebrew/bin,
+          # which precedes /usr/local/bin on PATH. Prepend the pinned copy so
+          # both the version check and `make format` use SWIFTFORMAT_VERSION.
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          test "$(/usr/local/bin/swiftformat --version)" = "$SWIFTFORMAT_VERSION"
 
       - name: Format check
         run: make format
@@ -152,9 +157,9 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.txt
-          # Fail on upload/parse errors. Coverage thresholds stay informational
-          # (codecov.yml) until the poller/auth suites land.
-          fail_ci_if_error: true
+          # Non-blocking until a CODECOV_TOKEN is configured; coverage is
+          # informational (codecov.yml).
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 
   build-release:
     name: Release build
