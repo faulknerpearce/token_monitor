@@ -96,7 +96,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                     "OpenCode console refresh: monthly \(pct, format: .fixed(precision: 1))%"
                 )
                 return
-            } catch let error as OpenCodeConsoleError {
+            } catch let error as ProviderError {
                 switch error.usageError {
                 case .unauthorized, .notSignedIn:
                     auth.markSessionInvalid(reason: error.localizedDescription)

@@ -113,7 +113,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
                 daysInPeriod: fresh.daysInPeriod(),
                 now: fresh.fetchedAt
             )
-        } catch let error as GrokbotUsageError {
+        } catch let error as ProviderError {
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)

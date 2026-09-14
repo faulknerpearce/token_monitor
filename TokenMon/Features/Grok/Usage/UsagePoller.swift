@@ -90,7 +90,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         // needsSignIn means credentials were cleared after 401/403 — wait for re-auth
         // instead of spinning on empty cookies every poll interval.
         guard auth.isSignedIn, !auth.needsSignIn else {
-            lastError = UsageClientError.notSignedIn.localizedDescription
+            lastError = ProviderError.notSignedIn(.grok).localizedDescription
             return
         }
 
@@ -115,7 +115,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
             notifier.evaluate(usedPercent: snap.usedPercent, settings: settings)
             logger.info("Usage refreshed: \(snap.usedPercent, format: .fixed(precision: 1))% used")
-        } catch let error as UsageClientError {
+        } catch let error as ProviderError {
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)

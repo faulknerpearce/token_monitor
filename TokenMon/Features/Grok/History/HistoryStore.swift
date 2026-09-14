@@ -143,7 +143,7 @@ final class HistoryStore: ObservableObject {
 
     /// Coalesces disk writes from frequent poll appends into one save.
     private func scheduleFlush() {
-        guard let context else { return }
+        guard context != nil else { return }
         dirty = true
         saveTask?.cancel()
         saveTask = Task { [weak self] in

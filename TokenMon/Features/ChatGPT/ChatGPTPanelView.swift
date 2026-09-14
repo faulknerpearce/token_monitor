@@ -26,13 +26,13 @@ struct ChatGPTPanelView: View {
                         color: ConcentricUsageRingView.chatgptColor,
                         caption: snapshot.limitReached
                             ? "Limit reached"
-                            : snapshot.primary?.resetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                            : snapshot.primary?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: "Weekly",
                         percent: snapshot.secondary?.usedPercent ?? 0,
                         color: ConcentricUsageRingView.chatgptColor,
-                        caption: snapshot.secondary?.resetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                        caption: snapshot.secondary?.resetsAt.map { Format.resetCaption($0) }
                     )
                     if !snapshot.allowed {
                         Text("Codex access is currently blocked for this account.")

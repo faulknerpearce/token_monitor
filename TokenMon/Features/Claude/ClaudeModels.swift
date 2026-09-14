@@ -19,7 +19,7 @@ struct ClaudeUsageResponse: Hashable, Sendable {
     /// Parses the raw usage JSON (`five_hour` / `seven_day` windows).
     static func parse(_ data: Data) throws -> ClaudeUsageResponse {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ClaudeUsageError.badResponse("Unexpected usage payload")
+            throw ProviderError.badResponse(.claude, "Unexpected usage payload")
         }
         return ClaudeUsageResponse(
             fiveHour: window(from: root["five_hour"]),

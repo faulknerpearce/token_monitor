@@ -61,35 +61,6 @@ enum OpenRouterBudgetSource: String, Sendable {
     }
 }
 
-enum OpenRouterUsageError: LocalizedError, ProviderUsageError {
-    case notSignedIn
-    case unauthorized
-    case badResponse(String)
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case let .badResponse(message): return .badResponse(message)
-        case let .network(message): return .network(message)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Add an OpenRouter API key to load usage."
-        case .unauthorized:
-            return "OpenRouter rejected the API key. Check or replace it."
-        case let .badResponse(message):
-            return "OpenRouter response error: \(message)"
-        case let .network(message):
-            return "OpenRouter network error: \(message)"
-        }
-    }
-}
-
 /// One OpenRouter poll result.
 ///
 /// Budget model: the credits the user put in. A management key resolves the

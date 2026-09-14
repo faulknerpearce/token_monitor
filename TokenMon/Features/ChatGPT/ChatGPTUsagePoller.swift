@@ -77,7 +77,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             auth.needsSignIn = false
             let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
             logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
-        } catch let error as ChatGPTUsageError {
+        } catch let error as ProviderError {
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

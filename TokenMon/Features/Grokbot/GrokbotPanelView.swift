@@ -33,9 +33,7 @@ struct GrokbotPanelView: View {
                             label: "Weekly",
                             percent: snapshot.usedPercent,
                             color: ConcentricUsageRingView.grokbotColor,
-                            caption: snapshot.resetsAt.map {
-                                "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))"
-                            },
+                            caption: snapshot.resetsAt.map { Format.resetCaption($0) },
                             showsLabel: false
                         )
                     } else {

@@ -97,7 +97,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             logger.info(
                 "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
             )
-        } catch let cursorError as CursorUsageError {
+        } catch let cursorError as ProviderError {
             let usageError = cursorError.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

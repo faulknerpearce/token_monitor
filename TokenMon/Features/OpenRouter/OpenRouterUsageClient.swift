@@ -42,24 +42,19 @@ struct OpenRouterUsageClient: Sendable {
     }
 
     private func get(_ path: String) async throws -> Data {
-        var request = URLRequest(url: Self.baseURL.appendingPathComponent(path))
-        request.httpMethod = "GET"
-        AuthenticatedRequest.applyHeaders(to: &request, cookieHeader: nil, bearerToken: apiKey, referer: nil)
-        return try await AuthenticatedRequest.perform(request) { usageError in
-            switch usageError {
-            case .unauthorized: return OpenRouterUsageError.unauthorized
-            case let .network(message): return OpenRouterUsageError.network(message)
-            case let .badResponse(message): return OpenRouterUsageError.badResponse(message)
-            case .notSignedIn: return OpenRouterUsageError.notSignedIn
-            }
-        }
+        try await ProviderHTTP.get(
+            path,
+            baseURL: Self.baseURL,
+            context: .openRouter,
+            bearerToken: apiKey
+        )
     }
 
     private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         do {
             return try decoder.decode(type, from: data)
         } catch {
-            throw OpenRouterUsageError.badResponse("Unexpected JSON: \(error.localizedDescription)")
+            throw ProviderError.badResponse(.openRouter, "Unexpected JSON: \(error.localizedDescription)")
         }
     }
 }

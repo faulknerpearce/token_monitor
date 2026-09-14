@@ -632,15 +632,4 @@ enum MenuBarStatusRenderer {
             _cache.removeAllObjects()
         }
     }
-
-    /// Removes the appearance observer and cached bitmaps. The renderer
-    /// re-registers lazily on the next `image(...)` call, so bounded-lifetime
-    /// owners (tests/previews) can tear down without leaking global observers.
-    static func stopObserving() {
-        if let appearanceObserver {
-            DistributedNotificationCenter.default().removeObserver(appearanceObserver)
-            Self.appearanceObserver = nil
-        }
-        _cache.removeAllObjects()
-    }
 }

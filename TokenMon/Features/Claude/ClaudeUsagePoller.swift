@@ -101,7 +101,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
                 now: fetchedAt
             )
-        } catch let error as ClaudeUsageError {
+        } catch let error as ProviderError {
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

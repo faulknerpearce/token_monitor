@@ -1,6 +1,23 @@
 import Foundation
 import os
 
+extension ProviderError {
+    static func grokHTTPStatus(_ code: Int, body: String) -> ProviderError {
+        let message = "Usage request failed (HTTP \(code)): \(body)"
+        return .custom(message: message, usage: .badResponse(message))
+    }
+
+    static func grokDecoding(_ detail: String) -> ProviderError {
+        let message = "Could not parse usage response: \(detail)"
+        return .custom(message: message, usage: .badResponse(message))
+    }
+
+    static var grokEmptyResponse: ProviderError {
+        let message = "Empty usage response from Grok."
+        return .custom(message: message, usage: .badResponse(message))
+    }
+}
+
 /// Fetches SuperGrok weekly usage via authenticated grok.com / CLI endpoints.
 struct UsageClient: Sendable {
     private let logger = Logger(category: "UsageClient")
@@ -30,7 +47,7 @@ struct UsageClient: Sendable {
 
     func fetchUsage() async throws -> WeeklyUsageSnapshot {
         if cookieHeader == nil && bearerToken == nil {
-            throw UsageClientError.notSignedIn
+            throw ProviderError.notSignedIn(.grok)
         }
 
         var lastError: Error?
@@ -41,7 +58,7 @@ struct UsageClient: Sendable {
             if let rest = try await fetchRESTBreakdown() {
                 return rest
             }
-        } catch let error as UsageClientError where error == .unauthorized {
+        } catch let error as ProviderError where error == .unauthorized(.grok) {
             throw error
         } catch {
             lastError = error
@@ -51,7 +68,7 @@ struct UsageClient: Sendable {
         // 2) grok.com gRPC-web billing (overall %).
         do {
             return try await fetchGRPCWebBilling()
-        } catch let error as UsageClientError where error == .unauthorized {
+        } catch let error as ProviderError where error == .unauthorized(.grok) {
             throw error
         } catch {
             lastError = error
@@ -71,7 +88,7 @@ struct UsageClient: Sendable {
         if let lastError {
             throw lastError
         }
-        throw UsageClientError.emptyResponse
+        throw ProviderError.grokEmptyResponse
     }
 
     // MARK: - REST
@@ -89,7 +106,7 @@ struct UsageClient: Sendable {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { continue }
             if http.statusCode == 401 || http.statusCode == 403 {
-                throw UsageClientError.unauthorized
+                throw ProviderError.unauthorized(.grok)
             }
             guard http.statusCode == 200, !data.isEmpty else { continue }
             if let snapshot = UsageResponseParser.parseJSON(data, accountEmail: accountEmail) {
@@ -119,14 +136,14 @@ struct UsageClient: Sendable {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw UsageClientError.network("Invalid response")
+            throw ProviderError.network(.grok, "Invalid response")
         }
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw UsageClientError.unauthorized
+            throw ProviderError.unauthorized(.grok)
         }
         guard http.statusCode == 200 else {
             let body = String(data: data.prefix(400), encoding: .utf8) ?? ""
-            throw UsageClientError.httpStatus(http.statusCode, body)
+                throw ProviderError.grokHTTPStatus(http.statusCode, body: body)
         }
 
         try GRPCWebParser.validateTrailers(data)
@@ -167,20 +184,20 @@ struct UsageClient: Sendable {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw UsageClientError.network("Invalid response")
+            throw ProviderError.network(.grok, "Invalid response")
         }
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw UsageClientError.unauthorized
+            throw ProviderError.unauthorized(.grok)
         }
         guard http.statusCode == 200 else {
             let body = String(data: data.prefix(400), encoding: .utf8) ?? ""
-            throw UsageClientError.httpStatus(http.statusCode, body)
+                throw ProviderError.grokHTTPStatus(http.statusCode, body: body)
         }
 
         if let snapshot = UsageResponseParser.parseCLIBilling(data, accountEmail: accountEmail) {
             return snapshot
         }
-        throw UsageClientError.decodingFailed("CLI billing JSON shape unrecognized")
+        throw ProviderError.grokDecoding("CLI billing JSON shape unrecognized")
     }
 
     private func applyAuth(to request: inout URLRequest) {
@@ -393,7 +410,7 @@ enum GRPCWebParser {
         if payloads.isEmpty, looksLikeProtobuf(data) {
             payloads = [data]
         }
-        guard !payloads.isEmpty else { throw UsageClientError.emptyResponse }
+        guard !payloads.isEmpty else { throw ProviderError.grokEmptyResponse }
 
         var fixed32: [(path: [UInt64], value: Float, order: Int)] = []
         var varints: [(path: [UInt64], value: UInt64)] = []
@@ -435,7 +452,7 @@ enum GRPCWebParser {
             $0.path.starts(with: [1, 5]) || ($0.path == [1, 8, 1] && ($0.value == 1 || $0.value == 2))
         }
         let used = percent ?? ((reset != nil && hasPeriod && fixed32.isEmpty) ? 0 : nil)
-        guard let used else { throw UsageClientError.decodingFailed("gRPC usage percent missing") }
+        guard let used else { throw ProviderError.grokDecoding("gRPC usage percent missing") }
         return Parsed(usedPercent: used, resetsAt: reset, products: products, dailySeries: dailySeries)
     }
 
@@ -588,9 +605,9 @@ enum GRPCWebParser {
         guard let raw = fields["grpc-status"], let status = Int(raw), status != 0 else { return }
         let message = fields["grpc-message"] ?? ""
         if status == 16 || message.lowercased().contains("unauthenticated") {
-            throw UsageClientError.unauthorized
+            throw ProviderError.unauthorized(.grok)
         }
-        throw UsageClientError.httpStatus(status, message)
+        throw ProviderError.grokHTTPStatus(status, body: message)
     }
 
     private static func dataFrames(from data: Data) -> [Data] {

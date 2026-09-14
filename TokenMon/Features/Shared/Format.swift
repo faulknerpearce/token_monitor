@@ -70,4 +70,13 @@ enum Format {
             .replacingOccurrences(of: "AM", with: "am")
             .replacingOccurrences(of: "PM", with: "pm")
     }
+
+    /// `Resets …` caption for a reset date.
+    static func resetCaption(
+        _ date: Date,
+        dateFormat: String = "EEE dd MMMM h:mma",
+        timeZone: TimeZone? = nil
+    ) -> String {
+        "Resets \(resetDate(date, dateFormat: dateFormat, timeZone: timeZone))"
+    }
 }

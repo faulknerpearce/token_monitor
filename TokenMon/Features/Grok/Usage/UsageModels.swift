@@ -240,38 +240,3 @@ struct WeeklyUsageSnapshot: Codable, Identifiable, Hashable, Sendable {
         accountEmail: "user@example.com"
     )
 }
-
-enum UsageClientError: LocalizedError, ProviderUsageError, Equatable {
-    case notSignedIn
-    case unauthorized
-    case httpStatus(Int, String)
-    case decodingFailed(String)
-    case emptyResponse
-    case network(String)
-
-    var usageError: UsageError {
-        switch self {
-        case .notSignedIn: return .notSignedIn
-        case .unauthorized: return .unauthorized
-        case let .network(message): return .network(message)
-        default: return .badResponse(localizedDescription)
-        }
-    }
-
-    var errorDescription: String? {
-        switch self {
-        case .notSignedIn:
-            return "Sign in to grok.com to load usage."
-        case .unauthorized:
-            return "Session expired. Please sign in again."
-        case let .httpStatus(code, body):
-            return "Usage request failed (HTTP \(code)): \(body)"
-        case let .decodingFailed(detail):
-            return "Could not parse usage response: \(detail)"
-        case .emptyResponse:
-            return "Empty usage response from Grok."
-        case let .network(message):
-            return message
-        }
-    }
-}
