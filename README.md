@@ -4,14 +4,14 @@
   <img src="Docs/tokenmon-logo.png" alt="TokenMon" width="280">
 </p>
 
-A native macOS menu bar app for tracking your AI provider usage — **SuperGrok**, **Grokbot**, **OpenCode**, **Cursor**, **Claude**, **ChatGPT** and **OpenRouter** — in real time.
+TokenMon is a native macOS menu bar app that tracks how much of your allowance you have used across your AI providers — **ChatGPT**, **Claude**, **Cursor**, **Grokbot**, **OpenCode**, **OpenRouter**, and **SuperGrok** — in real time.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/faulknerpearce/token_monitor)
 [![Swift](https://img.shields.io/badge/Swift-5.10-orange)](https://www.swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml)
 
-> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (xAI, Anysphere/Cursor, OpenCode, Anthropic, OpenAI, or OpenRouter). It uses authenticated provider surfaces that may change without notice.
+> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (Anthropic, Anysphere/Cursor, OpenAI, OpenCode, OpenRouter, or xAI). It uses authenticated provider surfaces that may change without notice.
 
 ## Overview
 
@@ -23,13 +23,13 @@ Adding a provider is a registry entry away: `ProviderRegistry` wires each `Monit
 
 | Provider | Usage pools surfaced | Daily Budget chart |
 |----------|----------------------|--------------------|
-| **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
-| **Grokbot** | Weekly Bot allowance, anchored to the plan's own reset instant | Weekly window |
-| **Claude** | 5-hour session + weekly (7-day) pool | Weekly window |
 | **ChatGPT (Codex)** | 5-hour primary + weekly secondary pool | — |
+| **Claude** | 5-hour session + weekly (7-day) pool | Weekly window |
 | **Cursor** | Monthly billing cycle (usage-summary %) | Last 7 days of the billing cycle |
+| **Grokbot** | Weekly Bot allowance, anchored to the plan's own reset instant | Weekly window |
 | **OpenCode Go** | 5-hour + weekly + monthly limits (console); local estimate when signed out | Weekly + subscription-month sections |
 | **OpenRouter** | Account credits (management key) or per-key spending cap with provider-declared reset window | — |
+| **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
 
 Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). TokenMon never substitutes a calendar-derived guess when a provider payload is incomplete — the affected section simply waits for the next complete refresh.
 
@@ -38,20 +38,20 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 | Area | Details |
 |------|---------|
 | **Menu bar** | Compact status: provider icon, used %, optional filling usage bar |
-| **Dropdown** | Per-provider panel: used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
+| **Dropdown** | Per-provider panel headed by its usage pool (Weekly / Monthly / Mixed), plus used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
 | **Overview tab** | All connected providers at a glance with hourly multi-provider chart |
 | **Daily Budget** | Per-pool daily charts (weekly windows, subscription months) paced against the provider's own consumed % |
-| **Auth** | WKWebView sign-in per provider; session cookies in Application Support |
+| **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and sessions persist under Application Support |
 | **Polling** | Faster refresh while the menu is open; backoff on errors; sleep / wake aware |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
 | **Alerts** | Optional threshold notifications |
-| **Preferences** | Menu bar toggles, poll intervals, visible products, launch at login |
+| **Preferences** | Menu bar toggles, poll intervals, provider order, visible products, launch at login |
 | **Agent app** | No Dock icon by default (`LSUIElement`) |
 
 ## Requirements
 
 - macOS 14 Sonoma or later
-- [Xcode 15+](https://developer.apple.com/xcode/) (full app; Command Line Tools alone are not enough)
+- [Xcode 15.3+](https://developer.apple.com/xcode/) (Swift 5.10; the full app — Command Line Tools alone are not enough)
 - A signed-in account for at least one supported provider
 
 ## Getting started
@@ -69,9 +69,9 @@ Select the **TokenMon** scheme → **My Mac** → Run (⌘R). The app appears in
 ### 2. Sign in to your providers
 
 1. Click the menu bar item and pick a provider from the switcher (or start on **Overview**)
-2. Click **Sign In…** and complete the login on that provider's official sign-in page
-3. If capture does not happen automatically, click **Capture Session**. Use **Back** in the sign-in window (or **Close popup**) to leave an OAuth popup.
-4. Usage appears after the first successful refresh — repeat for any other providers you want to track
+2. Choose **Sign In…** and complete the login on that provider's own page
+3. The window finishes on its own once you're back on the provider page, shows **"Signed in as …"**, and closes. If it lingers, choose **Finish Sign-In**; use **Back** or **Close popup** to leave an OAuth popup.
+4. Usage appears after the first refresh — repeat for any other providers you want to track
 
 ## Build from the command line
 
@@ -109,7 +109,7 @@ All targets are listed below (`make help` also shows your detected signing ident
 | `make lint-fix` | Auto-correct autocorrectable SwiftLint violations, then enforce the strict gate |
 | `make format` | **SwiftFormat gate** — fails on formatting drift (config: `.swiftformat`) |
 | `make format-fix` | Auto-format all Swift sources |
-| `make secrets` | **gitleaks secret scan** of the working tree — must be clean before handoff/PR |
+| `make secrets` | **gitleaks secret scan** of the working tree **and** full git history — must be clean before handoff/PR |
 | `make project` | Regenerate `TokenMon.xcodeproj` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) |
 | `make icon` | Regenerate the app icon asset catalog |
 | `make check` | Verify the Xcode toolchain (`xcode-select`, versions) |
@@ -133,7 +133,7 @@ make test-core   # CLT-only parsers/builders (no app host)
 make lint        # SwiftLint strict gate (must pass before handoff/PR)
 make lint-fix    # auto-fix issues, then re-run the strict gate
 make format      # SwiftFormat drift gate
-make secrets     # gitleaks secret scan
+make secrets     # gitleaks secret scan (working tree + full history)
 ```
 
 `make lint` runs `swiftlint lint --strict`, so **every warning is treated as an error**. Configuration lives in `.swiftlint.yml`. Keep it green before opening a PR or handing off work.
@@ -144,16 +144,16 @@ make secrets     # gitleaks secret scan
 TokenMon/
   App/           Entry point, AppDelegate
   Features/
+    ChatGPT/     ChatGPT/Codex usage pools and panel
+    Claude/      Claude auth, weekly usage, and panel
+    Cursor/      Cursor auth, dashboard usage, and panel
     Grok/        Grok auth, usage, history, and alerts
     Grokbot/     Grokbot weekly allowance and panel (borrows the Cursor session)
     OpenCode/    OpenCode auth, console/local usage, and panel
-    Cursor/      Cursor auth, dashboard usage, and panel
-    Claude/      Claude auth, weekly usage, and panel
-    ChatGPT/     ChatGPT/Codex usage pools and panel
     OpenRouter/  OpenRouter key/credits usage and panel
     Overview/    Multi-provider rings and hourly chart
     Provider/    Provider identity, registry, switching, and logos
-    Shared/      Cookie capture, sign-in shell, Daily Budget kernel, poll helpers
+    Shared/      Credentials, HTTP/error helpers, cookie capture, sign-in shell, usage-pool + Daily Budget kernels, poll helpers
     MenuBar/     Label renderer, dropdown, daily chart
     Settings/    Preferences, UserDefaults
   Resources/     Info.plist, entitlements, assets
@@ -168,7 +168,7 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 - Session cookies and optional bearer tokens are stored as **user-only** files under Application Support (not Keychain — avoids access-dialog loops on ad-hoc debug builds).
 - The app is **not sandboxed**; the store path is:
   `~/Library/Application Support/TokenMon/` (files `auth_*.dat`, mode `0600`)
-- Network access is limited to authenticated hosts of the connected providers (grok.com/x.ai, opencode.ai, cursor.com, claude.ai, chatgpt.com, openrouter.ai) for usage and auth.
+- Network access is limited to authenticated hosts of the connected providers (chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com/x.ai) for usage and auth.
 - History stays on this Mac (SwiftData). No third-party telemetry.
 
 ## Documentation
@@ -187,7 +187,7 @@ For a signed, notarized release build, see [Docs/NOTARIZATION.md](Docs/NOTARIZAT
 
 ## Notes on usage windows
 
-Each provider defines its own consumption pool: a rolling week anchored to a reset instant (SuperGrok, Grokbot), a weekly window plus 5-hour session (Claude, ChatGPT), a monthly billing cycle (Cursor), stacked 5-hour/weekly/monthly limits (OpenCode Go), or credits and key caps with a declared reset period (OpenRouter). Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
+Each provider defines its own consumption pool: ChatGPT and Claude pair a 5-hour session with a weekly pool, Cursor uses a monthly billing cycle, Grokbot and SuperGrok anchor a rolling week to the provider's reset instant, OpenCode Go stacks 5-hour/weekly/monthly limits, and OpenRouter uses credits or a per-key cap with a declared reset period. Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
 
 TokenMon never invents a usage period. If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh rather than substituting a calendar-derived guess. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
 
