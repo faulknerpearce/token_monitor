@@ -9,9 +9,7 @@ struct CursorSignInView: View {
             auth: auth,
             config: ProviderSignInConfig(
                 title: "Sign in to Cursor",
-                initialStatus: "Sign in to your Cursor account. The session is captured automatically when you reach the usage dashboard.",
-                authHostStatus: "Complete sign-in. When you land on the Cursor dashboard, the session is captured automatically.",
-                capturingStatus: "Back on Cursor — capturing session…",
+                subtitle: "Sign in to your Cursor account. This window finishes on its own once you reach the dashboard.",
                 startURL: URL(string: "https://cursor.com/dashboard/usage")!,
                 isAuthHost: { host, path in
                     host.contains("authenticator.cursor")
