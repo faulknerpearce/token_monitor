@@ -9,9 +9,7 @@ struct SignInView: View {
             auth: auth,
             config: ProviderSignInConfig(
                 title: "Sign in to Grok",
-                initialStatus: "Sign in with your Grok / xAI account. The session is captured automatically when you return to grok.com.",
-                authHostStatus: "Complete sign-in. When you return to grok.com, the session is captured automatically.",
-                capturingStatus: "Back on grok.com — capturing session…",
+                subtitle: "Sign in with your Grok / xAI account. This window finishes on its own once you're back on grok.com.",
                 startURL: URL(
                     string: "https://accounts.x.ai/sign-in?redirect=https%3A%2F%2Fgrok.com%2F%3F_s%3Dusage"
                 )!,

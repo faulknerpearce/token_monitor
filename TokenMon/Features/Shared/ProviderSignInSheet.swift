@@ -6,28 +6,26 @@ import WebKit
 @MainActor
 protocol ProviderCookieCapturing: ObservableObject {
     var lastAuthError: String? { get }
+    var accountEmail: String? { get }
     /// Isolated WebKit store this provider signs into and captures from.
     var signInDataStore: WKWebsiteDataStore { get }
     func captureCookiesFromWebKit() async -> Bool
 }
 
+/// Per-provider configuration for the shared sign-in sheet.
 struct ProviderSignInConfig {
     var title: String
-    var initialStatus: String
-    var authHostStatus: String
-    var capturingStatus: String
+    var subtitle: String
     var startURL: URL
     var isAuthHost: (String, String) -> Bool
     var isReturnPage: (URL) -> Bool
     var returnDelayNanoseconds: UInt64
-    /// Optional side effect when the return page is detected (before delayed capture).
+    /// Runs when the return page is detected, before the delayed capture.
     var onReturned: ((URL) -> Void)?
 
     init(
         title: String,
-        initialStatus: String,
-        authHostStatus: String,
-        capturingStatus: String,
+        subtitle: String,
         startURL: URL,
         isAuthHost: @escaping (String, String) -> Bool,
         isReturnPage: @escaping (URL) -> Bool,
@@ -35,9 +33,7 @@ struct ProviderSignInConfig {
         onReturned: ((URL) -> Void)? = nil
     ) {
         self.title = title
-        self.initialStatus = initialStatus
-        self.authHostStatus = authHostStatus
-        self.capturingStatus = capturingStatus
+        self.subtitle = subtitle
         self.startURL = startURL
         self.isAuthHost = isAuthHost
         self.isReturnPage = isReturnPage
@@ -46,59 +42,37 @@ struct ProviderSignInConfig {
     }
 }
 
-/// Shared sign-in chrome: title, nav (Back / popup), WebKit host, Capture / Done.
+/// Guided sign-in: the user signs in on the provider's own page and the sheet
+/// finishes on its own, showing a brief confirmation before it closes.
 struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
     @ObservedObject var auth: Auth
     let config: ProviderSignInConfig
     var onComplete: () -> Void
-    /// Runs after a successful cookie capture, before dismiss.
+    /// Runs after a successful cookie capture, before dismissal.
     var afterCapture: (() async -> Void)?
 
     @StateObject private var browser = SignInBrowserController()
-    @State private var statusMessage: String
-    @State private var isCapturing = false
+    @State private var phase: Phase = .signingIn
+    @State private var didHintTimeout = false
     @State private var isDismissed = false
     @Environment(\.dismiss) private var dismiss
 
-    init(
-        auth: Auth,
-        config: ProviderSignInConfig,
-        onComplete: @escaping () -> Void,
-        afterCapture: (() async -> Void)? = nil
-    ) {
-        self.auth = auth
-        self.config = config
-        self.onComplete = onComplete
-        self.afterCapture = afterCapture
-        _statusMessage = State(initialValue: config.initialStatus)
+    /// How long the window waits before nudging the user to finish manually.
+    private let timeoutHintNanoseconds: UInt64 = 25_000_000_000
+    /// How long the "signed in" confirmation stays up before the window closes.
+    private let confirmationNanoseconds: UInt64 = 1_100_000_000
+
+    private enum Phase: Equatable {
+        case signingIn
+        case finishing
+        case signedIn(email: String?)
+        case failed(String)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(config.title)
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .padding()
-
-            Text(statusMessage)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-
-            if let err = auth.lastAuthError {
-                Text(err)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 4)
-            }
-
+            header
+            Divider()
             SignInNavigationBar(browser: browser)
             Divider()
 
@@ -108,56 +82,127 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
                 controller: browser,
                 isAuthHost: config.isAuthHost,
                 isReturnPage: config.isReturnPage,
-                onAuthHostSeen: {
-                    statusMessage = config.authHostStatus
-                },
+                onAuthHostSeen: {},
                 onReturned: { url in
                     config.onReturned?(url)
-                    statusMessage = config.capturingStatus
                     Task { await captureAfterReturn() }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack(spacing: 12) {
-                Button(isCapturing ? "Capturing session…" : "Capture Session") {
-                    Task { _ = await capture() }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(isCapturing)
-
-                if isCapturing {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                Spacer()
-
-                Button("Done") {
-                    onComplete()
-                    dismiss()
-                }
-            }
-            .padding()
+            Divider()
+            footer
         }
         .frame(minWidth: 880, minHeight: 640)
-        .onAppear {
-            NSApp.activate()
-        }
-        .onDisappear {
-            isDismissed = true
-        }
-        .onChange(of: browser.popupDepth) { _, depth in
-            if depth > 0 {
-                statusMessage =
-                    "Complete sign-in in the popup. Back or Close popup returns to the provider page."
-            }
+        .onAppear { NSApp.activate() }
+        .onDisappear { isDismissed = true }
+        .task {
+            try? await Task.sleep(nanoseconds: timeoutHintNanoseconds)
+            if !Task.isCancelled { didHintTimeout = true }
         }
     }
 
-    /// Wait for an OAuth popup to close, then capture; retry once if cookies are late.
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if case .signedIn = phase {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(config.title)
+                    .font(.title2.weight(.semibold))
+                Text(statusText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button("Cancel") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding()
+    }
+
+    private var statusText: String {
+        switch phase {
+        case .signingIn:
+            if browser.hasPopup {
+                return "Complete sign-in in the popup above."
+            }
+            if didHintTimeout {
+                return "Signed in? Choose Finish Sign-In to complete."
+            }
+            return config.subtitle
+        case .finishing:
+            return "Finishing sign-in…"
+        case let .signedIn(email):
+            return email.map { "Signed in as \($0)" } ?? "Signed in"
+        case let .failed(message):
+            return message
+        }
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            if case .finishing = phase {
+                ProgressView().controlSize(.small)
+            }
+
+            Spacer()
+
+            Button(primaryTitle) {
+                Task { await finish() }
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(isBusy || isSignedIn)
+        }
+        .padding()
+    }
+
+    private var primaryTitle: String {
+        switch phase {
+        case .signingIn: return "Finish Sign-In"
+        case .finishing: return "Finishing…"
+        case .failed: return "Try Again"
+        case .signedIn: return "Signed In"
+        }
+    }
+
+    private var isBusy: Bool {
+        if case .finishing = phase { return true }
+        return false
+    }
+
+    private var isSignedIn: Bool {
+        if case .signedIn = phase { return true }
+        return false
+    }
+
+    // MARK: - Flow
+
+    /// Manual finish: capture now and close, or surface a retry.
+    private func finish() async {
+        guard !isDismissed, !isBusy, !isSignedIn else { return }
+        phase = .finishing
+        if await capture() {
+            await confirmAndDismiss()
+        } else {
+            phase = .failed(failureMessage)
+            browser.rearmReturn()
+        }
+    }
+
+    /// Automatic capture after the user returns to the provider page.
     private func captureAfterReturn() async {
-        guard !isDismissed, !isCapturing else { return }
+        guard !isDismissed, !isBusy, !isSignedIn else { return }
         for _ in 0..<40 where browser.hasPopup {
             try? await Task.sleep(nanoseconds: 200_000_000)
             if isDismissed { return }
@@ -165,34 +210,44 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
         if config.returnDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: config.returnDelayNanoseconds)
         }
-        if isDismissed { return }
-        if await capture() { return }
+        // The user may have finished manually while we waited.
+        guard !isDismissed, !isBusy, !isSignedIn else { return }
+
+        phase = .finishing
+        if await capture() {
+            await confirmAndDismiss()
+            return
+        }
+        // Cookies may be late; retry once before asking the user.
         try? await Task.sleep(nanoseconds: 1_200_000_000)
-        if isDismissed { return }
-        _ = await capture()
+        guard !isDismissed, !isSignedIn else { return }
+        if await capture() {
+            await confirmAndDismiss()
+        } else {
+            phase = .failed(failureMessage)
+            browser.rearmReturn()
+        }
     }
 
-    @discardableResult
     private func capture() async -> Bool {
-        guard !isDismissed, !isCapturing else { return false }
-        isCapturing = true
-        defer { isCapturing = false }
         let ok = await auth.captureCookiesFromWebKit()
-        if ok {
-            if let afterCapture {
-                await afterCapture()
-            }
-            statusMessage = "Session captured."
-            onComplete()
-            dismiss()
-            return true
+        if ok, let afterCapture {
+            await afterCapture()
         }
-        statusMessage = auth.lastAuthError
-            ?? "No session cookies found yet. Finish signing in, then click Capture Session."
-        // Cookies may simply be late, or the user may not have finished signing
-        // in yet. Let a later landing on the return page auto-capture again.
-        browser.rearmReturn()
-        return false
+        return ok
+    }
+
+    private func confirmAndDismiss() async {
+        guard !isSignedIn else { return }
+        phase = .signedIn(email: auth.accountEmail)
+        onComplete()
+        try? await Task.sleep(nanoseconds: confirmationNanoseconds)
+        if !isDismissed { dismiss() }
+    }
+
+    private var failureMessage: String {
+        auth.lastAuthError
+            ?? "Couldn't find a signed-in session yet. Finish signing in, then try again."
     }
 }
 

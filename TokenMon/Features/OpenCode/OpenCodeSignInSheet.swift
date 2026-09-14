@@ -9,9 +9,7 @@ struct OpenCodeSignInView: View {
             auth: auth,
             config: ProviderSignInConfig(
                 title: "Sign in to OpenCode",
-                initialStatus: "Sign in to your OpenCode account. The session is captured automatically when you reach the console.",
-                authHostStatus: "Complete sign-in. When you land on the OpenCode console, the session is captured automatically.",
-                capturingStatus: "Back on OpenCode — capturing session…",
+                subtitle: "Sign in to your OpenCode account. This window finishes on its own once you reach the console.",
                 startURL: URL(string: "https://opencode.ai/auth/authorize")!,
                 isAuthHost: { host, path in
                     host.contains("auth.opencode.ai") || path.contains("/auth/authorize")

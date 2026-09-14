@@ -9,9 +9,7 @@ struct ChatGPTSignInView: View {
             auth: auth,
             config: ProviderSignInConfig(
                 title: "Sign in to ChatGPT",
-                initialStatus: "Sign in to your ChatGPT account. The session is captured automatically when you return to chatgpt.com.",
-                authHostStatus: "Complete sign-in. When you land back on chatgpt.com, the session is captured automatically.",
-                capturingStatus: "Back on ChatGPT — capturing session…",
+                subtitle: "Sign in to your ChatGPT account. This window finishes on its own once you return to chatgpt.com.",
                 startURL: URL(string: "https://chatgpt.com/")!,
                 isAuthHost: ChatGPTSignInView.isAuthHost,
                 isReturnPage: ChatGPTSignInView.isReturnPage
