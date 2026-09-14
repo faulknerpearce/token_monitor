@@ -24,9 +24,9 @@ struct OpenCodeLimitBar: View {
         case .rolling5h:
             return "Resets \(date.formatted(.relative(presentation: .named)))"
         case .weekly:
-            return "Resets \(Format.resetDate(date, dateFormat: "EEE h:mma"))"
+            return Format.resetCaption(date, dateFormat: "EEE h:mma")
         case .monthly:
-            return "Resets \(Format.resetDate(date, dateFormat: "EEE dd MMMM h:mma"))"
+            return Format.resetCaption(date)
         }
     }
 }

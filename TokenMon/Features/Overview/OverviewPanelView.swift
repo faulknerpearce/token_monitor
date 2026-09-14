@@ -235,7 +235,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if grokPoller.snapshot == nil {
@@ -287,7 +287,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if openCodePoller.snapshot == nil {
@@ -338,7 +338,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if cursorPoller.snapshot == nil {
@@ -389,7 +389,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if claudePoller.snapshot == nil {
@@ -440,7 +440,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if chatGPTPoller.snapshot == nil {
@@ -491,7 +491,7 @@ struct OverviewPanelView: View {
             }
             .frame(height: 8)
             if let resetsAt {
-                Text("Resets \(Format.resetDate(resetsAt, dateFormat: "EEE dd MMMM h:mma"))")
+                Text(Format.resetCaption(resetsAt))
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if grokbotPoller.snapshot == nil {

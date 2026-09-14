@@ -29,13 +29,13 @@ struct ClaudePanelView: View {
                         label: "5-Hour Window",
                         percent: snapshot.fiveHour?.usedPercent ?? 0,
                         color: ConcentricUsageRingView.claudeColor,
-                        caption: snapshot.fiveHour?.resetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                        caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: "Weekly",
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
                         color: ConcentricUsageRingView.claudeColor,
-                        caption: snapshot.sevenDay?.resetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                        caption: snapshot.sevenDay?.resetsAt.map { Format.resetCaption($0) }
                     )
                 }
 

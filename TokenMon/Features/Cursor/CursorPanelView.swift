@@ -36,13 +36,13 @@ struct CursorPanelView: View {
                         label: "Cursor Models",
                         percent: cursorModelsPercent,
                         color: ConcentricUsageRingView.cursorColor,
-                        caption: cursorModelsResetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                        caption: cursorModelsResetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: "Other Models",
                         percent: otherModelsPercent,
                         color: ConcentricUsageRingView.cursorColor,
-                        caption: otherModelsResetsAt.map { "Resets \(Format.resetDate($0, dateFormat: "EEE dd MMMM h:mma"))" }
+                        caption: otherModelsResetsAt.map { Format.resetCaption($0) }
                     )
                 }
 
