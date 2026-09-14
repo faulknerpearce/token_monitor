@@ -1,7 +1,7 @@
 import Foundation
 
 /// Persists grok.com session cookies and optional bearer token under Application Support.
-/// Keychain is intentionally avoided — ad-hoc/debug builds spam "wants to access keychain" dialogs in a loop.
+/// Uses file-based storage instead of Keychain; debug builds prompt repeatedly for Keychain access.
 @MainActor
 final class AuthSessionService: ProviderAuthSession {
     private static let grokHosts = ["grok.com", "x.ai", "x.com", "twitter.com"]

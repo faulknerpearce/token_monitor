@@ -2,11 +2,9 @@ import Foundation
 
 /// Which subscription is paying for the Bot allowance.
 ///
-/// Grok Bot ships as a Cursor-backed app (`com.anysphere.sand`) but is sold
-/// through both channels, so the same account can be entitled via Cursor or via
-/// a SuperGrok plan. The usage payload reports the SuperGrok plan name when the
-/// allowance comes from that side, which is the only signal that distinguishes
-/// the two — there is no separate endpoint per channel.
+/// The usage payload reports the SuperGrok plan name when the allowance comes
+/// from that side; otherwise it is Cursor-funded. There is no separate endpoint
+/// per channel.
 enum GrokbotEntitlement: Codable, Hashable, Sendable {
     case cursor
     case superGrok(planLabel: String)
@@ -22,9 +20,8 @@ enum GrokbotEntitlement: Codable, Hashable, Sendable {
 
 /// Snapshot of the weekly Grok Bot allowance at a point in time.
 ///
-/// `resetsAt` is `nil` when the payload arrived without `next_reset_timestamp_utc`.
-/// The panel withholds the weekly section in that case rather than substituting a
-/// calendar-derived window — see the project rule in `Docs/ARCHITECTURE.md`.
+/// `resetsAt` is `nil` when the payload arrived without `next_reset_timestamp_utc`;
+/// the panel withholds the weekly section rather than substitute a calendar window.
 struct GrokbotSnapshot: Codable, Hashable, Sendable {
     var fetchedAt: Date
     var usedPercent: Double
@@ -67,11 +64,9 @@ struct GrokbotSnapshot: Codable, Hashable, Sendable {
     func daysInPeriod(calendar: Calendar = .current) -> Int {
         guard let periodStart, let resetsAt, resetsAt > periodStart else { return 7 }
         let days = DailyBudget.daysInBillingCycle(start: periodStart, end: resetsAt, calendar: calendar)
-        // On reset day the payload reports `current_period_start` on the same
-        // calendar day as `next_reset_timestamp_utc`, so the derived span
-        // rounds down to a single day. Taking that literally collapses the
-        // chart to one bar at a 100%/day budget — the pool is a weekly one, so
-        // a sub-2-day span means "unreliable", not "one-day plan".
+        // On reset day the payload can report both ends on the same calendar day,
+        // collapsing the span to a single day; treat a sub-2-day span as unreliable
+        // since the pool is weekly.
         guard days >= 2 else { return 7 }
         return min(31, days)
     }

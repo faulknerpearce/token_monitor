@@ -9,17 +9,15 @@ struct ConcentricUsageRingView: View {
 
     static let grokColor = SRGB(red: 0.11, green: 0.38, blue: 0.82).color.opacity(0.85)
     static let openCodeColor = ModelPalette.orange.color.opacity(0.78)
-    /// Canonical Cursor sRGB — expose the raw components (not just the blended `Color`)
-    /// so other renderers (e.g. the menu bar icon) derive from one source instead of
-    /// hand-typing a second literal that can drift out of sync.
+    /// Canonical Cursor sRGB, shared with other renderers (e.g. the menu bar icon).
     static let cursorSRGB = SRGB(red: 0.18, green: 0.53, blue: 0.38)
     static let cursorColor = cursorSRGB.color.opacity(0.85)
     static let claudeSRGB = SRGB(red: 0.85, green: 0.47, blue: 0.34)
     static let claudeColor = claudeSRGB.color.opacity(0.85)
     static let chatgptColor = SRGB(red: 0.16, green: 0.52, blue: 0.46).color.opacity(0.85)
     static let openRouterColor = SRGB(red: 0.45, green: 0.36, blue: 0.90).color.opacity(0.85)
-    /// Grok Bot is a monochrome brand; a graphite that stays legible as a bar fill
-    /// and does not collide with Grok navy or Cursor green.
+    /// Grok Bot brand graphite; stays legible as a bar fill without colliding with
+    /// Grok navy or Cursor green.
     static let grokbotSRGB = SRGB(red: 0.38, green: 0.42, blue: 0.50)
     static let grokbotColor = grokbotSRGB.color.opacity(0.85)
 

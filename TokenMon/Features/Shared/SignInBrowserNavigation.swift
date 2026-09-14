@@ -2,8 +2,8 @@ import Foundation
 
 /// What the sign-in Back button should do for the active web view.
 ///
-/// OAuth providers open a popup with little or no history. Back must then
-/// dismiss the popup instead of doing nothing, which is how users got stuck.
+/// OAuth providers open a popup with little or no history, so Back dismisses the
+/// popup instead of doing nothing.
 enum SignInBackAction: String, Codable, CaseIterable, Hashable, Sendable {
     case goBack
     case closePopup

@@ -396,7 +396,7 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(saturday?.budgetUSD ?? -1, expectedDaily, accuracy: 0.001)
         XCTAssertEqual(Int((saturday?.budgetUSD ?? 0).rounded()), 3)
 
-        // Old dollar-ratio math would have called Saturday 15% of the $20 limit.
+        // Per-day spend follows the quota scale, not the $20 plan limit.
         XCTAssertLessThan(saturday?.spentUSD ?? 100, 2)
         XCTAssertFalse(sunday?.isOverBudget ?? true)
     }

@@ -14,8 +14,7 @@ final class AppVersionTests: XCTestCase {
         XCTAssertNil(AppVersion("1.x.2"))
     }
 
-    /// String comparison would put 1.10.0 below 1.9.0 — the whole reason this
-    /// type exists.
+    /// Components compare numerically, so 1.10.0 sorts above 1.9.0.
     func testComparesNumericallyNotLexically() {
         XCTAssertTrue(AppVersion("1.10.0")! > AppVersion("1.9.0")!)
         XCTAssertTrue(AppVersion("1.4.2")! < AppVersion("1.4.10")!)

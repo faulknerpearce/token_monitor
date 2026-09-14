@@ -30,8 +30,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     init(settings: AppSettings, auth: CursorAuthSession) {
         self.settings = settings
         self.auth = auth
-        // Grokbot signs out this same session; drop the Cursor snapshot as soon
-        // as the cookies are gone rather than waiting for the next poll.
+        // Drop the Cursor snapshot as soon as this shared session signs out.
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()

@@ -3,15 +3,14 @@ import Foundation
 /// Fetches the weekly Grok Bot allowance from the cookie-authenticated Cursor
 /// dashboard.
 ///
-/// Grok Bot is a Cursor-backed product (the desktop app bundle is
-/// `com.anysphere.sand`), and "Sand" is the name the wire protocol still uses.
-/// `aiserver.v1.GetSandUsageStatusResponse` is reached through the dashboard's
-/// REST wrapper and carries the whole weekly pool:
+/// Grok Bot is a Cursor-backed product (app bundle `com.anysphere.sand`), and
+/// "Sand" is the wire-protocol name. `aiserver.v1.GetSandUsageStatusResponse`
+/// is reached through the dashboard's REST wrapper and carries the weekly pool:
 ///
 ///   POST https://cursor.com/api/dashboard/get-sand-usage-status   (body `{}`)
 ///
 ///   current_period_start           → periodStart
-///   next_reset_timestamp_utc       → resetsAt      (the anchor for every window)
+///   next_reset_timestamp_utc       → resetsAt      (anchor for every window)
 ///   usage_percent                  → usedPercent
 ///   included_limit_zero            ┐
 ///   has_non_zero_included_limit    ┘ → hasIncludedAllowance
@@ -19,8 +18,8 @@ import Foundation
 ///   grok_plan_label                ┘ → entitlement
 ///
 /// One endpoint covers both purchase channels: when the allowance is bundled
-/// with a SuperGrok subscription rather than a Cursor one, the SuperGrok plan
-/// fields are populated and the rest of the payload is identical.
+/// with a SuperGrok subscription, the SuperGrok plan fields are populated and
+/// the rest of the payload is identical.
 struct GrokbotUsageClient: Sendable {
     static let baseURL = URL(string: "https://cursor.com")!
     static let usageStatusPath = "/api/dashboard/get-sand-usage-status"
@@ -58,11 +57,8 @@ struct GrokbotUsageClient: Sendable {
         // so a transport switch does not silently blank the panel.
         //
         // proto3 JSON omits default-valued fields, so a period with no Bot usage
-        // yet arrives *without* `usage_percent` — that is 0%, not "no access".
-        // Only a payload carrying no allowance fields at all means the account
-        // has no Bot entitlement. Without this the section blanked exactly when
-        // usage was empty, instead of drawing an empty track like every other
-        // provider does at 0%.
+        // arrives without `usage_percent` — that is 0%, not "no access". Only a
+        // payload with no allowance fields at all means no Bot entitlement.
         let percent: Double
         if let reported = JSON.firstDouble(root, keys: ["usagePercent", "usage_percent"]) {
             percent = reported

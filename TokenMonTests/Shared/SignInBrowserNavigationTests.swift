@@ -95,9 +95,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
 
     // MARK: - Controller publishing
 
-    /// Regression: the sheet observes this controller and SwiftUI re-runs
-    /// `updateNSView` on every publish, so an unconditional `apply` spun the main
-    /// thread forever and the sign-in window appeared to hang.
+    /// Re-applying unchanged state must not publish `objectWillChange`.
     @MainActor
     func testApplyDoesNotPublishWhenNothingChanged() {
         let controller = SignInBrowserController()
@@ -191,11 +189,8 @@ final class SignInBrowserNavigationTests: XCTestCase {
 
     // MARK: - Sign-in browser identity
 
-    /// Regression: 1.4.1 set `customUserAgent = AppIdentity.userAgent`, so the
-    /// sign-in browser announced itself as "TokenMon/x.y.z" with no browser
-    /// tokens. OAuth providers (Google especially) refuse sign-in from a UA that
-    /// does not look like a browser. This is an interactive browser, not an API
-    /// client: it must keep WebKit's default Safari User-Agent.
+    /// Like an ordinary browser, sign-in keeps WebKit's default Safari
+    /// User-Agent: OAuth providers refuse a UA that does not look like one.
     @MainActor
     func testSignInBrowserDoesNotOverrideTheUserAgent() {
         let browser = SignInBrowserView(

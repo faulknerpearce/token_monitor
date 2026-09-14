@@ -1,19 +1,9 @@
 import Foundation
 
-/// Builds a Settings → Usage style “Daily use” series on the **billing period** axis.
-///
-/// The SuperGrok pool is a rolling week that ends at `resetsAt` (often mid-day Thursday).
-/// The chart shows **7 full calendar days starting at the period start** (e.g. Thu→Wed).
-/// When the period rolls over, the whole window advances — bars are never split across
-/// two billing periods.
-///
-/// Priority:
-/// 1. Server daily series (when discovered / passed in)
-/// 2. Local snapshot deltas between successive sample days **within the same billing period**
-/// 3. Mid-period reset/rebase (used% drops, `resetsAt` unchanged): drop prior days and
-///    start tracking from that day with the current week-to-date total
-/// 4. Real period rollover (used% drops and `resetsAt` advances): start the new period’s week
-/// 5. Until two valid sample days exist (normal week), leave bars empty
+/// Builds a Settings → Usage style “Daily use” series on the **billing period** axis:
+/// 7 calendar days starting at the period start (e.g. Thu→Wed). Prefers local
+/// day-over-day snapshot deltas within the period, falls back to a server daily
+/// series, and leaves bars empty until two valid sample days exist.
 enum DailyUsageBuilder {
     /// Equal daily share of the weekly SuperGrok pool.
     static let dailyCapPercent: Double = 100.0 / 7.0
@@ -83,8 +73,7 @@ enum DailyUsageBuilder {
         )
 
         // Local day-over-day history is the source of truth for tracked usage.
-        // Only fall back to a server daily series when local samples cannot paint bars
-        // (heuristic protobuf day stamps have produced false positives that wiped weeks).
+        // Fall back to a server daily series only when local samples cannot paint bars.
         var samples = history
         if let current {
             if samples.isEmpty || (samples.last.map { $0.fetchedAt < current.fetchedAt } ?? true) {
@@ -216,8 +205,8 @@ enum DailyUsageBuilder {
                         }
                     } else {
                         // Day-over-day growth. If cumulative is flat or lower without a rebase,
-                        // still show period-to-date on the period-start day when it's the only
-                        // baseline we have (first bar after a new week opens).
+                        // still show period-to-date on the period-start day when it is the only
+                        // available baseline (first bar after a new week opens).
                         segments.append(
                             contentsOf: growthSegments(
                                 previousUsed: previous,
@@ -394,16 +383,10 @@ enum DailyUsageBuilder {
 
     // MARK: - Billing period week
 
-    /// Exactly **7** calendar days for the active SuperGrok billing period.
-    ///
-    /// - **Before** `resetsAt`: previous reset day → day before reset
-    ///   (e.g. next reset Thu Jul 16 → **Thu Jul 9 … Wed Jul 15**). One Thursday only.
-    /// - **After** `resetsAt` fires: whole window rolls to the new period starting that day
-    ///   (**Thu Jul 16 … Wed Jul 22**). Never appends a second Thursday onto the old week.
-    /// - Once the API advances `resetsAt` by a week, the same formula
-    ///   (`startOfDay(resetsAt) - 7` … `+ 6`) yields the new period.
-    ///
-    /// Returns nil when `resetsAt` is unknown — never falls back to a calendar week.
+    /// Exactly **7** calendar days for the active SuperGrok billing period: before
+    /// `resetsAt`, the previous reset day through the day before reset; once it fires,
+    /// the window rolls to the new period starting that day. Returns nil when
+    /// `resetsAt` is unknown — never falls back to a calendar week.
     static func billingPeriodWeekBounds(
         resetsAt: Date?,
         weekOffset: Int,
@@ -414,12 +397,8 @@ enum DailyUsageBuilder {
 
         guard let resetsAt else { return nil }
         let resetDay = cal.startOfDay(for: resetsAt)
-        // Active period start for the current snapshot of `resetsAt`:
-        // • Still in the period (now < resetsAt): started 7 days before that reset day.
-        // • Past the reset instant (now >= resetsAt) and API has not moved `resetsAt` yet:
-        //   roll the chart to the new week starting on `resetDay` (no second Thursday).
-        // • API already advanced `resetsAt`: now < new resetsAt again → first branch with
-        //   resetDay = next week, so start = that day − 7 = current period’s Thursday.
+        // Active period start: 7 days before the reset day while still in period, or
+        // the reset day itself once `resetsAt` has passed and the API has not advanced it.
         let baseStart: Date
         if now >= resetsAt {
             baseStart = resetDay
@@ -433,11 +412,9 @@ enum DailyUsageBuilder {
 
     // MARK: - Helpers
 
-    /// `resetsAt` for the SuperGrok period that owns the displayed week window.
-    ///
-    /// - **Current week** (`weekOffset == 0`): live snapshot / API value.
-    /// - **Past weeks**: prefer in-window sample metadata; else the calendar day after
-    ///   `weekEnd` (period end is the day before the next reset).
+    /// `resetsAt` for the SuperGrok period that owns the displayed week window: the
+    /// live value for the current week, or in-window sample metadata for past weeks
+    /// (falling back to the day after `weekEnd`).
     private static func periodAnchorResets(
         weekOffset: Int,
         weekStart: Date,

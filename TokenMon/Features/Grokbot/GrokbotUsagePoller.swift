@@ -91,10 +91,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             lastRefreshedAt = Date()
             logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
-            // A rollover moves the reset instant forward by roughly a whole
-            // period. Reset the accumulated deltas + baseline so the fresh
-            // window's first sample is credited whole; the drop-as-reset path
-            // alone understates a new window that is already above the old one.
+            // A rollover moves the reset instant forward by roughly a whole period;
+            // reset the accumulated deltas and baseline so the fresh window's first
+            // sample is credited whole.
             if Self.isNewWindow(
                 previousResetsAt: weeklyResetsAt,
                 nextResetsAt: fresh.resetsAt,

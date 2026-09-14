@@ -2,9 +2,8 @@ import Foundation
 
 /// Model-layer registry mapping each `MonitorProvider` to its live poller.
 ///
-/// App wiring (start all pollers, forward child changes) iterates this
-/// registry instead of hardcoding each provider, so adding a provider (e.g.
-/// OpenRouter) means adding one registry entry.
+/// App wiring iterates the registry instead of hardcoding each provider; adding
+/// a provider means adding one registry entry.
 @MainActor
 struct ProviderRegistry {
     private let pollers: [MonitorProvider: any ProviderUsagePoller]

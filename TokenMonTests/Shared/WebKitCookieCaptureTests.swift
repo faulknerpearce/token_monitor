@@ -55,8 +55,8 @@ final class WebKitCookieCaptureTests: XCTestCase {
         XCTAssertEqual(Set(chosen?.map(\.name) ?? []), ["sessionToken", "orgId"])
     }
 
-    /// An allowlist that misses the session cookie must not persist a useless
-    /// subset — it falls back to the previous broad capture.
+    /// An allowlist that misses the session cookie falls back to the broad
+    /// full-jar capture.
     func testAllowlistWithoutSessionCookieFallsBackToFullJar() {
         let chosen = WebKitCookieCapture.select(
             from: allCookies,
@@ -65,7 +65,7 @@ final class WebKitCookieCaptureTests: XCTestCase {
         XCTAssertEqual(chosen?.count, jar.count)
     }
 
-    /// Empty allowlist keeps the pre-existing behaviour untouched.
+    /// Empty allowlist keeps the broad full-jar capture.
     func testEmptyAllowlistKeepsBroadCapture() {
         let chosen = WebKitCookieCapture.select(
             from: allCookies,

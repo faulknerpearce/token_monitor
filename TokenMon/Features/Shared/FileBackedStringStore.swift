@@ -28,8 +28,7 @@ struct FileBackedStringStore {
         if FileManager.default.fileExists(atPath: url.path) {
             try? data.write(to: url, options: .atomic)
         } else {
-            // Create user-only from the start; the directory is already 0700, so
-            // there is no window where a umask-default file holds a credential.
+            // Create user-only from the start (the directory is already 0700).
             FileManager.default.createFile(
                 atPath: url.path,
                 contents: data,

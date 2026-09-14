@@ -2,10 +2,8 @@ import Foundation
 
 /// Common usage-fetch failure cases shared across providers.
 ///
-/// Provider clients map their provider-specific errors onto these cases (via
-/// `ProviderUsageError.usageError`) so pollers and UI can handle the universal
-/// auth/network failure surface uniformly — Grok, OpenCode, Cursor, and future
-/// providers like OpenRouter.
+/// Provider clients map their provider-specific errors onto these cases via
+/// `ProviderUsageError.usageError`.
 enum UsageError: LocalizedError, Equatable {
     case notSignedIn
     case unauthorized

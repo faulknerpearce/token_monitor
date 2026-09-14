@@ -1,7 +1,5 @@
-# SwiftLint configuration for TokenMon
-# Gate: `make lint` runs with --strict — every warning is an error and blocks handoff.
-# Keep this config green on the current codebase; raise strictness only when the
-# underlying code is fixed (see skills/swift-engineer/SKILL.md → Linting gate).
+# SwiftLint configuration for TokenMon.
+# `make lint` runs this with --strict: every warning is an error.
 
 included:
   - TokenMon
@@ -14,13 +12,7 @@ excluded:
   - .build
   - DerivedData
 
-# Length thresholds tuned to this codebase (menu bar renderer + panel views are long by design).
-# Re-tighten each threshold in the refactor stage that shrinks the offending type/function:
-#   type_body_length  → 400/500 after Stages 1–2 split the provider + test types
-#   file_length       → 700/900 after UsageParsingTests splits its parser helpers out
-#   function_body_length → 80/120 after Stage 1.1 (DailyUsageBuilder.parse) and Stage 3.2 (renderer)
-#   function_parameter_count → 8/10 after Stage 3.2 groups renderer params into a state struct
-#   cyclomatic_complexity → 15/25 after Stage 1.1 and the OpenCodeUsagePoller poll rewrite
+# Length thresholds tuned to this codebase (menu bar renderer and panel views run long).
 line_length:
   warning: 160
   error: 200
@@ -70,18 +62,12 @@ type_name:
   min_length: 3
   max_length: 60
 
-# Opt-in rules that catch real problems and match the project conventions.
-# Deliberately NOT enabled (noise that doesn't match this codebase):
-#   type_contents_order, switch_case_on_newline, vertical_whitespace_between_cases,
-#   required_deinit, single_test_class, object_literal, attributes, implicit_return.
-# redundant_nil_coalescing is disabled: it misfires on double optionals (e.g.
-# `resetsByDay[dayStart] ?? nil` where the value type is Date?), and its autocorrect
-# stripped `?? nil` and broke compilation in DailyUsageBuilder.
-# discouraged_optional_boolean is disabled because the one occurrence
-# (MenuBarStatusRenderer.cachedMenuBarIsDark) is an intentional memoization cache;
-# Stage 3.3 (mutability review) removes that cache and can re-enable this rule.
-# force_unwrapping is handled by code review + the dedicated refactor item (Stage 3.4),
-# not the lint gate, because compile-time URL literals are an accepted convention here.
+# Opt-in rules that match the project conventions.
+# Not enabled (do not fit this codebase): type_contents_order,
+# switch_case_on_newline, vertical_whitespace_between_cases, required_deinit,
+# single_test_class, object_literal, attributes, implicit_return.
+# redundant_nil_coalescing: misfires on double optionals.
+# discouraged_optional_boolean and force_unwrapping: not enforced by the gate.
 opt_in_rules:
   - closure_spacing
   - contains_over_filter_count

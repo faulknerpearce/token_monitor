@@ -147,7 +147,7 @@ enum OpenCodeLocalStats {
             throw OpenCodeLocalStatsError.databaseMissing(dbURL)
         }
         // Open the DB once and share the connection across the session + two
-        // message scans (was 3 separate opens per snapshot).
+        // message scans.
         let db = try openConnection(at: dbURL)
         defer { sqlite3_close(db) }
 
@@ -197,7 +197,7 @@ enum OpenCodeLocalStats {
         let monthTotals = tokenTotals(rows: monthEvents)
         let monthEstimated = estimatedCostUSD(rows: monthEvents)
         // Ensure monthly stats never appear smaller than the weekly models total at cycle start
-        // (week can include a day before billing month, e.g. Aug 17 vs billing Aug 18).
+        // (the week can include a day before the billing month).
         let weeklyModelsCost = models.reduce(0) { $0 + $1.costUSD }
         let modelsTokensSum = models.reduce(0) { $0 + $1.inputTokens + $1.outputTokens + $1.cacheReadTokens + $1.cacheWriteTokens }
         let modelsInputSum = models.reduce(0) { $0 + $1.inputTokens }
@@ -735,10 +735,9 @@ enum OpenCodeLocalStats {
     /// Builds the last-7 daily-budget bars for the Go **subscription** month,
     /// plus that period's start for pace captions.
     ///
-    /// Console `periodResetsAt` is authoritative when present — signed-in bars
-    /// must match the console Monthly bar. The local first-Go-session
-    /// anniversary is only a fallback for the local-estimate path. Returns nil
-    /// when neither signal exists — never invents a calendar month of `now`.
+    /// Console `periodResetsAt` is authoritative when present; the local
+    /// first-Go-session anniversary is the fallback. Returns nil when neither
+    /// signal exists.
     static func monthDailyBudgetDays(
         limitUSD: Double,
         usedPercent: Double = 0,
@@ -758,9 +757,8 @@ enum OpenCodeLocalStats {
         let spendsPercent: [Date: Double] = limitUSD > 0
             ? usdSpends.mapValues { $0 / limitUSD * 100 }
             : [:]
-        // Anchor the bars to the consumed monthly usage (the Monthly bar): local
-        // events only shape *how* the budget was spread across days, while the
-        // authoritative monthly total sets the scale so the bars reconcile with it.
+        // Anchor the bars to the consumed monthly usage: local events shape how
+        // the budget spread across days, while the monthly total sets the scale.
         let anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
         let percentLimit: Double = 100 // monthly allocation = 100%
 
@@ -797,10 +795,8 @@ enum OpenCodeLocalStats {
     }
 
     /// Scales per-day percentage-point spends so their sum equals the consumed
-    /// monthly usage (`usedPercent`) — the same anchor Cursor uses. Prior weeks'
-    /// usage stays counted in the monthly total while only the latest days are
-    /// drawn, so the 7 visible bars are a consistent slice of the Monthly bar.
-    /// Returns the spends unchanged when there is nothing to anchor to.
+    /// monthly usage (`usedPercent`). Returns the spends unchanged when there is
+    /// nothing to anchor to.
     static func scaledSpendsPercent(
         _ spendsPercent: [Date: Double],
         to usedPercent: Double

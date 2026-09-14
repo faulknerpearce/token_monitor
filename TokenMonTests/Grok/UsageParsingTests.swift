@@ -104,8 +104,8 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertTrue(parsed.products.contains { $0.id == "build" && abs($0.percentOfPool - 13) < 0.01 })
     }
 
-    /// An oversized/`UInt64.max` length varint must be rejected, not converted
-    /// to `Int` (which traps). Regression for a crash on malformed protobuf.
+    /// An oversized/`UInt64.max` length varint is rejected, not converted to
+    /// `Int` (which would trap).
     func testOversizedLengthVarintDoesNotCrash() {
         var bytes: [UInt8] = [0x3A] // field 7, wire type 2 (length-delimited)
         bytes.append(contentsOf: Array(repeating: 0xFF, count: 9))
@@ -115,8 +115,8 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertThrowsError(try GRPCWebParser.parseUsage(data))
     }
 
-    /// Live SuperGrok payload (2026-07-28): Build 30, Chat 21, Imagine 12, Other 1.
-    /// Regression: enum 5 must be Imagine (not Voice); enum 3 must be Other (not Imagine).
+    /// Live SuperGrok payload (2026-07-28): Build 30, Chat 21, Imagine 12,
+    /// Other 1; enum 5 maps to Imagine and enum 3 to Other.
     func testGRPCLiveCreditsConfigEnumMap() throws {
         let grpcHex = """
         000000006d0a6b0d0000804212001a00220b08b1c889d30610b8efb07f\

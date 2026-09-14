@@ -1,9 +1,8 @@
 @testable import TokenMon
 import XCTest
 
-/// Regression coverage for `HistoryStore` (in-memory SwiftData).
-/// Targets the review findings: same-day `recent` desync, skip window,
-/// 200-entry cap, and `clear`.
+/// `HistoryStore` (in-memory SwiftData): same-day `recent` upsert, skip
+/// window, 200-entry cap, and `clear`.
 @MainActor
 final class HistoryStoreTests: XCTestCase {
     private var store: HistoryStore!
@@ -40,8 +39,8 @@ final class HistoryStoreTests: XCTestCase {
     }
 
     func testSecondSameDaySampleReplacesInsteadOfPrepending() {
-        // Regression: each poll mints a fresh snapshot id while the disk row keeps
-        // its original id; upsert by calendar day must replace in place.
+        // Upsert by calendar day replaces in place, though each poll mints a
+        // fresh snapshot id.
         let cal = Calendar.current
         let morning = WeeklyUsageSnapshot(fetchedAt: cal.startOfDay(for: Date()).addingTimeInterval(3600), usedPercent: 10)
         let afternoon = WeeklyUsageSnapshot(fetchedAt: cal.startOfDay(for: Date()).addingTimeInterval(3600 * 10), usedPercent: 42)

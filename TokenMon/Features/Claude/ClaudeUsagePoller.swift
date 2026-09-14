@@ -20,9 +20,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let logger = Logger(category: "Claude")
     private var cancellables = Set<AnyCancellable>()
 
-    /// Last observed `seven_day.resets_at`; tracks weekly-pool rollovers so the
-    /// day-delta history can be cleared when a new period begins, and anchors
-    /// the chart if a later payload omits the reset time.
+    /// Last observed `seven_day.resets_at`; anchors the chart when a later payload
+    /// omits the reset time. A forward move does not clear accumulated day deltas.
     private var weeklyResetsAt: Date?
 
     private lazy var loop = PollingLoop(
@@ -126,28 +125,23 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
     }
 
-    /// Tracks the latest observed `seven_day.resets_at` so it can anchor the
-    /// chart if a later payload omits the reset time.
+    /// Tracks the latest observed `seven_day.resets_at` to anchor the chart when a
+    /// later payload omits the reset time.
     ///
-    /// Note: this deliberately does NOT wipe accumulated day deltas when
-    /// `resets_at` moves forward. Claude's weekly pool is a rolling window whose
-    /// reset time advances with usage, so a forward move is not necessarily a
-    /// fresh period — clearing on it erased real history. Old-period days simply
-    /// fall outside the anchored window and are hidden; a true reset still gets
-    /// captured by the drop-as-reset credit in `DailyQuotaDeltaStore`.
+    /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
+    /// weekly pool is a rolling window whose reset time advances with usage, so a
+    /// forward move is not necessarily a fresh period. Old-period days fall outside
+    /// the anchored window and are hidden; a true reset is captured by the
+    /// drop-as-reset credit in `DailyQuotaDeltaStore`.
     private func noteWeeklyResetAdvance(_ resetsAt: Date?) {
         guard let resetsAt else { return }
         weeklyResetsAt = resetsAt
     }
 
-    /// Daily bars for the current weekly window, anchored to the pool's actual
-    /// reset time: while the period runs, the first bar is the day it began
-    /// and the last bar is the day before reset — except on reset day itself
-    /// before the instant, when the last bar is today so calendar-keyed
-    /// deltas stay visible. Returns [] when no provider reset has been observed —
-    /// a rolling 7-day window is never substituted for the real period.
-    /// The weekly window's 100% pool is split evenly across its 7 days, so each
-    /// day's budget is 1/7th of it.
+    /// Daily bars for the current weekly window, anchored to the pool's actual reset
+    /// time; returns [] when no provider reset has been observed (a rolling 7-day
+    /// window is never substituted). The pool is split evenly across the period's
+    /// days, so each day's budget is 1/7th.
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,

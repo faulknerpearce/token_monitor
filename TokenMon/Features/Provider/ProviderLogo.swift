@@ -56,7 +56,7 @@ enum ProviderLogo {
         return image
     }()
 
-    /// OpenRouter mark; falls back to a network glyph until a brand asset lands.
+    /// OpenRouter mark; falls back to a network glyph when the asset is absent.
     static let openRouter: NSImage = {
         let image = (NSImage(named: "OpenRouterLogo")?.copy() as? NSImage)
             ?? NSImage(systemSymbolName: "network", accessibilityDescription: "OpenRouter")

@@ -49,7 +49,7 @@ struct GrokPanelView: View {
 
     @ViewBuilder
     private func usageHeader(_ snapshot: WeeklyUsageSnapshot) -> some View {
-        // Show only Chat, Build, Imagine, Voice (as requested), defaulting to 0% when unused
+        // Show Chat, Build, Imagine, Voice; unused products default to 0%.
         let productsByID = Dictionary(
             snapshot.products.map { ($0.id.lowercased(), $0) },
             uniquingKeysWith: { _, last in last }

@@ -39,7 +39,7 @@ enum OpenCodeConsoleError: LocalizedError, ProviderUsageError {
 
 /// Fetches authoritative OpenCode Go usage from the console SolidStart server functions.
 ///
-/// Working protocol (verified against live console):
+/// Protocol:
 /// ```
 /// GET https://opencode.ai/_server?id=<hash>&args=["wrk_…"]
 /// Cookie: auth=…; provider=…
@@ -50,7 +50,7 @@ enum OpenCodeConsoleError: LocalizedError, ProviderUsageError {
 struct OpenCodeConsoleClient: Sendable {
     static let baseURL = URL(string: "https://opencode.ai")!
 
-    /// Fallback server-fn id when live discovery fails (current console build).
+    /// Fallback server-fn id when live discovery fails.
     static let fallbackLiteSubscriptionID =
         "c7389bd0e731f80f49593e5ee53835475f4e28594dd6bd83eb229bab753498cd"
 
@@ -260,7 +260,7 @@ struct OpenCodeConsoleClient: Sendable {
     }
 
     private func callLiteSubscription(serverID: String, workspaceID: String) async throws -> LitePayload {
-        // Live console accepts GET with a plain JSON args array (not seroval POST body).
+        // Console accepts GET with a plain JSON args array.
         var components = URLComponents(url: Self.baseURL.appendingPathComponent("_server"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "id", value: serverID),
@@ -302,7 +302,7 @@ struct OpenCodeConsoleClient: Sendable {
         }
         if let xerr = http.value(forHTTPHeaderField: "X-Error"), !xerr.isEmpty {
             if xerr.lowercased().contains("auth") || xerr.lowercased().contains("account") {
-                // account-without-workspace often means bad args; keep message
+                // Account-without-workspace usually means bad args.
             }
             throw OpenCodeConsoleError.badResponse(xerr)
         }
@@ -353,8 +353,8 @@ struct OpenCodeConsoleClient: Sendable {
     }
 
     private static func windowFields(named name: String, in body: String) -> WindowFields? {
-        // Live form: rollingUsage$R[2]={status:"ok",resetInSec:18000,usagePercent:0}
-        // Prefer a simple scan from the key name to the matching `}` (no fragile `$` regex).
+        // Example: rollingUsage$R[2]={status:"ok",resetInSec:18000,usagePercent:0}
+        // Scan from the key name to the matching `}`.
         guard let keyRange = body.range(of: name) else { return nil }
         let afterKey = body[keyRange.upperBound...]
         guard let braceOpen = afterKey.firstIndex(of: "{") else { return nil }
@@ -384,8 +384,7 @@ struct OpenCodeConsoleClient: Sendable {
             } else if !digits.isEmpty {
                 break
             } else {
-                // First meaningful character is not numeric: give up rather
-                // than latching onto a later number.
+                // First meaningful character is not numeric: give up.
                 return nil
             }
         }

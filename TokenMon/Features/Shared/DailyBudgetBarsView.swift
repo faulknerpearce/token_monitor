@@ -58,8 +58,7 @@ struct MonthlyDailyBudgetBarsView: View {
 }
 
 /// Shared stem chart + pace footer. Prefer `WeeklyDailyBudgetBarsView` or
-/// `MonthlyDailyBudgetBarsView` at call sites so weekly vs subscription-month
-/// math cannot be mixed up.
+/// `MonthlyDailyBudgetBarsView` at call sites.
 struct DailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
@@ -106,8 +105,8 @@ struct DailyBudgetBarsView: View {
             period: allowancePeriod,
             days: days
         )
-        // Weekly windows earn from visible bars when start is unknown.
-        // Monthly requires a subscription start — never invent a calendar month.
+        // Weekly windows earn from visible bars when start is unknown;
+        // monthly requires a subscription start.
         let elapsed: Int?
         if let start {
             elapsed = DailyBudget.elapsedDaysThroughToday(from: start)
@@ -197,7 +196,7 @@ struct DailyBudgetBarsView: View {
     }
 
     private func dayColumn(_ day: DailyBudgetDay) -> some View {
-        // Full stem height = the day's allowance. Fill = usage vs that allowance — mirrors Grok DailyUsageChartView.
+        // Full stem height = the day's allowance; fill = usage vs that allowance.
         let fraction = day.budgetUSD > 0 ? min(1, max(0, day.spentUSD / day.budgetUSD)) : 0
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
         let isFuture = day.date > Calendar.current.startOfDay(for: Date())
@@ -205,11 +204,8 @@ struct DailyBudgetBarsView: View {
 
         return VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
-                // Track stays at full strength on every day, matching Grok's
-                // DailyUsageChartView. Dimming the whole column (track
-                // included) dropped an empty future day to ~5% alpha, which
-                // reads as "no bar at all" on the dark panel — only the fill
-                // should fade.
+                // Track stays at full strength on every day; only the fill
+                // fades on future days.
                 Color.primary.opacity(0.12)
 
                 if fraction > 0.005 && !isFuture {

@@ -152,9 +152,8 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         let monthly = snapshot.windows.first { $0.kind == .monthly }
         let monthlyLimit = monthly?.limitUSD ?? OpenCodeWindowKind.monthly.defaultLimitUSD
         guard monthlyLimit > 0 else { return nil }
-        // Anchor the bars to the Monthly bar the user sees so the daily chart
-        // reconciles with the consumed monthly usage. Prefer console resetsAt
-        // when local subscription bounds are unavailable.
+        // Anchor the bars to the consumed monthly usage; prefer console
+        // resetsAt when local subscription bounds are unavailable.
         let usedPercent = snapshot.monthlyUsedPercent
         let resetsAt = monthly?.resetsAt
         return await Task.detached(priority: .utility) {

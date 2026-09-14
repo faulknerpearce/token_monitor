@@ -3,10 +3,8 @@ import Foundation
 /// A dotted release version (`1.4.2`), compared numerically rather than as a
 /// string so `1.10.0` sorts above `1.9.0`.
 ///
-/// Parsing is deliberately forgiving about the shapes GitHub tags take
-/// (`v1.4.2`, `1.4`, `1.4.2-beta.1`) and deliberately strict about everything
-/// else: an unparseable tag yields `nil`, and the caller then offers no update
-/// rather than guessing.
+/// Parses GitHub-style tags (`v1.4.2`, `1.4`, `1.4.2-beta.1`); an unparseable
+/// tag yields `nil`.
 struct AppVersion: Comparable, CustomStringConvertible, Sendable {
     let components: [Int]
     /// Pre-release suffix after `-`, e.g. `beta.1`. Absent on final releases.
