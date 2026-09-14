@@ -24,7 +24,7 @@ struct ClaudePanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeader(title: "Usage")
+                    PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
                     SlimUsageTrack(
                         label: "5-Hour Window",
                         percent: snapshot.fiveHour?.usedPercent ?? 0,

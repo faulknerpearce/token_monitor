@@ -65,6 +65,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         dailyBudgetDays = nil
         weeklyResetsAt = nil
         lastError = nil
+        lastRefreshedAt = nil
+        hourly.clear()
+        daily.clear()
     }
 
     func refreshNow() async {
@@ -88,6 +91,18 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             lastRefreshedAt = Date()
             logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
+            // A rollover moves the reset instant forward by roughly a whole
+            // period. Reset the accumulated deltas + baseline so the fresh
+            // window's first sample is credited whole; the drop-as-reset path
+            // alone understates a new window that is already above the old one.
+            if Self.isNewWindow(
+                previousResetsAt: weeklyResetsAt,
+                nextResetsAt: fresh.resetsAt,
+                periodDays: fresh.daysInPeriod()
+            ) {
+                hourly.beginNewWindow()
+                daily.beginNewWindow()
+            }
             if let resetsAt = fresh.resetsAt {
                 weeklyResetsAt = resetsAt
             }
@@ -120,6 +135,20 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private func currentInterval() -> TimeInterval {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    }
+
+    /// True when `nextResetsAt` represents a genuinely new allowance period
+    /// rather than the same period's reset instant creeping forward. A rollover
+    /// advances the anchor by at least half the period.
+    static func isNewWindow(
+        previousResetsAt: Date?,
+        nextResetsAt: Date?,
+        periodDays: Int,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard let previous = previousResetsAt, let next = nextResetsAt, next > previous else { return false }
+        let threshold = TimeInterval(max(1, periodDays)) * 86_400 * 0.5
+        return next.timeIntervalSince(previous) >= threshold
     }
 
     /// Daily bars for the current allowance period, anchored to the provider's

@@ -9,8 +9,6 @@ struct ProviderAuthConfig {
     var storeFilenamePrefix: String
     /// Log category (subsystem: `com.modelmonitor.app`).
     var logCategory: String
-    /// Whether the session begins signed-out (vs. signed-in-until-proven-wrong).
-    var startsSignedOut: Bool
     /// Whether this provider also persists a bearer token (Grok only).
     var usesBearerToken: Bool
     /// Extra store keys to clear on sign-out / invalid (e.g. `workspace`).
@@ -46,6 +44,9 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
 
     private let store: any CredentialStore
     private let logger: Logger
+    /// In-flight browser-cookie purge from a prior sign-out / invalidation.
+    /// Capture awaits it so a quick re-auth cannot race the late clear.
+    private var clearTask: Task<Void, Never>?
 
     init(config: ProviderAuthConfig, directory: URL? = nil, store: (any CredentialStore)? = nil) {
         self.config = config
@@ -57,7 +58,8 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         } else {
             self.store = FileBackedCredentialStore(filenamePrefix: config.storeFilenamePrefix)
         }
-        self.needsSignIn = config.startsSignedOut
+        // `refreshFromDisk()` derives `needsSignIn` from the stored credentials,
+        // so no separate "starts signed out" flag is needed.
         refreshFromDisk()
     }
 
@@ -78,6 +80,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         if let reason { lastAuthError = reason }
         clearBrowserState()
         isSignedIn = false
+        accountEmail = nil
         logger.info("\(self.config.logCategory, privacy: .public) session marked invalid")
     }
 
@@ -106,6 +109,9 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     }
 
     func captureCookiesFromWebKit() async -> Bool {
+        // Finish any pending sign-out purge first so it cannot delete cookies we
+        // are about to capture from a fresh sign-in.
+        _ = await clearTask?.value
         guard let result = await WebKitCookieCapture.capture(policy: config.capturePolicy, dataStore: signInDataStore) else {
             lastAuthError = config.capturePolicy.failureMessage
             logger.warning("No auth cookies found after sign-in")
@@ -147,7 +153,8 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         WebKitCookieCapture.clearHTTPCookieStorage(hosts: config.signOutHosts)
         let dataStore = signInDataStore
         let isDomain = config.isDomain
-        Task {
+        clearTask?.cancel()
+        clearTask = Task {
             await WKWebsiteDataStoreBridge.shared.clearAllCookies(in: dataStore)
             // Legacy cookies from before per-provider stores lived in the default jar.
             await WKWebsiteDataStoreBridge.shared.clearCookies(matching: isDomain, in: .default())

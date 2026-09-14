@@ -664,7 +664,12 @@ enum OpenCodeLocalStats {
     private static func int64Value(_ value: Any?) -> Int64 {
         if let n = value as? Int64 { return n }
         if let n = value as? Int { return Int64(n) }
-        if let n = value as? Double { return Int64(n) }
+        if let n = value as? Double {
+            guard n.isFinite else { return 0 }
+            if n >= Double(Int64.max) { return Int64.max }
+            if n <= Double(Int64.min) { return Int64.min }
+            return Int64(n)
+        }
         if let n = value as? NSNumber { return n.int64Value }
         return 0
     }

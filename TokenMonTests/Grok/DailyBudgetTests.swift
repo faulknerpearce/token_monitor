@@ -329,6 +329,7 @@ final class DailyBudgetTests: XCTestCase {
             days: days,
             knownStart: date(2026, 8, 5),
             resetsAt: date(2026, 9, 5),
+            now: date(2026, 8, 20),
             calendar: calendar
         )
         XCTAssertTrue(calendar.isDate(start!, inSameDayAs: date(2026, 8, 5)))

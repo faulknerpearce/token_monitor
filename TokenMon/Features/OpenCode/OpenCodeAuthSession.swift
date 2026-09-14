@@ -12,7 +12,7 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     /// Last known workspace id (`wrk_…`) from redirect or prior fetch.
     @Published private(set) var workspaceID: String?
 
-    private static func openCodePolicy() -> WebKitCookieCapture.Policy {
+    static func openCodePolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: openCodeHosts) },
             isPreferredSessionCookie: { $0.name.lowercased() == "auth" },
@@ -35,7 +35,6 @@ final class OpenCodeAuthSession: ProviderAuthSession {
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "opencode_auth_",
                 logCategory: "OpenCodeAuth",
-                startsSignedOut: true,
                 usesBearerToken: false,
                 extraStoreKeys: ["workspace"],
                 signOutHosts: Self.openCodeHosts,

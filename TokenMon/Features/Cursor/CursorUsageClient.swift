@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum CursorUsageError: LocalizedError, ProviderUsageError {
     case notSignedIn
@@ -32,6 +33,7 @@ enum CursorUsageError: LocalizedError, ProviderUsageError {
 /// Fetches Cursor dashboard usage via cookie-authenticated unofficial endpoints.
 struct CursorUsageClient: Sendable {
     static let baseURL = URL(string: "https://cursor.com")!
+    private static let log = Logger(category: "Cursor")
 
     private let cookieHeader: String
 
@@ -262,11 +264,29 @@ struct CursorUsageClient: Sendable {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw CursorUsageError.badResponse("Expected events JSON object")
         }
-        let total = (root["totalUsageEventsCount"] as? Int)
-            ?? (root["totalUsageEventsCount"] as? Double).map(Int.init)
-            ?? 0
+        // Coerce strings and numbers alike; a missing/renamed field yields 0,
+        // which the pager treats as "unknown" rather than "no more pages".
+        let total = JSON.number(root["totalUsageEventsCount"]).map(safeInt) ?? 0
         let events = (root["usageEventsDisplay"] as? [[String: Any]]) ?? []
         return (events, total)
+    }
+
+    /// Clamps a JSON number into `Int` without trapping on out-of-range/NaN.
+    /// Compares against the `Double` bounds first: converting a value at or
+    /// beyond `Double(Int.max)` would trap because that double rounds to 2^63.
+    static func safeInt(_ value: Double) -> Int {
+        guard value.isFinite else { return 0 }
+        if value >= Double(Int.max) { return Int.max }
+        if value <= Double(Int.min) { return Int.min }
+        return Int(value)
+    }
+
+    /// Clamps a JSON number into `Int64` without trapping on out-of-range/NaN.
+    static func safeInt64(_ value: Double) -> Int64 {
+        guard value.isFinite else { return 0 }
+        if value >= Double(Int64.max) { return Int64.max }
+        if value <= Double(Int64.min) { return Int64.min }
+        return Int64(value)
     }
 
     static func aggregateCostStats(
@@ -396,19 +416,25 @@ struct CursorUsageClient: Sendable {
     }
 
     static func eventTimestamp(_ event: [String: Any]) -> Date? {
-        if let msString = event["timestamp"] as? String, let ms = Double(msString) {
-            return Date(timeIntervalSince1970: ms / 1000)
+        if let msString = event["timestamp"] as? String, let raw = Double(msString) {
+            return date(fromEpochNumber: raw)
         }
         if let ms = event["timestamp"] as? Double {
-            let seconds = ms > 1_000_000_000_000 ? ms / 1000 : ms
-            return Date(timeIntervalSince1970: seconds)
+            return date(fromEpochNumber: ms)
         }
         if let ms = event["timestamp"] as? Int {
-            let value = Double(ms)
-            let seconds = value > 1_000_000_000_000 ? value / 1000 : value
-            return Date(timeIntervalSince1970: seconds)
+            return date(fromEpochNumber: Double(ms))
         }
         return nil
+    }
+
+    /// Accepts seconds or milliseconds (heuristic on magnitude) and rejects
+    /// implausible/negative values instead of returning a 1970 date.
+    private static func date(fromEpochNumber value: Double) -> Date? {
+        guard value.isFinite, value > 0 else { return nil }
+        let seconds = value > 1_000_000_000_000 ? value / 1000 : value
+        guard seconds > 0 else { return nil }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     static func chargedCents(_ event: [String: Any]) -> Double {
@@ -428,17 +454,17 @@ struct CursorUsageClient: Sendable {
         let output = JSON.number(tokenUsage["outputTokens"]) ?? 0
         let cacheWrite = JSON.number(tokenUsage["cacheWriteTokens"]) ?? 0
         let cacheRead = JSON.number(tokenUsage["cacheReadTokens"]) ?? 0
-        return Int64(input + output + cacheWrite + cacheRead)
+        return safeInt64(input + output + cacheWrite + cacheRead)
     }
 
     static func inputTokenCount(_ event: [String: Any]) -> Int64 {
         guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
-        return Int64(JSON.number(tokenUsage["inputTokens"]) ?? 0)
+        return safeInt64(JSON.number(tokenUsage["inputTokens"]) ?? 0)
     }
 
     static func outputTokenCount(_ event: [String: Any]) -> Int64 {
         guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
-        return Int64(JSON.number(tokenUsage["outputTokens"]) ?? 0)
+        return safeInt64(JSON.number(tokenUsage["outputTokens"]) ?? 0)
     }
 
     private static func modelIdentifier(from event: [String: Any]) -> String? {
@@ -468,7 +494,8 @@ struct CursorUsageClient: Sendable {
         var allEvents: [[String: Any]] = []
         var page = 1
         let pageSize = 500
-        while page <= 40 {
+        let pageCap = 40
+        while page <= pageCap {
             let body: [String: Any] = [
                 "startDate": String(startMs),
                 "endDate": String(endMs),
@@ -478,7 +505,12 @@ struct CursorUsageClient: Sendable {
             let data = try await post(path: "/api/dashboard/get-filtered-usage-events", json: body)
             let (events, total) = try Self.parseUsageEventsPage(data: data)
             allEvents.append(contentsOf: events)
-            if allEvents.count >= total || events.count < pageSize {
+            if events.count < pageSize { break }
+            // `total <= 0` means the field was absent/unknown — keep paging on
+            // the short-page signal rather than stopping after one page.
+            if total > 0, allEvents.count >= total { break }
+            if page == pageCap {
+                Self.log.warning("Cursor event page cap (\(pageCap)) reached; totals may be truncated")
                 break
             }
             page += 1

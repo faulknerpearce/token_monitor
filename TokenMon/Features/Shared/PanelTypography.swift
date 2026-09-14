@@ -39,3 +39,23 @@ struct PanelSectionHeader: View {
             .foregroundStyle(.tertiary)
     }
 }
+
+/// A section header with an optional trailing usage figure, shown as plain
+/// text (the bars carry the detail; the Overview cards keep `PanelPill`).
+struct PanelSectionHeaderRow: View {
+    let title: String
+    var trailing: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            PanelSectionHeader(title: title)
+            Spacer()
+            if let trailing {
+                Text(trailing)
+                    .font(PanelTypography.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}

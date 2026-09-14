@@ -159,10 +159,12 @@ final class HistoryStore: ObservableObject {
         guard dirty, let context else { return }
         do {
             try context.save()
+            dirty = false
         } catch {
+            // Keep `dirty` set so the next append/poll or terminate-flush retries;
+            // clearing it here would silently drop the last snapshots.
             Self.logger.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
-        dirty = false
     }
 
     /// Keep `recent` in sync without re-fetching (and re-decoding) up to 200 rows.

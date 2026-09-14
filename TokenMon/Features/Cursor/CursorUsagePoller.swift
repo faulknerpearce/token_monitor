@@ -55,6 +55,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         dailyBudgetDays = nil
         lastError = nil
         dataSourceLabel = nil
+        lastRefreshedAt = nil
     }
 
     func refreshNow() async {

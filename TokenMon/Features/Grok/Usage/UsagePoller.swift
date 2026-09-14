@@ -33,6 +33,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
     private var pausedForSleep = false
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         auth: AuthSessionService,
@@ -47,6 +48,15 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         self.notifier = notifier
         self.grokHourly = grokHourly
         observeSleep()
+        // Signing out (or a 401) must drop the snapshot and the account-scoped
+        // hourly deltas immediately, not on the next poll.
+        auth.$isSignedIn
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] signedIn in
+                if !signedIn { self?.clearSnapshot() }
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -65,6 +75,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     func clearSnapshot() {
         snapshot = nil
         lastError = nil
+        lastRefreshedAt = nil
+        grokHourly.clear()
     }
 
     func refreshNow() async {

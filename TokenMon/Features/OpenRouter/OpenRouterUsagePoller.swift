@@ -13,6 +13,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let auth: OpenRouterAuthSession
     private let logger = Logger(category: "OpenRouter")
+    private var cancellables = Set<AnyCancellable>()
 
     private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
@@ -22,6 +23,13 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     init(settings: AppSettings, auth: OpenRouterAuthSession) {
         self.settings = settings
         self.auth = auth
+        auth.$isSignedIn
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] signedIn in
+                if !signedIn { self?.clearSnapshot() }
+            }
+            .store(in: &cancellables)
     }
 
     func start() {
@@ -35,6 +43,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     func clearSnapshot() {
         snapshot = nil
         lastError = nil
+        lastRefreshedAt = nil
     }
 
     func refreshNow() async {

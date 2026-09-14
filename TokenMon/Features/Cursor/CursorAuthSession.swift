@@ -11,7 +11,7 @@ final class CursorAuthSession: ProviderAuthSession {
         "api2.cursor.sh"
     ]
 
-    private static func cursorPolicy() -> WebKitCookieCapture.Policy {
+    static func cursorPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: cursorHosts) },
             isPreferredSessionCookie: {
@@ -37,7 +37,6 @@ final class CursorAuthSession: ProviderAuthSession {
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "cursor_auth_",
                 logCategory: "CursorAuth",
-                startsSignedOut: true,
                 usesBearerToken: false,
                 extraStoreKeys: [],
                 signOutHosts: Self.cursorHosts,

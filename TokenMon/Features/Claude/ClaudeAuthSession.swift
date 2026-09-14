@@ -9,7 +9,7 @@ final class ClaudeAuthSession: ProviderAuthSession {
         "api.claude.ai"
     ]
 
-    private static func claudePolicy() -> WebKitCookieCapture.Policy {
+    static func claudePolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: claudeHosts) },
             isPreferredSessionCookie: { $0.name == "sessionKey" },
@@ -33,7 +33,6 @@ final class ClaudeAuthSession: ProviderAuthSession {
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "claude_auth_",
                 logCategory: "ClaudeAuth",
-                startsSignedOut: true,
                 usesBearerToken: false,
                 extraStoreKeys: [],
                 signOutHosts: Self.claudeHosts,

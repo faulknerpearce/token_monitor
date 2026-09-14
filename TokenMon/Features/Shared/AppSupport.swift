@@ -25,7 +25,11 @@ enum AppSupport {
                 to: dir
             )
         }
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? fm.createDirectory(
+            at: dir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         return dir
     }

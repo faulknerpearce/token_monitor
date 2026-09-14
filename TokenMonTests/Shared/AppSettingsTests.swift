@@ -214,4 +214,29 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         XCTAssertEqual(settings.enabledProviderIDs, [.opencode])
     }
+
+    func testThresholdPercentIsClampedOnLoad() {
+        defaults.set(250.0, forKey: "thresholdPercent")
+        XCTAssertEqual(makeSettings().thresholdPercent, 100)
+
+        defaults.set(-5.0, forKey: "thresholdPercent")
+        XCTAssertEqual(makeSettings().thresholdPercent, 0)
+    }
+
+    func testRetiredVisibleProductsFallBackToAllKnown() {
+        defaults.set(["legacyWidget"], forKey: "visibleProductIDs")
+        let settings = makeSettings()
+        XCTAssertEqual(settings.visibleProductIDs, Set(ProductCatalog.knownIDs))
+    }
+
+    func testEmptyVisibleProductsIsPreserved() {
+        defaults.set([String](), forKey: "visibleProductIDs")
+        XCTAssertTrue(makeSettings().visibleProductIDs.isEmpty)
+    }
+
+    func testVisibleProductsDropUnknownIds() {
+        defaults.set(["chat", "legacyWidget"], forKey: "visibleProductIDs")
+        let settings = makeSettings()
+        XCTAssertEqual(settings.visibleProductIDs, ["chat"])
+    }
 }

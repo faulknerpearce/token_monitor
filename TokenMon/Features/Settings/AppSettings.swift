@@ -202,7 +202,7 @@ final class AppSettings: ObservableObject {
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? true
-        thresholdPercent = defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80
+        thresholdPercent = min(100, max(0, defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80))
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
         let savedOrder = (defaults.stringArray(forKey: Keys.providerOrder) ?? [])
             .compactMap(MonitorProvider.init(rawValue:))
@@ -215,7 +215,17 @@ final class AppSettings: ObservableObject {
             enabledProviderIDs = Set(MonitorProvider.usageProviders)
         }
         if let saved = defaults.stringArray(forKey: Keys.visibleProducts) {
-            visibleProductIDs = Set(saved.map { $0.lowercased() })
+            let parsed = Set(saved.map { $0.lowercased() })
+            let known = Set(ProductCatalog.knownIDs)
+            if parsed.isEmpty {
+                // The user explicitly deselected every product — keep it empty.
+                visibleProductIDs = []
+            } else {
+                // Drop retired/renamed ids; if nothing survives, fall back to all
+                // known products rather than hiding the breakdown.
+                let sanitized = parsed.intersection(known)
+                visibleProductIDs = sanitized.isEmpty ? known : sanitized
+            }
         } else {
             visibleProductIDs = Set(ProductCatalog.knownIDs)
         }

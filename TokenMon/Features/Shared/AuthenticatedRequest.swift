@@ -27,13 +27,16 @@ enum AuthenticatedRequest {
     }
 
     /// Maps an HTTP response to a shared `UsageError`, or `nil` on success.
-    static func mapError(for response: HTTPURLResponse, data: Data) -> UsageError? {
+    ///
+    /// The response body is deliberately **not** included in the user-facing
+    /// message — it can echo credentials or internal identifiers. Callers that
+    /// need it for diagnostics should log the bytes privately.
+    static func mapError(for response: HTTPURLResponse, data _: Data) -> UsageError? {
         if response.statusCode == 401 || response.statusCode == 403 {
             return .unauthorized
         }
         guard (200..<300).contains(response.statusCode) else {
-            let snippet = String(data: data.prefix(200), encoding: .utf8) ?? ""
-            return .badResponse("HTTP \(response.statusCode) \(snippet)")
+            return .badResponse("HTTP \(response.statusCode)")
         }
         return nil
     }

@@ -17,7 +17,6 @@ final class AuthSessionService: ProviderAuthSession {
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "auth_",
                 logCategory: "Auth",
-                startsSignedOut: false,
                 usesBearerToken: true,
                 extraStoreKeys: [],
                 signOutHosts: Self.grokHosts,

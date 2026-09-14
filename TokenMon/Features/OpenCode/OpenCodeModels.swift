@@ -399,7 +399,7 @@ enum ModelPalette {
 
     static func sRGB(for seed: String) -> SRGB {
         let hash = seed.utf8.reduce(5381) { ($0 &* 33) ^ Int($1) }
-        let index = abs(hash) % sRGB.count
+        let index = Int(hash.magnitude % UInt(sRGB.count))
         return sRGB[index]
     }
 

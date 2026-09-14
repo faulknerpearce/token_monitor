@@ -126,7 +126,10 @@ struct GrokbotUsageClient: Sendable {
             if let string = JSON.string(root[key]), let parsed = ISO8601DateFormatter.parseFlexible(string) {
                 return parsed
             }
-            if let dict = root[key] as? [String: Any], let seconds = JSON.number(dict["seconds"]) {
+            if let dict = root[key] as? [String: Any],
+               let seconds = JSON.number(dict["seconds"]), seconds > 0 {
+                // An unset protobuf Timestamp arrives as {seconds: 0}; treat it
+                // as missing rather than anchoring the window to 1970.
                 return Date(timeIntervalSince1970: seconds + (JSON.number(dict["nanos"]) ?? 0) / 1_000_000_000)
             }
         }

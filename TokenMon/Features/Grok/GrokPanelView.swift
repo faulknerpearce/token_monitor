@@ -69,11 +69,10 @@ struct GrokPanelView: View {
             grokTitle
 
             PanelCard {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PanelSectionHeader(title: "Weekly Usage")
-                    Spacer()
-                    PanelPill(text: "\(Int(snapshot.usedPercent.rounded()))% used")
-                }
+                PanelSectionHeaderRow(
+                    title: snapshot.usagePool.sectionTitle,
+                    trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
+                )
 
                 SegmentedUsageBar(products: products, height: 8)
 

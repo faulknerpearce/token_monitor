@@ -22,7 +22,7 @@ struct OpenCodePanelView: View {
                 }
 
                 PanelCard {
-                    PanelSectionHeader(title: "Limits")
+                    PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
                     ForEach(snapshot.windows) { window in
                         OpenCodeLimitBar(window: window)
                     }

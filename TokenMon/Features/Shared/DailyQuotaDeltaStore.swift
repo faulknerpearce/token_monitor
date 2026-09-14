@@ -73,13 +73,18 @@ final class DailyQuotaDeltaStore: ObservableObject {
     }
 
     /// Drops all accumulated day totals because the tracked quota window rolled
-    /// over (e.g. a weekly pool reset), while keeping the utilization baseline.
-    /// Keeping the baseline routes the next recorded sample through the usual
-    /// drop-as-reset path, so whatever accrued in the fresh window before the
-    /// next poll is credited to its day instead of lost.
+    /// over (e.g. a weekly pool reset), and resets the utilization baseline to
+    /// zero so the first sample of the fresh window is credited in full.
+    ///
+    /// Keeping the old baseline (the previous behaviour) only routed the next
+    /// sample through the drop-as-reset path when it was *lower* than the old
+    /// value; a fresh window already above it (e.g. 20% → 30%) was understated
+    /// by the stale baseline. Zeroing it credits the whole new-window value and
+    /// keeps subsequent in-window comparisons correct.
     func beginNewWindow() {
-        defer { persist() }
         spentByDay = [:]
+        lastUsedPercent = 0
+        persist()
     }
 
     private static func prune(_ days: inout [Date: Double]) {
