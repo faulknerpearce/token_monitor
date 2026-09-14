@@ -11,8 +11,6 @@ TokenMon is a native macOS menu bar app that tracks how much of your allowance y
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml)
 
-> **Unofficial.** TokenMon is not affiliated with, endorsed by, or supported by any of the tracked providers (Anthropic, Anysphere/Cursor, OpenAI, OpenCode, OpenRouter, or xAI). It uses authenticated provider surfaces that may change without notice.
-
 ## Overview
 
 TokenMon sits in the macOS menu bar and shows how much of your allowance you have used on each connected AI provider — overall and, where the provider exposes it, broken down by product or time window. Switch between providers from one dropdown, or use the **Overview** tab to see every connected provider side by side. Sign in once per provider; the app polls authenticated endpoints and keeps a local history for the daily chart.
