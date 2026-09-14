@@ -12,11 +12,9 @@ enum WebKitCookieCapture {
         var includeAllDomainCookiesWhenSessionFound: Bool
         /// Lowercased names of the only cookies this provider actually sends.
         ///
-        /// When non-empty and the preferred session cookie is among them, just
-        /// these are persisted — the rest of the domain jar (analytics, feature
-        /// flags, marketing ids) never touches disk. Empty means "keep the old
-        /// broad behaviour", and a set that fails to yield the preferred cookie
-        /// falls back to it too, so narrowing can never silently break sign-in.
+        /// When non-empty and the preferred session cookie is among them, only
+        /// these are persisted. Empty, or a set without the preferred cookie,
+        /// falls back to the full domain jar.
         var essentialCookieNames: Set<String>
         var maxAttempts: Int
         var retryDelayNanoseconds: UInt64
@@ -74,9 +72,8 @@ enum WebKitCookieCapture {
 
     /// Picks the cookies to persist out of everything the sign-in web view holds.
     ///
-    /// Pure and synchronous so the policy can be exercised without a WebKit
-    /// data store. Prefers the provider's `essentialCookieNames` allowlist and
-    /// only widens to the whole domain jar when that yields nothing usable.
+    /// Prefers the provider's `essentialCookieNames` allowlist and only widens to
+    /// the whole domain jar when that yields nothing usable.
     static func select(from cookies: [HTTPCookie], policy: Policy) -> [HTTPCookie]? {
         let relevant = cookies.filter { policy.isDomain($0.domain) }
         guard !relevant.isEmpty else { return nil }

@@ -42,9 +42,8 @@ final class ThresholdNotifier: ObservableObject {
         send(usedPercent: usedPercent, threshold: threshold)
     }
 
-    /// Pure decision logic (testable without UNUserNotificationCenter): fires once
-    /// per threshold crossing; re-arms only after usage drops 5+ points below the
-    /// notified threshold.
+    /// Fires once per threshold crossing; re-arms only after usage drops 5+ points
+    /// below the notified threshold.
     nonisolated static func shouldNotify(
         usedPercent: Double,
         threshold: Double,

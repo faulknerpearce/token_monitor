@@ -119,7 +119,7 @@ final class HistoryStore: ObservableObject {
         let sameDay = findRecords(on: dayStart, calendar: cal)
         if let existing = sameDay.first {
             existing.apply(snapshot)
-            // Collapse legacy duplicates so each calendar day has one end-of-day row.
+            // Collapse duplicates so each calendar day has one end-of-day row.
             if sameDay.count > 1 {
                 for extra in sameDay.dropFirst() {
                     context.delete(extra)

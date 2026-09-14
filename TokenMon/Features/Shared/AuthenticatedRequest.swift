@@ -2,10 +2,9 @@ import Foundation
 
 /// Shared helpers for building and executing cookie/bearer-authenticated requests.
 ///
-/// The Grok, OpenCode, and Cursor clients each re-implemented request-header
-/// setup and HTTP-error mapping. This centralizes the common contract: Cookie or
-/// Authorization header, JSON Accept, optional Referer, 401/403 → `.unauthorized`,
-/// other non-2xx → `.badResponse`, transport errors → `.network`.
+/// Common contract: Cookie or Authorization header, JSON Accept, optional
+/// Referer, 401/403 → `.unauthorized`, other non-2xx → `.badResponse`, transport
+/// errors → `.network`.
 enum AuthenticatedRequest {
     /// Applies the standard auth/content headers to a request.
     static func applyHeaders(
@@ -28,9 +27,8 @@ enum AuthenticatedRequest {
 
     /// Maps an HTTP response to a shared `UsageError`, or `nil` on success.
     ///
-    /// The response body is deliberately **not** included in the user-facing
-    /// message — it can echo credentials or internal identifiers. Callers that
-    /// need it for diagnostics should log the bytes privately.
+    /// The response body is not included in the user-facing message, since it can
+    /// echo credentials or internal identifiers.
     static func mapError(for response: HTTPURLResponse, data _: Data) -> UsageError? {
         if response.statusCode == 401 || response.statusCode == 403 {
             return .unauthorized

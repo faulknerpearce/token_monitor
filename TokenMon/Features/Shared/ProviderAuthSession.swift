@@ -24,10 +24,8 @@ struct ProviderAuthConfig {
 /// Shared cookie/email/bearer session backing every provider's auth.
 ///
 /// Provider subclasses configure a `ProviderAuthConfig` (capture policy, sign-out
-/// hosts, extra persisted keys) and inherit the disk refresh, sign-in state
-/// machine, cookie capture, and sign-out behavior. This removes the near-duplicate
-/// session classes for Grok, OpenCode, and Cursor (and future providers like
-/// OpenRouter).
+/// hosts, extra persisted keys) and inherit disk refresh, sign-in state machine,
+/// cookie capture, and sign-out behavior.
 @MainActor
 class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     let config: ProviderAuthConfig
@@ -37,9 +35,8 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
 
-    /// WebKit store isolated to this provider. Sign-in and capture only ever see
-    /// this provider's cookies; other providers (and legacy default-jar cookies)
-    /// are invisible to it.
+    /// WebKit store isolated to this provider; sign-in and capture only see this
+    /// provider's cookies.
     let signInDataStore = WKWebsiteDataStore.nonPersistent()
 
     private let store: any CredentialStore
@@ -58,8 +55,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         } else {
             self.store = FileBackedCredentialStore(filenamePrefix: config.storeFilenamePrefix)
         }
-        // `refreshFromDisk()` derives `needsSignIn` from the stored credentials,
-        // so no separate "starts signed out" flag is needed.
+        // `refreshFromDisk()` derives `needsSignIn` from the stored credentials.
         refreshFromDisk()
     }
 
@@ -109,8 +105,8 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     }
 
     func captureCookiesFromWebKit() async -> Bool {
-        // Finish any pending sign-out purge first so it cannot delete cookies we
-        // are about to capture from a fresh sign-in.
+        // Finish any pending sign-out purge first so it cannot delete cookies
+        // being captured from a fresh sign-in.
         _ = await clearTask?.value
         guard let result = await WebKitCookieCapture.capture(policy: config.capturePolicy, dataStore: signInDataStore) else {
             lastAuthError = config.capturePolicy.failureMessage
@@ -143,7 +139,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     }
 
     /// Clears persisted session keys and browser cookies (the provider's isolated
-    /// WebKit store, matching domains in the legacy default jar, and
+    /// WebKit store, matching domains in the default jar, and
     /// `HTTPCookieStorage`). Shared by explicit sign-out and 401/403 invalidation.
     func clearBrowserState() {
         removeStore(key: "session")
@@ -156,7 +152,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         clearTask?.cancel()
         clearTask = Task {
             await WKWebsiteDataStoreBridge.shared.clearAllCookies(in: dataStore)
-            // Legacy cookies from before per-provider stores lived in the default jar.
+            // Clear matching cookies from the shared default cookie jar.
             await WKWebsiteDataStoreBridge.shared.clearCookies(matching: isDomain, in: .default())
         }
     }

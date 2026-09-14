@@ -149,7 +149,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(days.count, 7)
         XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 27)))
         XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 9, 2)))
-        // The finished period's day totals no longer appear.
+        // Finished-period day totals are absent from the new window.
         for day in days where !calendar.isDate(day.date, inSameDayAs: date(2026, 8, 27)) {
             XCTAssertEqual(day.spentUSD, 0)
         }

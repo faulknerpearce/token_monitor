@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Card container matching the Grok wireframe in the screenshot:
-/// rounded 12pt, filled (not transparent) + stroke, 12pt interior padding.
-/// Use for every provider section (Weekly Usage, Categories, Daily Usage, Limits, Stats, etc.)
+/// Card container: rounded 12pt, filled + stroke, 12pt interior padding.
+/// Used for provider sections.
 struct PanelCard<Content: View>: View {
     let content: Content
 

@@ -14,9 +14,8 @@ struct AvailableRelease: Equatable, Sendable {
 /// Reads the project's latest GitHub release and decides whether it is newer
 /// than the running app.
 ///
-/// Only public release metadata is fetched — no token, no user data, and
-/// nothing is downloaded or installed. The user is pointed at the release page
-/// and updates by hand.
+/// Fetches only public release metadata; nothing is downloaded or installed.
+/// The user is pointed at the release page and updates by hand.
 enum ReleaseFeed {
     static let owner = "faulknerpearce"
     static let repository = "token_monitor"
@@ -28,8 +27,7 @@ enum ReleaseFeed {
     /// Parses the `releases/latest` payload, returning the release only when it
     /// is strictly newer than `current`.
     ///
-    /// Drafts and pre-releases are ignored: a menu-bar app should not nudge
-    /// people onto an unfinished build.
+    /// Drafts and pre-releases are ignored.
     static func newerRelease(
         in data: Data,
         than current: AppVersion

@@ -1,10 +1,8 @@
 import Foundation
 
-/// Shared helpers for extracting values from `[String: Any]` JSON trees.
-///
-/// These were duplicated between the Grok, Cursor, and OpenCode clients; hoisting
-/// them here keeps numeric coercion, key-order fallback, and nested traversal
-/// consistent across every provider.
+/// Shared helpers for extracting values from `[String: Any]` JSON trees,
+/// keeping numeric coercion, key-order fallback, and nested traversal
+/// consistent across providers.
 enum JSON {
     /// Coerces a decoded JSON value to `Double`, descending into `["val": …]` /
     /// `["value": …]` wrappers the server emits around scalar fields.

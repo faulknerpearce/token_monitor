@@ -4,11 +4,8 @@ import Foundation
 /// File-backed per-calendar-day accumulation of a provider's quota-window
 /// growth, in percentage points of that window.
 ///
-/// Mirrors `HourlyDeltaActivityStore`'s reset handling: a drop in the window's
-/// utilization means a new window started, so the post-reset value is credited
-/// to the sampled day rather than discarded — dropping it would silently lose
-/// whatever usage accrued between the reset and the next poll. This matters a
-/// lot for windows that reset multiple times a day (Claude's five-hour window).
+/// A drop in the window's utilization means a new window started; the post-reset
+/// value is credited to the sampled day rather than discarded.
 @MainActor
 final class DailyQuotaDeltaStore: ObservableObject {
     /// Local-start-of-day → percentage-point growth of the tracked window.
@@ -36,10 +33,9 @@ final class DailyQuotaDeltaStore: ObservableObject {
         load()
     }
 
-    /// Record a new window utilization snapshot. Growth since the last sample is
-    /// added to the sampled calendar day; a drop is treated as a window reset
-    /// and the post-reset value is attributed to the day instead of being
-    /// discarded (same semantics as `HourlyDeltaActivityStore`).
+    /// Records a new window utilization snapshot. Growth since the last sample is
+    /// added to the sampled calendar day; a drop is treated as a window reset and
+    /// the post-reset value is attributed to the day.
     func record(windowUsedPercent: Double, at date: Date = Date()) {
         defer { persist() }
 
@@ -72,15 +68,9 @@ final class DailyQuotaDeltaStore: ObservableObject {
         persist()
     }
 
-    /// Drops all accumulated day totals because the tracked quota window rolled
-    /// over (e.g. a weekly pool reset), and resets the utilization baseline to
-    /// zero so the first sample of the fresh window is credited in full.
-    ///
-    /// Keeping the old baseline (the previous behaviour) only routed the next
-    /// sample through the drop-as-reset path when it was *lower* than the old
-    /// value; a fresh window already above it (e.g. 20% → 30%) was understated
-    /// by the stale baseline. Zeroing it credits the whole new-window value and
-    /// keeps subsequent in-window comparisons correct.
+    /// Drops all accumulated day totals after the tracked quota window rolls over
+    /// (e.g. a weekly pool reset) and zeros the utilization baseline so the first
+    /// sample of the fresh window is credited in full.
     func beginNewWindow() {
         spentByDay = [:]
         lastUsedPercent = 0

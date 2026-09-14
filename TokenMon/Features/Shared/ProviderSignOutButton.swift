@@ -1,16 +1,10 @@
 import SwiftUI
 
-/// Modest "Sign out" affordance for signed-in provider surfaces.
+/// "Sign out" affordance for signed-in provider surfaces.
 ///
-/// Renders as a full-width, right-aligned row placed at the trailing edge of a
-/// provider card. The idle state is a single tertiary icon; because sign-out
-/// clears the persisted session, pressing it swaps the row to an inline
-/// confirm/cancel pair rather than presenting a system alert — `MenuBarExtra`
-/// panels mishandle modal alerts (the panel resigns key and the dialog strands
-/// off-window), so confirmation stays inside the panel. Owning a full row (not
-/// sharing the header line) guarantees the prompt renders untruncated in every
-/// panel regardless of header width. The caller's `action` runs only after the
-/// user confirms.
+/// Renders as a full-width, right-aligned row: a tertiary icon that swaps to an
+/// inline confirm/cancel pair when pressed. `action` runs only after the user
+/// confirms.
 ///
 /// - Parameters:
 ///   - provider: Provider whose session this button ends; names the confirm prompt.

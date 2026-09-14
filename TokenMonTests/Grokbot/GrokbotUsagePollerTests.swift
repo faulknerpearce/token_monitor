@@ -86,9 +86,8 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertEqual(snapshot.daysInPeriod(calendar: calendar), 7)
     }
 
-    /// On reset day the payload puts `current_period_start` on the same calendar
-    /// day as the reset, so the derived span rounds to a single day. Taking that
-    /// literally collapsed the chart to one bar at a 100%/day budget.
+    /// A payload whose period start and reset land on the same day falls back
+    /// to a 7-day period rather than a one-day span.
     func testSameDayStartAndResetFallsBackToAWeek() {
         let snapshot = GrokbotSnapshot(
             fetchedAt: date(2026, 9, 2, hour: 14),

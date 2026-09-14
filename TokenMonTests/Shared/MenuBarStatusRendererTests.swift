@@ -64,10 +64,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
     }
 
     func testCompositeModeRendersVisibleTrackAtZeroUsage() {
-        // Regression: the bar graph used to vanish when usage hit 0 (e.g. right
-        // after a weekly reset) because the fill was dropped and the track was
-        // painted at 0.14 alpha. The track must stay visible so the bar slot is
-        // always drawn, even at an empty (0%) fill.
+        // The track stays visible at 0% usage, so the bar slot is still drawn.
         let zeroSnap = WeeklyUsageSnapshot(usedPercent: 0, remainingPercent: 100)
         let fullSnap = WeeklyUsageSnapshot(usedPercent: 9, remainingPercent: 91)
         let zero = render(

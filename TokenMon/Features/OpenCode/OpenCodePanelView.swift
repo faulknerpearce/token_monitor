@@ -178,7 +178,7 @@ struct OpenCodeModelsSection: View {
     }
 }
 
-// MARK: - Company logo helper (uses provider SVGs from temp → Assets, circles)
+// MARK: - Company logo helper
 
 private enum ModelCompany {
     case kimi, qwen, glm, minimax, deepseek, nvidia, muse, anthropic, openai, meta, other

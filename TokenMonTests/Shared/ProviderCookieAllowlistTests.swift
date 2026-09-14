@@ -1,8 +1,8 @@
 @testable import TokenMon
 import XCTest
 
-/// Exercises the *real* provider capture allowlists — the security-sensitive
-/// part of the narrower-cookie-storage change — rather than a synthetic policy.
+/// Exercises the *real* provider capture allowlists rather than a synthetic
+/// policy.
 @MainActor
 final class ProviderCookieAllowlistTests: XCTestCase {
     private func cookie(_ name: String, value: String, domain: String) -> HTTPCookie {

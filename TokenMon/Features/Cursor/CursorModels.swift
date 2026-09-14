@@ -14,7 +14,7 @@ enum CursorPoolKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// Pace vs even-consumption budget across the billing cycle (CodexBar-style).
+/// Pace vs even-consumption budget across the billing cycle.
 struct CursorPace: Hashable, Sendable {
     /// Even-rate expected used % at `now`.
     var expectedUsedPercent: Double

@@ -82,8 +82,8 @@ struct OverviewHourlyUsageChart: View {
             }
         }
 
-        /// Unit label for the hover tooltip — each provider's activity is a
-        /// percentage of a *different* quota window, so this can't be one hardcoded string.
+        /// Unit label for the hover tooltip; each provider's activity is a
+        /// percentage of its own quota window.
         var quotaLabel: String {
             switch self {
             case .grok, .grokbot: return "weekly"

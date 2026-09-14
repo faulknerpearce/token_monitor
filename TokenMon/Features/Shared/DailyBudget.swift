@@ -2,9 +2,8 @@ import Foundation
 
 /// One calendar day in the monthly budget chart.
 ///
-/// `spentUSD`/`budgetUSD` are nominally USD for the legacy dollar chart, but
-/// for the usage-quota chart they carry **percent of the monthly allocation**
-/// (0…100). `isUsagePercent` disambiguates formatting; the math is identical.
+/// `spentUSD`/`budgetUSD` are nominally USD, but on the usage-quota chart they
+/// carry **percent of the monthly allocation** (0…100); the math is identical.
 struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     var id: Date { date }
     var date: Date
@@ -107,12 +106,8 @@ enum DailyBudget {
     }
 
     /// Bars for the full weekly window anchored at the pool's actual reset
-    /// instant rather than a fixed weekday. The window is the 7 days ending on
-    /// the last day of the running period (advancing `resetsAt` by whole periods
-    /// when the payload is stale), so it always contains today. On reset day
-    /// before the instant that last day is today — calendar-keyed deltas stay
-    /// visible. After the instant the window rolls to the new period. Never
-    /// mixes two partial periods. Days after today carry 0 and are dimmed.
+    /// instant rather than a fixed weekday. Advances a stale `resetsAt` by whole
+    /// periods so the window contains today; days after today are 0 and dimmed.
     static func buildWeeklyWindowDays(
         limitUSD: Double,
         daysInPeriod: Int,
@@ -124,7 +119,7 @@ enum DailyBudget {
         let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: daysInPeriod)
         let today = calendar.startOfDay(for: now)
         // Advance a stale `resetsAt` to the next future reset so the window
-        // still contains today instead of sliding into the future empty.
+        // still contains today.
         var nextReset = resetsAt
         var guardIter = 0
         while nextReset <= now, guardIter < 520 {
@@ -159,11 +154,9 @@ enum DailyBudget {
 
     /// Even-pace headroom through today vs live period consumption.
     ///
-    /// Uses `days` for the per-day allotment. `periodConsumed` is the pulled
-    /// used % for the pool — not the sum of bar spends. When the chart is a
-    /// rolling 7-bar slice of a longer period (monthly), pass
-    /// `elapsedDaysInPeriod` so earned days match the full pool, not just the
-    /// visible bars.
+    /// `periodConsumed` is the pulled used % for the pool, not the sum of bar
+    /// spends. Pass `elapsedDaysInPeriod` so earned days match the full pool on
+    /// monthly charts.
     struct PaceHeadroom: Hashable, Sendable {
         var dailyBudget: Double
         var earnedThroughToday: Double
@@ -194,15 +187,11 @@ enum DailyBudget {
         return gap + 1
     }
 
-    /// Subscription / billing month bounds. Never uses “calendar month of now”.
+    /// Subscription / billing month bounds, never the calendar month of `now`.
     ///
-    /// Prefer explicit `knownStart` + `resetsAt` and keep their exact instants
-    /// (Cursor cycles can start mid-day). With only one side, infer the other by
-    /// shifting one calendar month (anniversary-style cycles).
-    ///
-    /// When `now` is provided and the resolved cycle already ended (stale payload
-    /// after a rollover), the provider-given anchor advances in whole months
-    /// until it describes the running period — same treatment as weekly windows.
+    /// With only one side, infers the other by shifting one calendar month
+    /// (anniversary-style cycles). A stale ended cycle advances in whole months
+    /// to the running period.
     static func subscriptionMonth(
         knownStart: Date? = nil,
         resetsAt: Date? = nil,

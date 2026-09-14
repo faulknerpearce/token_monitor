@@ -28,9 +28,8 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
     }
 
     func testWindowResetAttributesPostResetValueInsteadOfDroppingIt() {
-        // Regression test: a window reset (used-percent drops) must not silently
-        // discard the usage that already accrued in the new window before the
-        // next poll — it should be credited to the hour it was observed in.
+        // A window reset (used-percent drops) credits the usage already accrued
+        // in the new window to the hour it was observed in.
         let (activity, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
 

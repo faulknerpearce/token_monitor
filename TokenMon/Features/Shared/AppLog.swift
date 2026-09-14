@@ -2,7 +2,6 @@ import Foundation
 import os
 
 /// Single source of truth for logging subsystem and User-Agent identity.
-/// Replaces the copy-pasted "com.modelmonitor.app" / "TokenMon/1.0" strings.
 enum AppLog {
     static let subsystem = "com.modelmonitor.app"
 }

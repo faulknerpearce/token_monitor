@@ -3,7 +3,7 @@ codecov:
 
 coverage:
   status:
-    # Project-wide coverage stays informational until the poller/auth suites land.
+    # Project-wide coverage is informational; the patch status gates PRs.
     project:
       default:
         informational: true
@@ -12,9 +12,8 @@ coverage:
         target: 50%
         only_pulls: true
 
-# UI-heavy files where XCTest coverage is not meaningful. Covers SwiftUI files that
-# don't happen to end in "View.swift" too (bars, rows, charts) — keep this in sync
-# when adding a new UI-only file that doesn't match one of these suffixes.
+# UI-heavy files excluded from coverage: SwiftUI views and the custom-drawn
+# bars, rows, and charts that do not end in "View.swift".
 ignore:
   - "TokenMon/App/AppDelegate.swift"
   - "TokenMon/Features/**/*View.swift"

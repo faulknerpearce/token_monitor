@@ -114,7 +114,7 @@ struct OpenCodeHourSegment: Identifiable, Hashable, Sendable {
         inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
     }
 
-    /// Activity weight for Overview: prefer $, fall back so free turns still count.
+    /// Activity weight for Overview: prefer $; fall back to message count so free turns count.
     var activityWeight: Double {
         if costUSD > 0 { return costUSD }
         return Double(messageCount) * 0.01

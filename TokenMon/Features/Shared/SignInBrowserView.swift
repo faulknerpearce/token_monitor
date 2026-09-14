@@ -23,9 +23,8 @@ final class SignInBrowserController: ObservableObject {
 
     fileprivate weak var browser: SignInBrowserView?
 
-    /// Wire this controller to its AppKit browser. Idempotent: re-attaching the
-    /// same view must not publish, or a SwiftUI update that re-attaches would
-    /// feed itself and spin the main thread.
+    /// Wires this controller to its AppKit browser. Idempotent: re-attaching the
+    /// same view does not publish.
     func attach(_ browser: SignInBrowserView) {
         guard self.browser !== browser else { return }
         self.browser = browser
@@ -41,10 +40,9 @@ final class SignInBrowserController: ObservableObject {
     /// Allow auto-capture to fire again after a capture attempt found no cookies.
     func rearmReturn() { browser?.rearmReturn() }
 
-    /// Publish live web view state. Only changed values are assigned: `@Published`
-    /// emits on every assignment even when the value is identical, and the sheet
-    /// observes this object, so unconditional writes create an endless
-    /// publish -> body -> updateNSView -> publish cycle.
+    /// Publishes live web view state. Only changed values are assigned, since
+    /// `@Published` emits on every assignment and unconditional writes would
+    /// create an endless publish/update cycle.
     func apply(
         canGoBack: Bool,
         canGoForward: Bool,
@@ -62,12 +60,9 @@ final class SignInBrowserController: ObservableObject {
 
 /// AppKit host for provider sign-in: one main `WKWebView` plus a stack of OAuth popups.
 ///
-/// Google / GitHub / Apple sign-in uses `window.open`. Returning `nil` from
-/// `createWebViewWith` and loading that URL in the parent view destroys the
-/// original page and breaks `window.opener`. Each popup is a real child
-/// `WKWebView` created with the configuration WebKit supplies (required so
-/// cookies stay in the provider's isolated store). Back with no history
-/// dismisses the top popup.
+/// Each popup is a child `WKWebView` created with the configuration WebKit
+/// supplies so cookies stay in the provider's isolated store. Back with no
+/// history dismisses the top popup.
 @MainActor
 final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     var isAuthHost: (String, String) -> Bool {
@@ -108,10 +103,9 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
 
-        // No `customUserAgent` here on purpose. This is an interactive browser,
-        // not an API client: WebKit's default Safari User-Agent is what OAuth
-        // providers expect, and Google refuses sign-in from a UA that does not
-        // look like a browser. `AppIdentity.userAgent` is for our own API calls.
+        // No `customUserAgent`: this is an interactive browser and OAuth
+        // providers expect WebKit's default Safari User-Agent (Google refuses
+        // other UAs). `AppIdentity.userAgent` is for API calls.
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
         self.mainWebView = webView
@@ -256,25 +250,18 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         fireReturn(url)
     }
 
-    /// Deliver `onReturned` at most once per sign-in.
-    ///
-    /// The gate reports `.returnPage` on every finished navigation, and provider
-    /// pages navigate client-side after login, so without this latch auto-capture
-    /// would be kicked off repeatedly. The latch lives here, not in the gate: the
-    /// gate's first `.returnPage` is deliberately swallowed while a popup is open
-    /// so the popup-dismiss paths can fire it later.
+    /// Delivers `onReturned` at most once per sign-in; the gate reports
+    /// `.returnPage` on every finished navigation. The latch lives here, not in
+    /// the gate, so the popup-dismiss paths can fire a swallowed return later.
     private func fireReturn(_ url: URL) {
         guard !didFireReturn else { return }
         didFireReturn = true
         onReturned(url)
     }
 
-    /// Re-arm auto-capture after a capture attempt came back empty.
-    ///
-    /// The return page can load before the session cookie is committed, or the
-    /// user can land back on the provider page without having finished signing
-    /// in. Without this the one-shot latch would stay closed for the rest of the
-    /// window and every later landing would need a manual Capture Session.
+    /// Re-arms auto-capture after a capture attempt came back empty (the return
+    /// page can load before the session cookie is committed, or the user may not
+    /// have finished signing in).
     func rearmReturn() {
         didFireReturn = false
     }

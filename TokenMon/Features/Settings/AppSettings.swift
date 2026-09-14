@@ -185,7 +185,7 @@ final class AppSettings: ObservableObject {
         selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar
     }
 
-    /// Guards against recursive `didSet` when registration fails and we revert.
+    /// Guards against recursive `didSet` when registration fails and the value is reverted.
     private var isRevertingLaunchAtLogin = false
 
     init(defaults: UserDefaults = .standard) {

@@ -4,9 +4,8 @@ import os
 
 /// Checks GitHub for a newer TokenMon release and publishes the result.
 ///
-/// Deliberately notify-only: it downloads nothing and installs nothing, so it
-/// needs no signing key, no appcast and no elevated trust. `availableRelease`
-/// drives a single row in the menu that opens the release page.
+/// Notify-only: downloads and installs nothing. `availableRelease` drives a
+/// menu row that opens the release page.
 @MainActor
 final class UpdateChecker: ObservableObject {
     @Published private(set) var availableRelease: AvailableRelease?
@@ -14,7 +13,7 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var lastCheckedAt: Date?
 
-    /// Quiet by design — releases are rare and the API is rate-limited for
+    /// Poll interval: releases are rare and the API is rate-limited for
     /// unauthenticated callers.
     static let checkInterval: TimeInterval = 6 * 60 * 60
 
@@ -62,7 +61,7 @@ final class UpdateChecker: ObservableObject {
     func checkNow() async {
         guard settings.checksForUpdates, !isChecking else { return }
         guard let currentVersion else {
-            // No readable bundle version — comparing would be guesswork.
+            // Skip: no readable bundle version to compare against.
             logger.warning("Skipping update check: bundle has no CFBundleShortVersionString")
             return
         }
@@ -102,8 +101,8 @@ final class UpdateChecker: ObservableObject {
             throw UpdateCheckError.badResponse("No HTTP response")
         }
         guard (200..<300).contains(http.statusCode) else {
-            // 403 here is almost always the unauthenticated rate limit, not a
-            // real failure — say so rather than showing a scary error.
+            // 403 is usually the unauthenticated rate limit, not a real
+            // failure.
             let detail = http.statusCode == 403
                 ? "GitHub rate limit reached; will retry later"
                 : "HTTP \(http.statusCode)"

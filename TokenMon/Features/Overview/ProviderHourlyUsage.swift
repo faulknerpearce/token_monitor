@@ -24,7 +24,7 @@ struct ProviderHourUsage: Identifiable, Hashable, Sendable {
     var activity: Double
     /// Dollar-ish amount for peak labels (OpenCode / harness $ for this hour).
     var costUSD: Double
-    /// Token totals when the provider exposes them. Grok/Claude currently report quota only.
+    /// Token totals when the provider exposes them; Grok/Claude report quota only.
     var grokTokens: Int64?
     var openCodeGoTokens: Int64
     var openCodeZenTokens: Int64

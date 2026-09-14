@@ -8,8 +8,7 @@ extension Color {
     static let usageRemainingTrack = Color.primary.opacity(0.12)
 }
 
-/// Weekly pool bar styled like the dropdown wireframe `UsageBar`:
-/// label row above, gapped rounded segments, muted remainder track.
+/// Weekly pool bar: label row above, gapped rounded segments, muted remainder track.
 struct SegmentedUsageBar: View {
     let products: [ProductUsage]
     var height: CGFloat = 8

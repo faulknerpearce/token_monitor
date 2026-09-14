@@ -44,7 +44,7 @@ enum Format {
         }
     }
 
-    /// DateFormatter keyed by date format; constructing one per call is expensive.
+    /// Cached DateFormatter keyed by date format.
     private static let formatterCacheLock = NSLock()
     private static var formatterCache: [String: DateFormatter] = [:]
 

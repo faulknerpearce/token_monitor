@@ -80,8 +80,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func refreshNow() async {
-        // Poll only when Grok is visible (menu bar / panel tab) or a session exists —
-        // matches the Cursor/OpenCode gating and avoids idle churn while signed out.
+        // Poll only when Grok is visible (menu bar / panel tab) or a session exists;
+        // avoid idle churn while signed out.
         guard settings.needsGrokPolling || auth.isSignedIn else { return }
         guard !isRefreshing else { return }
         isRefreshing = true

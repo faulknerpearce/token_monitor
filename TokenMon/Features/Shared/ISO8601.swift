@@ -1,7 +1,7 @@
 import Foundation
 
 /// Shared ISO-8601 parsing helpers, tolerating optional fractional seconds.
-/// Formatters are cached statically — constructing one per call is expensive.
+/// Formatters are cached statically.
 extension ISO8601DateFormatter {
     static let flexible: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()

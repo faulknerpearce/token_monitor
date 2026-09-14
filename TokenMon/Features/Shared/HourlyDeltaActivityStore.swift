@@ -5,12 +5,8 @@ import Foundation
 /// between polls), keyed by an arbitrary `storageKey` so each provider persists
 /// its own file-backed series.
 ///
-/// Handles quota-window resets (Grok's weekly pool, Claude's 5-hour window, …):
-/// a drop in the raw `usedPercent` means a new window started, so the post-reset
-/// value is attributed as *this* hour's growth in the new window rather than
-/// being discarded — dropping it would silently lose whatever usage accrued
-/// between the reset and the next poll, which matters a lot for windows that
-/// reset multiple times a day.
+/// A drop in the raw `usedPercent` means a quota window reset; the post-reset
+/// value is attributed as the current hour's growth in the new window.
 @MainActor
 final class HourlyDeltaActivityStore: ObservableObject {
     @Published private(set) var hourWeights: [Double]
@@ -42,10 +38,9 @@ final class HourlyDeltaActivityStore: ObservableObject {
         loadOrReset(for: today)
     }
 
-    /// Record a new `usedPercent` snapshot. Growth since the last sample is
-    /// attributed to the current hour; a drop is treated as a quota-window
-    /// reset, and the new value is attributed as this hour's growth in the
-    /// new window (instead of being discarded).
+    /// Records a new `usedPercent` snapshot. Growth since the last sample is
+    /// attributed to the current hour; a drop is treated as a quota-window reset
+    /// and the new value is attributed as this hour's growth in the new window.
     func record(usedPercent: Double, at date: Date = Date()) {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: date)
@@ -77,9 +72,8 @@ final class HourlyDeltaActivityStore: ObservableObject {
         hourWeights = next
     }
 
-    /// Drops the accumulated series and utilization baseline. Called on
-    /// sign-out / account switch so one account's growth never leaks into the
-    /// chart of the next account signed in on the same provider.
+    /// Drops the accumulated series and utilization baseline (e.g. on sign-out
+    /// or account switch).
     func clear() {
         let today = Calendar.current.startOfDay(for: Date())
         dayStart = today
@@ -88,11 +82,8 @@ final class HourlyDeltaActivityStore: ObservableObject {
         persist()
     }
 
-    /// Drops the finished window's hourly growth because the provider's quota
-    /// window rolled over, and resets the utilization baseline so the first
-    /// sample of the fresh window is credited in full. Without resetting the
-    /// baseline, a new window that is already above the old window's last value
-    /// would be understated by the old baseline.
+    /// Clears the finished window's hourly growth and resets the utilization
+    /// baseline so the first sample of the new window is credited in full.
     func beginNewWindow() {
         hourWeights = Array(repeating: 0, count: 24)
         lastUsedPercent = 0

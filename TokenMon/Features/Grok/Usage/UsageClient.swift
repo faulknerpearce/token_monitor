@@ -299,7 +299,7 @@ enum UsageResponseParser {
             "extraCredits", "extraCreditsBalance", "onDemandBalance", "creditsBalance"
         ])
 
-        // Accept if we have used% or products that sum to used.
+        // Accept if a used% or products that sum to used are present.
         let inferredUsed: Double? = {
             if let used { return used }
             let sum = products.reduce(0) { $0 + $1.percentOfPool }
@@ -347,7 +347,7 @@ enum UsageResponseParser {
     }
 }
 
-// MARK: - gRPC-web protobuf scan (adapted from community billing parsers)
+// MARK: - gRPC-web protobuf scan
 
 extension Data {
     /// Shared with unit/manual tests that decode raw protobuf samples.
@@ -371,7 +371,7 @@ enum GRPCWebParser {
         var usedPercent: Double?
         var resetsAt: Date?
         var products: [ProductUsage]
-        /// Per-day rows if present in the protobuf (currently unused by known samples).
+        /// Per-day rows if present in the protobuf (unused by known samples).
         var dailySeries: [DailyUsageSnapshot] = []
     }
 
@@ -379,7 +379,6 @@ enum GRPCWebParser {
     /// Verified against a live SuperGrok response + grok.com Settings → Usage
     /// (Build 30%, Chat 21%, Imagine 12%, Other 1%):
     ///   enum 2 → 30%, 4 → 21%, 5 → 12%, 3 → 1%.
-    /// Earlier maps that labeled 3=Imagine / 5=Voice caused Imagine↔Voice swaps.
     private static let productEnumMap: [UInt64: (id: String, name: String)] = [
         1: ("api", "API"),
         2: ("build", "Grok Build"),
@@ -469,12 +468,8 @@ enum GRPCWebParser {
         return lines.joined(separator: "\n")
     }
 
-    /// Reserved for a confirmed server daily series path.
-    ///
-    /// The previous heuristic (pairing near-midnight unix varints with nearby fixed32
-    /// percents) false-positived on live GetGrokCreditsConfig payloads and could
-    /// override local day-over-day history in `DailyUsageBuilder`. Keep empty until
-    /// xAI documents a stable daily field path.
+    /// Reserved for a confirmed server daily series path. Returns empty until a
+    /// stable daily field path is available.
     private static func extractDailySeries(
         varints _: [(path: [UInt64], value: UInt64)],
         fixed32 _: [(path: [UInt64], value: Float, order: Int)],
@@ -485,9 +480,7 @@ enum GRPCWebParser {
     }
 
     /// Scans raw protobuf bytes recursively for field‑7 sub‑messages (products),
-    /// pairing field 1 (enum) with field 2 (percent) inside each entry.
-    /// Works at any nesting depth so it doesn’t matter whether products live
-    /// inside an outer wrapper or at the top level.
+    /// pairing field 1 (enum) with field 2 (percent) inside each entry, at any depth.
     private static func parseProductsFromPayloads(_ payloads: [Data]) -> [ProductUsage] {
         var seen: [String: ProductUsage] = [:]
         for payload in payloads {

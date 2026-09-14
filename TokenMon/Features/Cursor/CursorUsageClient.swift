@@ -96,8 +96,8 @@ struct CursorUsageClient: Sendable {
                 calendar: calendar
             )
         } else if snap.planLimitUSD != nil {
-            // No events yet — still show empty 7-bar budget when we know the
-            // subscription/billing month (never invent a calendar month).
+            // No events yet — show an empty 7-bar budget when the
+            // subscription/billing month is known.
             let percentLimit: Double = 100
             if let built = DailyBudget.buildSubscriptionMonthLast7Days(
                 limitUSD: percentLimit,
@@ -162,7 +162,7 @@ struct CursorUsageClient: Sendable {
         let autoPercent = displayPercent(JSON.number(plan?["autoPercentUsed"]))
         let apiPercent = displayPercent(JSON.number(plan?["apiPercentUsed"]))
 
-        // Total precedence mirrors CodexBar / Cursor dashboard.
+        // Total precedence follows the Cursor dashboard.
         let totalPercent: Double = {
             if let total = displayPercent(JSON.number(plan?["totalPercentUsed"])) {
                 return total
@@ -271,9 +271,8 @@ struct CursorUsageClient: Sendable {
         return (events, total)
     }
 
-    /// Clamps a JSON number into `Int` without trapping on out-of-range/NaN.
-    /// Compares against the `Double` bounds first: converting a value at or
-    /// beyond `Double(Int.max)` would trap because that double rounds to 2^63.
+    /// Clamps a JSON number into `Int` without trapping on out-of-range/NaN;
+    /// compares against the `Double` bounds first to avoid the 2^63 rounding trap.
     static func safeInt(_ value: Double) -> Int {
         guard value.isFinite else { return 0 }
         if value >= Double(Int.max) { return Int.max }
@@ -507,7 +506,7 @@ struct CursorUsageClient: Sendable {
             allEvents.append(contentsOf: events)
             if events.count < pageSize { break }
             // `total <= 0` means the field was absent/unknown — keep paging on
-            // the short-page signal rather than stopping after one page.
+            // the short-page signal.
             if total > 0, allEvents.count >= total { break }
             if page == pageCap {
                 Self.log.warning("Cursor event page cap (\(pageCap)) reached; totals may be truncated")
@@ -593,8 +592,7 @@ struct CursorUsageClient: Sendable {
 
     /// USD spend per calendar day (startOfDay → cents/100).
     ///
-    /// When `cycleStart`/`cycleEnd` are set, events outside that half-open
-    /// window are dropped so a reset day's bar does not inherit the previous cycle.
+    /// When `cycleStart`/`cycleEnd` are set, events outside that half-open window are dropped.
     static func dailySpendByDay(
         events: [[String: Any]],
         cycleStart: Date? = nil,
@@ -616,10 +614,9 @@ struct CursorUsageClient: Sendable {
 
     /// Map list-price USD weights onto Cursor's usage-quota percent.
     ///
-    /// Event `chargedCents` is token list price, not plan consumption — `$15` of
-    /// charged cost can be `4%` of the included pool. Days are scaled so the
-    /// cycle total equals `usedPercent` (the Usage bar), using relative USD
-    /// only to split that quota across calendar days.
+    /// Event `chargedCents` is token list price, not plan consumption. Days are
+    /// scaled so the cycle total equals `usedPercent` (the Usage bar), using
+    /// relative USD only to split that quota across calendar days.
     static func quotaPercentsByDay(
         usdSpends: [Date: Double],
         usedPercent: Double

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Renders the menu bar status as a single bitmap.
-/// MenuBarExtra drops GeometryReader / Circle SwiftUI, so we draw explicitly.
+/// MenuBarExtra drops GeometryReader / Circle SwiftUI, so drawing is explicit.
 ///
 /// Composites enabled provider segments in `providerOrder`:
 /// Grok (always) + optional Cursor / OpenCode / Claude / Grokbot.
@@ -303,7 +303,7 @@ enum MenuBarStatusRenderer {
 
         var grokBlockWidth = iconSize + gap + grokUsedSize.width
         // Keep the bar slot even before the first snapshot / after sign-out so
-        // the status item width does not collapse (that read as the graph vanishing).
+        // the status item width does not collapse.
         if showGrokBar { grokBlockWidth += gap + barWidth }
         if grokSigned, showGrokCategories {
             for item in categoryLabels {
@@ -401,13 +401,10 @@ enum MenuBarStatusRenderer {
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
     ///
-    /// Every selection — Overview included — renders through this template while
-    /// "show selected provider" is on, so the status item width never changes and
-    /// the dropdown anchored beneath it keeps one x position when switching
-    /// providers. The bar is tinted with the provider's brand accent; Overview
-    /// has no single headline metric, so it shows the TokenMon mark over an
-    /// empty track. Grok category labels are composite-only since their
-    /// variable widths would break the fixed anchor.
+    /// All selections render through this template so the status item width never
+    /// changes and the dropdown keeps one x position when switching providers.
+    /// Overview shows the TokenMon mark over an empty track. Grok category labels
+    /// are composite-only because their variable widths would break the fixed anchor.
     private static func renderSelectedProvider(
         _ provider: MonitorProvider,
         snapshot: WeeklyUsageSnapshot?,
@@ -470,9 +467,8 @@ enum MenuBarStatusRenderer {
         }
     }
 
-    /// Bake a bitmap via `NSBitmapImageRep` instead of `lockFocus`. MenuBarExtra
-    /// often has no focused graphics context; `lockFocus` then produced an empty
-    /// image that got cached, so the graph vanished until the cache key changed.
+    /// Bake a bitmap via `NSBitmapImageRep`; `lockFocus` can produce an empty image
+    /// when MenuBarExtra has no focused graphics context.
     private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
         let scale: CGFloat = 2
         let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
@@ -528,8 +524,7 @@ enum MenuBarStatusRenderer {
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
         // Keep a 2pt sliver at 0% so the brand fill never collapses to nothing
-        // after a weekly reset (fillWidth was 0, so the "always draw a fill"
-        // path still skipped, leaving only a washed-out track).
+        // after a weekly reset.
         let raw = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
         let fillWidth = max(2, raw)
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
@@ -543,7 +538,7 @@ enum MenuBarStatusRenderer {
 
     private static func drawBarTrack(in barRect: NSRect) {
         // Opaque enough to read as a visible empty graph slot against a
-        // translucent menu bar, unlike the previous 0.14 alpha which washed out.
+        // translucent menu bar.
         chromeColor.withAlphaComponent(0.22).setFill()
         NSBezierPath(roundedRect: barRect, xRadius: barRect.height / 2, yRadius: barRect.height / 2).fill()
     }
@@ -612,9 +607,8 @@ enum MenuBarStatusRenderer {
     }
 
     private static func menuBarAppearance() -> NSAppearance {
-        // Prefer the status item, never the dropdown panel. Matching
-        // "MenuBarExtra" first flipped chrome to the panel appearance when the
-        // menu opened, which washed out (or cached) the graph until it closed.
+        // Prefer the status item over the dropdown panel; matching "MenuBarExtra"
+        // first can pick up the panel appearance while the menu is open.
         var extra: NSAppearance?
         for window in NSApp.windows {
             let name = window.className
