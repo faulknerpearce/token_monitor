@@ -115,4 +115,35 @@ final class CursorUsagePollerTests: XCTestCase {
             calendar: calendar
         ))
     }
+
+    /// When tracked daily deltas exceed the live pool %, rescale so chart bars
+    /// still sum to `usedPercent` instead of overshooting the headline.
+    func testTrackedExceedingPoolPercentIsRescaled() throws {
+        // Two fully tracked days (first tracked day is dropped as partial).
+        let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
+            observedByDay: [
+                day(2026, 8, 23): 1,
+                day(2026, 8, 25): 6,
+                day(2026, 8, 26): 4
+            ],
+            estimatedWeightByDay: [
+                day(2026, 8, 22): 100,
+                day(2026, 8, 24): 100,
+                day(2026, 8, 27): 100
+            ],
+            usedPercent: 5,
+            billingCycleStart: date(2026, 8, 22, hour: 17),
+            billingCycleEnd: date(2026, 9, 22, hour: 17),
+            now: date(2026, 8, 28, hour: 12),
+            calendar: calendar
+        ))
+
+        let aug25 = try XCTUnwrap(days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 8, 25)) })
+        let aug26 = try XCTUnwrap(days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 8, 26)) })
+        // tracked = 6+4 = 10 → scale 5/10; no back-fill on unobserved days.
+        XCTAssertEqual(aug25.spentUSD, 3.0, accuracy: 0.001)
+        XCTAssertEqual(aug26.spentUSD, 2.0, accuracy: 0.001)
+        let chartSum = days.map(\.spentUSD).reduce(0, +)
+        XCTAssertEqual(chartSum, 5.0, accuracy: 0.001)
+    }
 }

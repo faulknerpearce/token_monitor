@@ -149,8 +149,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Days the app observed directly use the real day-over-day growth of the
     /// reported pool % (`observedByDay`). Days it did not observe are back-filled
     /// from a per-day pool-estimate weight (`estimatedWeightByDay`), scaled so the
-    /// whole cycle still sums to `usedPercent`. Returns nil when the subscription
-    /// month cannot be resolved (a calendar month is never substituted).
+    /// whole cycle still sums to `usedPercent`. If tracked deltas exceed the live
+    /// pool %, they are rescaled down to match instead of overshooting. Returns
+    /// nil when the subscription month cannot be resolved (a calendar month is
+    /// never substituted).
     static func buildDailyBudgetDays(
         observedByDay: [Date: Double],
         estimatedWeightByDay: [Date: Double],
@@ -179,19 +181,29 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let tracked = effectiveObserved.values.reduce(0, +)
-        let untracked = max(0, usedPercent - tracked)
         let unobserved = estimated.filter { effectiveObserved[$0.key] == nil }
 
         var blended = effectiveObserved
-        let weightSum = unobserved.values.reduce(0, +)
-        if untracked > 0.001, weightSum > 0 {
-            for (day, usd) in unobserved {
-                blended[day, default: 0] += usd / weightSum * untracked
+        if tracked > usedPercent + 0.001, tracked > 0 {
+            // Pool % fell below the sum of tracked daily deltas (downward tick,
+            // API rebase, or drift past the reset floor). Rescale so bars still
+            // sum to the live headline usedPercent instead of overshooting it.
+            let scale = usedPercent / tracked
+            for (day, value) in effectiveObserved {
+                blended[day] = value * scale
             }
-        } else if untracked > 0.001, !unobserved.isEmpty {
-            let perDay = untracked / Double(unobserved.count)
-            for day in unobserved.keys {
-                blended[day, default: 0] += perDay
+        } else {
+            let untracked = max(0, usedPercent - tracked)
+            let weightSum = unobserved.values.reduce(0, +)
+            if untracked > 0.001, weightSum > 0 {
+                for (day, usd) in unobserved {
+                    blended[day, default: 0] += usd / weightSum * untracked
+                }
+            } else if untracked > 0.001, !unobserved.isEmpty {
+                let perDay = untracked / Double(unobserved.count)
+                for day in unobserved.keys {
+                    blended[day, default: 0] += perDay
+                }
             }
         }
 
