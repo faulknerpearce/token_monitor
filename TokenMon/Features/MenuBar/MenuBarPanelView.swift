@@ -30,6 +30,10 @@ struct MenuBarPanelView: View {
     let openChatGPTSignIn: () -> Void
     let selectOpenRouter: () -> Void
 
+    /// Fixed dropdown width. The panel host sizes only its height, so the
+    /// provider tabs never move horizontally.
+    static let panelWidth: CGFloat = 420
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ProviderSwitcherView(
@@ -63,10 +67,9 @@ struct MenuBarPanelView: View {
             menuActions
         }
         .padding(12)
-        .frame(width: 420)
+        .frame(width: Self.panelWidth)
         .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .animation(.easeInOut(duration: 0.15), value: settings.selectedProvider)
         .onAppear {
             poller.menuIsOpen = true
             openCodePoller.menuIsOpen = true

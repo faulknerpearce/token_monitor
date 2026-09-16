@@ -219,7 +219,10 @@ enum MenuBarStatusRenderer {
         let textSize: NSSize
         let color: NSColor
         let icon: NSImage
-        let iconInset: CGFloat
+        /// Drawn size of the icon slot. Padded marks use the full size; the
+        /// full-bleed OpenCode mark uses a slightly smaller box so its glyph
+        /// height, and the gap after it, match the others.
+        let iconBox: CGFloat
     }
 
     private enum CompositePiece {
@@ -250,7 +253,7 @@ enum MenuBarStatusRenderer {
             used: Double?,
             color: NSColor,
             icon: NSImage,
-            iconInset: CGFloat
+            iconBox: CGFloat = 16
         ) -> CompositeSolidSegment {
             let text = used.map { "\(Int($0.rounded()))%" } ?? "—"
             return CompositeSolidSegment(
@@ -259,7 +262,7 @@ enum MenuBarStatusRenderer {
                 textSize: text.size(withAttributes: usedAttrs),
                 color: color,
                 icon: icon,
-                iconInset: iconInset
+                iconBox: iconBox
             )
         }
 
@@ -273,32 +276,32 @@ enum MenuBarStatusRenderer {
                 pieces.append(.solid(provider: .cursor, segment: solid(
                     used: cursorSnapshot?.usedPercent,
                     color: ConcentricUsageRingView.cursorSRGB.nsColor,
-                    icon: ProviderLogo.cursor,
-                    iconInset: 0
+                    icon: ProviderLogo.cursor
                 )))
             case .opencode:
                 guard showOpenCodeBar else { continue }
+                // The OpenCode mark is full-bleed in its 300x300 frame while the
+                // other marks are padded, so draw it in a slightly smaller box to
+                // match their glyph height and keep the icon-to-text gap even.
                 pieces.append(.solid(provider: .opencode, segment: solid(
                     used: openCodeSnapshot?.primaryUsedPercent,
                     color: NSColor(calibratedRed: 0.90, green: 0.45, blue: 0.20, alpha: 1),
                     icon: ProviderLogo.openCode,
-                    iconInset: 2.5
+                    iconBox: 13
                 )))
             case .claude:
                 guard showClaudeBar else { continue }
                 pieces.append(.solid(provider: .claude, segment: solid(
                     used: claudeSnapshot?.headlineUsedPercent,
                     color: ConcentricUsageRingView.claudeSRGB.nsColor,
-                    icon: ProviderLogo.claude,
-                    iconInset: 0
+                    icon: ProviderLogo.claude
                 )))
             case .grokbot:
                 guard showGrokbotBar else { continue }
                 pieces.append(.solid(provider: .grokbot, segment: solid(
                     used: grokbotSnapshot?.usedPercent,
                     color: ConcentricUsageRingView.grokbotSRGB.nsColor,
-                    icon: ProviderLogo.grokbot,
-                    iconInset: 0
+                    icon: ProviderLogo.grokbot
                 )))
             case .overview, .chatgpt, .openrouter:
                 continue
@@ -361,6 +364,12 @@ enum MenuBarStatusRenderer {
             .foregroundColor: textColor
         ]
 
+        // Fixed text slots. The status item width must not depend on the value,
+        // or the icon resizes (and drags the dropdown with it) whenever data
+        // changes, which shows up as the dropdown moving on a provider switch.
+        let percentSlotWidth = ceil("100%".size(withAttributes: usedAttrs).width)
+        let grokTextSlot = ceil(max("Grok".size(withAttributes: usedAttrs).width, percentSlotWidth))
+
         let grokSigned = isGrokSignedIn && snapshot != nil
         let grokUsedText: String
         let grokUsedSize: NSSize
@@ -380,7 +389,7 @@ enum MenuBarStatusRenderer {
             categoryLabels = []
         }
 
-        var grokBlockWidth = iconSize + gap + grokUsedSize.width
+        var grokBlockWidth = iconSize + gap + grokTextSlot
         // Keep the bar slot even before the first snapshot / after sign-out so
         // the status item width does not collapse.
         if showGrokBar { grokBlockWidth += gap + barWidth }
@@ -410,7 +419,7 @@ enum MenuBarStatusRenderer {
             case .grok:
                 width += grokBlockWidth
             case let .solid(_, segment):
-                width += iconSize + gap + segment.textSize.width + gap + barWidth
+                width += segment.iconBox + gap + percentSlotWidth + gap + barWidth
             }
         }
 
@@ -429,10 +438,13 @@ enum MenuBarStatusRenderer {
                     drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
                     x += iconSize + gap
                     grokUsedText.draw(
-                        at: NSPoint(x: x, y: midY - grokUsedSize.height / 2 - 0.5),
+                        at: NSPoint(
+                            x: x + (grokTextSlot - grokUsedSize.width) / 2,
+                            y: midY - grokUsedSize.height / 2 - 0.5
+                        ),
                         withAttributes: usedAttrs
                     )
-                    x += grokUsedSize.width
+                    x += grokTextSlot
                     if showGrokBar {
                         x += gap
                         let barRect = NSRect(
@@ -462,14 +474,22 @@ enum MenuBarStatusRenderer {
                         }
                     }
                 case let .solid(_, segment):
-                    let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
-                    drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
-                    x += iconSize + gap
+                    let iconRect = NSRect(
+                        x: x,
+                        y: midY - segment.iconBox / 2,
+                        width: segment.iconBox,
+                        height: segment.iconBox
+                    )
+                    drawProviderIcon(segment.icon, in: iconRect, inset: 0)
+                    x += segment.iconBox + gap
                     segment.text.draw(
-                        at: NSPoint(x: x, y: midY - segment.textSize.height / 2 - 0.5),
+                        at: NSPoint(
+                            x: x + (percentSlotWidth - segment.textSize.width) / 2,
+                            y: midY - segment.textSize.height / 2 - 0.5
+                        ),
                         withAttributes: usedAttrs
                     )
-                    x += segment.textSize.width + gap
+                    x += percentSlotWidth + gap
                     let barRect = NSRect(
                         x: x, y: midY - barHeight / 2, width: barWidth, height: barHeight
                     )

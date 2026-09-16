@@ -14,7 +14,7 @@ final class MenuBarController: NSObject, ObservableObject {
     private let model: AppModel
     private let statusItem: NSStatusItem
     private let panel = MenuBarPanel()
-    private var hosting: NSHostingController<MenuBarRoot>?
+    private var hosting: NSHostingController<MenuBarPanelContent>?
     private var cancellables = Set<AnyCancellable>()
     private var regions: [MenuBarStatusRenderer.Region] = []
     private var escapeMonitor: Any?
@@ -119,8 +119,10 @@ final class MenuBarController: NSObject, ObservableObject {
     // MARK: - Panel
 
     private func showPanel() {
-        let hosting = NSHostingController(rootView: MenuBarRoot(model: model))
-        hosting.sizingOptions = [.preferredContentSize]
+        // No `sizingOptions`: AppKit must not resize the window itself, or it
+        // grows from the wrong edge and the content shifts. The panel frame is
+        // set explicitly from the status item instead.
+        let hosting = NSHostingController(rootView: MenuBarPanelContent(model: model))
         self.hosting = hosting
         panel.contentViewController = hosting
 
@@ -136,28 +138,29 @@ final class MenuBarController: NSObject, ObservableObject {
         hosting = nil
     }
 
-    /// Fits the panel to the SwiftUI content, anchoring the top edge so only the
-    /// bottom grows or shrinks.
+    /// Fits the panel to the SwiftUI content via `panelFrame(for:)`, which clamps
+    /// height to the visible screen and re-anchors under the status item so a
+    /// tall provider view cannot grow past the bottom of the display.
     private func resizePanelIfNeeded() {
         guard panel.isVisible, hosting != nil else { return }
         let size = panelContentSize()
-        guard size.height > 0, abs(size.height - panel.frame.height) > 0.5 else { return }
-        panel.setFrame(panelFrame(for: size, topEdge: panel.frame.maxY), display: true)
+        let frame = panelFrame(for: size)
+        guard abs(frame.height - panel.frame.height) > 0.5
+            || abs(frame.origin.x - panel.frame.origin.x) > 0.5
+            || abs(frame.origin.y - panel.frame.origin.y) > 0.5 else { return }
+        panel.setFrame(frame, display: true)
     }
 
     private func panelContentSize() -> NSSize {
-        guard let hosting else { return NSSize(width: 420, height: 480) }
+        guard let hosting else { return NSSize(width: MenuBarPanelView.panelWidth, height: 480) }
         hosting.view.layoutSubtreeIfNeeded()
-        let preferred = hosting.preferredContentSize
-        let fitting = hosting.view.fittingSize
-        let width = max(320, preferred.width > 0 ? preferred.width : fitting.width)
-        let height = max(200, preferred.height > 0 ? preferred.height : fitting.height)
-        return NSSize(width: width, height: height)
+        let height = max(200, hosting.view.fittingSize.height)
+        return NSSize(width: MenuBarPanelView.panelWidth, height: height)
     }
 
-    /// Frame for `size`, centered under the status item when `topEdge` is nil,
-    /// otherwise keeping `topEdge`, clamped to the screen.
-    private func panelFrame(for size: NSSize, topEdge: CGFloat? = nil) -> NSRect {
+    /// Frame for `size`, anchored just under the status item and clamped to the
+    /// screen. Deterministic, so repeated calls never move the panel.
+    private func panelFrame(for size: NSSize) -> NSRect {
         guard let button = statusItem.button, let buttonWindow = button.window else {
             return NSRect(origin: panel.frame.origin, size: size)
         }
@@ -165,9 +168,8 @@ final class MenuBarController: NSObject, ObservableObject {
         let visible = (buttonWindow.screen ?? NSScreen.main)?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let height = min(size.height, visible.height - 16)
-        let top = topEdge ?? (buttonFrame.minY - panelGap)
         var x = buttonFrame.midX - size.width / 2
-        var y = top - height
+        var y = buttonFrame.minY - panelGap - height
         x = min(max(x, visible.minX + 8), visible.maxX - size.width - 8)
         y = min(max(y, visible.minY + 8), visible.maxY - height - 8)
         return NSRect(x: x, y: y, width: size.width, height: height)
@@ -184,5 +186,23 @@ final class MenuBarController: NSObject, ObservableObject {
         let imageOriginX = (button.bounds.width - imageWidth) / 2
         let xInImage = pointInButton.x - imageOriginX
         return MenuBarStatusRenderer.provider(atX: xInImage, in: regions)
+    }
+}
+
+/// Top-aligned host for the dropdown content.
+///
+/// The panel resizes to the content a tick after SwiftUI lays out, so for a
+/// moment the window height can differ from the content height. Without this
+/// alignment SwiftUI centers the content in the taller window, which visibly
+/// moves the provider tabs. Anchoring to the top keeps them fixed.
+private struct MenuBarPanelContent: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MenuBarRoot(model: model)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
