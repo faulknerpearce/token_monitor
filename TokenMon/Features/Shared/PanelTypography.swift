@@ -15,8 +15,8 @@ enum PanelTypography {
     /// Chart axis / dense tertiary marks.
     static let micro = Font.system(size: 10)
     /// Stats-sheet label and value.
-    static let metricLabel = Font.system(size: 13)
-    static let metricValue = Font.system(size: 22, weight: .semibold)
+    static let metricLabel = Font.system(size: 12)
+    static let metricValue = Font.system(size: 18, weight: .semibold)
 }
 
 /// Shared vertical-stem size for Grok daily bars and Overview hourly bars.
