@@ -794,7 +794,25 @@ enum OpenCodeLocalStats {
             : [:]
         // Anchor the bars to the consumed monthly usage: local events shape how
         // the budget spread across days, while the monthly total sets the scale.
-        let anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
+        var anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
+        // No local rows for the console window (OpenCode not installed here, DB
+        // path changed, or usage not flushed yet): spread the console total over
+        // the elapsed days so the bars do not read zero against a non-zero
+        // headline caption.
+        if anchoredPercent.isEmpty, usedPercent > 0, let consoleBounds {
+            let elapsed = max(1, (calendar.dateComponents(
+                [.day],
+                from: calendar.startOfDay(for: consoleBounds.start),
+                to: calendar.startOfDay(for: now)
+            ).day ?? 0) + 1)
+            let perDay = usedPercent / Double(elapsed)
+            for offset in 0..<elapsed {
+                guard let day = calendar.date(byAdding: .day, value: offset, to: consoleBounds.start) else {
+                    continue
+                }
+                anchoredPercent[calendar.startOfDay(for: day)] = perDay
+            }
+        }
         let percentLimit: Double = 100 // monthly allocation = 100%
 
         // Console monthly reset wins: signed-in bars must agree with the Monthly bar.
