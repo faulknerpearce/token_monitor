@@ -14,7 +14,16 @@ final class ChatGPTAuthSession: ProviderAuthSession {
         "api.openai.com"
     ]
 
-    private static func chatgptPolicy() -> WebKitCookieCapture.Policy {
+    /// The cookies the usage token exchange actually sends. Narrowing the
+    /// persisted jar to these keeps unrelated analytics and SSO cookies out of
+    /// `chatgpt_auth_session.dat`; when none is present the capture falls back to
+    /// the full domain jar so sign-in still works.
+    static let essentialCookieNames: Set<String> = [
+        "__secure-next-auth.session-token",
+        "__host-next-auth.csrf-token"
+    ]
+
+    static func chatgptPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: chatgptHosts) },
             isPreferredSessionCookie: {
@@ -28,6 +37,7 @@ final class ChatGPTAuthSession: ProviderAuthSession {
                 return hints.contains { name.contains($0) }
             },
             includeAllDomainCookiesWhenSessionFound: true,
+            essentialCookieNames: Self.essentialCookieNames,
             maxAttempts: 4,
             failureMessage: "No ChatGPT session cookie found. Finish signing in to chatgpt.com, then click Capture Session."
         )

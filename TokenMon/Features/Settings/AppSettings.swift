@@ -150,39 +150,49 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// A provider only polls when the user has it enabled. The selection and
+    /// menu-bar flags are visibility filters, not lifecycle switches; without
+    /// this gate a disabled provider (e.g. Grokbot) still runs and can invalidate
+    /// a shared session (e.g. Cursor's).
+    private func isEnabled(_ provider: MonitorProvider) -> Bool {
+        enabledProviderIDs.contains(provider)
+    }
+
     /// Whether Grok should be polled (panel tab or menu-bar graph).
     var needsGrokPolling: Bool {
-        selectedProvider.pollsGrok || showGrokBarInMenuBar
+        isEnabled(.grok) && (selectedProvider.pollsGrok || showGrokBarInMenuBar)
     }
 
     /// Whether OpenCode should be polled (panel tab or menu-bar graph).
     var needsOpenCodePolling: Bool {
-        selectedProvider.pollsOpenCode || showOpenCodeBarInMenuBar
+        isEnabled(.opencode) && (selectedProvider.pollsOpenCode || showOpenCodeBarInMenuBar)
     }
 
     /// Whether Cursor should be polled (panel tab or menu-bar graph).
     var needsCursorPolling: Bool {
-        selectedProvider.pollsCursor || showCursorBarInMenuBar
+        isEnabled(.cursor) && (selectedProvider.pollsCursor || showCursorBarInMenuBar)
     }
 
     /// Whether Claude should be polled (panel tab or menu-bar graph).
     var needsClaudePolling: Bool {
-        selectedProvider.pollsClaude || showClaudeBarInMenuBar
+        isEnabled(.claude) && (selectedProvider.pollsClaude || showClaudeBarInMenuBar)
     }
 
     /// Whether ChatGPT/Codex should be polled (panel tab).
     var needsChatGPTPolling: Bool {
-        selectedProvider.pollsChatGPT
+        isEnabled(.chatgpt) && selectedProvider.pollsChatGPT
     }
 
     /// Whether OpenRouter should be polled (panel tab).
     var needsOpenRouterPolling: Bool {
-        selectedProvider.pollsOpenRouter
+        isEnabled(.openrouter) && selectedProvider.pollsOpenRouter
     }
 
-    /// Whether Grokbot should be polled (panel tab or menu-bar graph).
+    /// Whether Grokbot should be polled (panel tab or menu-bar graph). Gated on
+    /// Grokbot being enabled so a disabled Grokbot cannot invalidate the shared
+    /// Cursor session.
     var needsGrokbotPolling: Bool {
-        selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar
+        isEnabled(.grokbot) && (selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar)
     }
 
     /// Guards against recursive `didSet` when registration fails and the value is reverted.

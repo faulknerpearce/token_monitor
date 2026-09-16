@@ -30,21 +30,20 @@ swift Scripts/generate_icon.swift TokenMon/Resources/Assets.xcassets/AppIcon.app
 
 - Keep changes focused on one concern.
 - Prefer clear commit messages that explain *why*.
-- Run the core tests (CLT-only subset, no app host):
+- Run the full test suite. This is the required gate: it builds the app host and
+  covers Cursor usage, auth sessions, pollers, and UI behavior:
 
 ```bash
-./Scripts/run_core_tests.sh
+make test
 ```
 
-- When you touch parsing, auth, history, or UI behavior, also run the full suite (CI runs both):
+- `make test-core` is an optional, fast CLT-only smoke. It compiles the Grok
+  parsers plus the Daily Budget preview/Thursday-week assert, and does **not**
+  cover Cursor daily quota, auth sessions, pollers, or UI. A green core run is
+  not sufficient for billing or auth changes:
 
 ```bash
-xcodebuild \
-  -project TokenMon.xcodeproj \
-  -scheme TokenMon \
-  -destination 'platform=macOS' \
-  -derivedDataPath build/DerivedData \
-  test
+make test-core
 ```
 
 ## Pull requests

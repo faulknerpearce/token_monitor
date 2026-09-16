@@ -33,6 +33,19 @@ struct OpenCodePanelView: View {
                     }
                 }
 
+                if let weeklyDays = poller.weeklyDailyBudgetDays, !weeklyDays.isEmpty {
+                    let weekly = snapshot.windows.first { $0.kind == .weekly }
+                    PanelCard {
+                        WeeklyDailyBudgetBarsView(
+                            days: weeklyDays,
+                            accent: ModelPalette.orange.color,
+                            infoText: "Go-only share of the weekly quota per day. "
+                                + "Last 7 days shown.",
+                            periodUsedPercent: weekly?.usedPercent
+                        )
+                    }
+                }
+
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
                     let monthly = snapshot.windows.first { $0.kind == .monthly }
                     PanelCard {

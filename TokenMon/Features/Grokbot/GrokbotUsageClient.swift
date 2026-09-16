@@ -44,12 +44,10 @@ struct GrokbotUsageClient: Sendable {
         accountEmail: String?,
         fetchedAt: Date
     ) throws -> GrokbotSnapshot {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // An expired session redirects to WorkOS and lands on an HTML page,
-            // so a non-JSON body here means "signed out", not "malformed".
-            throw ProviderError.unauthorized(.grokbot)
-        }
-        if let error = JSON.string(root["error"]), isUnauthorized(error) {
+        // An expired session redirects to WorkOS and lands on an HTML page, so a
+        // non-JSON body here means "signed out", not "malformed".
+        let root = try ProviderHTTP.jsonObject(data, context: .grokbot)
+        if let error = JSON.string(root["error"]), ProviderHTTP.isUnauthorizedMessage(error) {
             throw ProviderError.unauthorized(.grokbot)
         }
 
@@ -107,11 +105,6 @@ struct GrokbotUsageClient: Sendable {
         }
         let display = label?.trimmingCharacters(in: .whitespacesAndNewlines)
         return .superGrok(planLabel: (display?.isEmpty == false ? display : funded) ?? funded)
-    }
-
-    private static func isUnauthorized(_ message: String) -> Bool {
-        let lowered = message.lowercased()
-        return lowered.contains("not_authenticated") || lowered.contains("unauthor")
     }
 
     /// Timestamps arrive as RFC-3339 strings, or as `{seconds, nanos}` when the

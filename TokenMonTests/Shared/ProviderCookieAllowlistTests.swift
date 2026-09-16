@@ -61,4 +61,33 @@ final class ProviderCookieAllowlistTests: XCTestCase {
         let chosen = WebKitCookieCapture.select(from: cookies, policy: CursorAuthSession.cursorPolicy())
         XCTAssertEqual(chosen?.map(\.value), ["sess"])
     }
+
+    /// Grok sign-in can leave an X/Twitter session in the same WebKit store;
+    /// only the grok.com session cookie may be persisted.
+    func testGrokPolicyDropsXSessionCookies() {
+        let cookies = [
+            cookie("sso", value: "grok-session", domain: "grok.com"),
+            cookie("auth_token", value: "x-session", domain: "x.com"),
+            cookie("ct0", value: "x-csrf", domain: "x.com"),
+            cookie("_ga", value: "tracker", domain: "grok.com")
+        ]
+        XCTAssertEqual(
+            selectedNames(cookies, policy: AuthSessionService.grokPolicy()),
+            ["sso"]
+        )
+    }
+
+    /// The OpenAI jar carries analytics and device cookies; only the next-auth
+    /// session cookie is needed for the usage token exchange.
+    func testChatGPTPolicyStoresOnlyTheSessionCookie() {
+        let cookies = [
+            cookie("__Secure-next-auth.session-token", value: "sess", domain: "chatgpt.com"),
+            cookie("_ga", value: "tracker", domain: "chatgpt.com"),
+            cookie("oai-did", value: "device", domain: "chatgpt.com")
+        ]
+        XCTAssertEqual(
+            selectedNames(cookies, policy: ChatGPTAuthSession.chatgptPolicy()),
+            ["__Secure-next-auth.session-token"]
+        )
+    }
 }

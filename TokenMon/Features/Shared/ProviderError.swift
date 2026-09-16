@@ -136,6 +136,29 @@ enum ProviderHTTP {
         )
     }
 
+    /// Decodes a 2xx body as a JSON object.
+    ///
+    /// A non-JSON or non-object body is almost always an HTML sign-in page a
+    /// provider served after an expired-session redirect (WorkOS, Clerk), so it
+    /// maps to `.unauthorized` rather than a malformed-payload error. This is the
+    /// same rule Grokbot applies to its WorkOS HTML body.
+    static func jsonObject(
+        _ data: Data,
+        context: ProviderErrorContext
+    ) throws -> [String: Any] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ProviderError.unauthorized(context)
+        }
+        return object
+    }
+
+    /// Provider payloads signal an expired session with an `error` string
+    /// (`not_authenticated` / `unauthorized`) rather than a 401/403 status.
+    static func isUnauthorizedMessage(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        return lowered.contains("not_authenticated") || lowered.contains("unauthor")
+    }
+
     private static func send(
         _ path: String,
         baseURL: URL,

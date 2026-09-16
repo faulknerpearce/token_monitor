@@ -13,6 +13,10 @@ final class OpenRouterAuthSession: ObservableObject {
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
 
+    /// Monotonic counter identifying the current key state; see
+    /// `ProviderAuthSession.sessionGeneration`.
+    private(set) var sessionGeneration = 0
+
     private let store: any CredentialStore
     private let logger = Logger(category: "OpenRouter")
 
@@ -30,11 +34,17 @@ final class OpenRouterAuthSession: ObservableObject {
     func refreshFromDisk() {
         isSignedIn = apiKey() != nil
         needsSignIn = !isSignedIn
+        sessionGeneration += 1
     }
 
     func apiKey() -> String? {
         guard let key = readStore(key: "key"), !key.isEmpty else { return nil }
         return key
+    }
+
+    /// True when `generation` still describes the live, usable key.
+    func isCurrent(_ generation: Int) -> Bool {
+        generation == sessionGeneration && isSignedIn && !needsSignIn
     }
 
     /// Persists a trimmed API key. Returns `false` (without saving) when the
@@ -54,6 +64,7 @@ final class OpenRouterAuthSession: ObservableObject {
         lastAuthError = nil
         isSignedIn = true
         needsSignIn = false
+        sessionGeneration += 1
         logger.info("OpenRouter API key saved")
         return true
     }
@@ -62,6 +73,7 @@ final class OpenRouterAuthSession: ObservableObject {
         needsSignIn = true
         if let reason { lastAuthError = reason }
         isSignedIn = false
+        sessionGeneration += 1
         logger.info("OpenRouter session marked invalid")
     }
 
@@ -70,6 +82,7 @@ final class OpenRouterAuthSession: ObservableObject {
         isSignedIn = false
         needsSignIn = true
         lastAuthError = nil
+        sessionGeneration += 1
         logger.info("OpenRouter signed out")
     }
 
