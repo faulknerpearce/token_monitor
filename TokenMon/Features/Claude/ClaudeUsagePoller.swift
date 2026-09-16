@@ -75,10 +75,11 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        let generation = auth.sessionGeneration
         let client = ClaudeUsageClient(cookieHeader: cookieHeader)
         do {
             let (response, fetchedAt) = try await client.fetchUsage()
-            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,

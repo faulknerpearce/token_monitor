@@ -111,6 +111,7 @@ final class AppModel: ObservableObject {
     let grokHourly = HourlyDeltaActivityStore(storageKey: "grok_hourly_today")
     let claudeHourly = HourlyDeltaActivityStore(storageKey: "claude_hourly_today")
     let claudeDaily = DailyQuotaDeltaStore(storageKey: "claude_daily_usage")
+    let cursorDaily = DailyQuotaDeltaStore(storageKey: "cursor_daily_usage")
     let grokbotHourly = HourlyDeltaActivityStore(storageKey: "grokbot_hourly_today")
     let grokbotDaily = DailyQuotaDeltaStore(storageKey: "grokbot_daily_usage")
     let poller: UsagePoller
@@ -153,7 +154,7 @@ final class AppModel: ObservableObject {
             grokHourly: grokHourly
         )
         openCodePoller = OpenCodeUsagePoller(settings: settings, auth: openCodeAuth)
-        cursorPoller = CursorUsagePoller(settings: settings, auth: cursorAuth)
+        cursorPoller = CursorUsagePoller(settings: settings, auth: cursorAuth, daily: cursorDaily)
         claudePoller = ClaudeUsagePoller(settings: settings, auth: claudeAuth, hourly: claudeHourly, daily: claudeDaily)
         chatGPTPoller = ChatGPTUsagePoller(settings: settings, auth: chatGPTAuth)
         openRouterPoller = OpenRouterUsagePoller(settings: settings, auth: openRouterAuth)
@@ -179,6 +180,7 @@ final class AppModel: ObservableObject {
         forwardChanges(from: grokHourly)
         forwardChanges(from: claudeHourly)
         forwardChanges(from: claudeDaily)
+        forwardChanges(from: cursorDaily)
         forwardChanges(from: grokbotHourly)
         forwardChanges(from: grokbotDaily)
         for (_, providerPoller) in providers.all {

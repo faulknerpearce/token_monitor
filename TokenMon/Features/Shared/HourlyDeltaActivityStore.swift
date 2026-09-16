@@ -39,8 +39,9 @@ final class HourlyDeltaActivityStore: ObservableObject {
     }
 
     /// Records a new `usedPercent` snapshot. Growth since the last sample is
-    /// attributed to the current hour; a drop is treated as a quota-window reset
-    /// and the new value is attributed as this hour's growth in the new window.
+    /// attributed to the current hour; a drop large enough to be a quota-window
+    /// reset credits the new value to this hour, while a small downward tick is
+    /// treated as rounding noise and ignored.
     func record(usedPercent: Double, at date: Date = Date()) {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: date)
@@ -57,13 +58,20 @@ final class HourlyDeltaActivityStore: ObservableObject {
 
         let delta: Double
         if let previous = lastUsedPercent {
-            delta = usedPercent >= previous ? usedPercent - previous : usedPercent
+            if usedPercent >= previous {
+                delta = usedPercent - previous
+            } else if previous - usedPercent >= Percent.resetDropFloor {
+                delta = usedPercent
+            } else {
+                // A small downward tick is noise, not a reset.
+                delta = 0
+            }
         } else {
             return
         }
 
         // Ignore tiny noise.
-        guard delta >= 0.05 else { return }
+        guard delta >= Percent.noiseFloor else { return }
 
         let hour = calendar.component(.hour, from: date)
         guard (0..<24).contains(hour) else { return }

@@ -63,4 +63,38 @@ final class ProviderAuthSessionTests: XCTestCase {
         // otherwise stale PII remains readable while signed out.
         XCTAssertNil(auth.accountEmail)
     }
+
+    /// A refresh captures `sessionGeneration` before its await; a sign-out or
+    /// account switch must make that capture stale so it cannot publish.
+    func testGenerationInvalidatesInFlightRefresh() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let auth = ProviderAuthSession(config: makeConfig(), directory: dir)
+        auth.save(cookieHeader: "session=abc")
+        let generation = auth.sessionGeneration
+        XCTAssertTrue(auth.isCurrent(generation))
+
+        auth.signOut()
+        XCTAssertFalse(auth.isCurrent(generation))
+
+        // A successful re-auth mints a new generation; the old capture stays stale.
+        auth.save(cookieHeader: "session=def")
+        XCTAssertTrue(auth.isCurrent(auth.sessionGeneration))
+        XCTAssertFalse(auth.isCurrent(generation))
+    }
+
+    /// `isCurrent` is false while the session needs sign-in even if the
+    /// generation has not moved (e.g. a pre-fetch guard).
+    func testIsCurrentRequiresUsableSession() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let auth = ProviderAuthSession(config: makeConfig(), directory: dir)
+        auth.save(cookieHeader: "session=abc")
+        auth.needsSignIn = true
+        XCTAssertFalse(auth.isCurrent(auth.sessionGeneration))
+    }
 }

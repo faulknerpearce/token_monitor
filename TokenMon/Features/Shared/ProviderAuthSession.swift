@@ -35,6 +35,12 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
 
+    /// Monotonic counter identifying the current credential state. A poller
+    /// captures it before a fetch and checks it after the await via
+    /// `isCurrent(_:)`, so a refresh that completes after a sign-out or account
+    /// switch cannot publish data for the previous account.
+    private(set) var sessionGeneration = 0
+
     /// WebKit store isolated to this provider; sign-in and capture only see this
     /// provider's cookies.
     let signInDataStore = WKWebsiteDataStore.nonPersistent()
@@ -66,6 +72,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         isSignedIn = hasTokenOrCookie
         accountEmail = loadEmail()
         needsSignIn = !isSignedIn
+        sessionGeneration += 1
     }
 
     /// Marks the session invalid (e.g. server returned 401/403) and clears both
@@ -78,6 +85,11 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         isSignedIn = false
         accountEmail = nil
         logger.info("\(self.config.logCategory, privacy: .public) session marked invalid")
+    }
+
+    /// True when `generation` still describes the live, usable session.
+    func isCurrent(_ generation: Int) -> Bool {
+        generation == sessionGeneration && isSignedIn && !needsSignIn
     }
 
     func cookieHeader() -> String? {
@@ -98,6 +110,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         writeStore(key: "session", value: cookieHeader)
         isSignedIn = true
         needsSignIn = false
+        sessionGeneration += 1
     }
 
     func loadBearerToken() -> String? {
@@ -115,9 +128,10 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         }
 
         save(cookieHeader: result.cookieHeader)
-        for cookie in result.cookies {
-            HTTPCookieStorage.shared.setCookie(cookie)
-        }
+        // Only the file store keeps these; copying into `HTTPCookieStorage.shared`
+        // would leave the session in a shared jar that outlives the 0600 file and
+        // lets unrelated requests auto-attach it. Request paths send the captured
+        // Cookie header explicitly.
         if let email = result.email {
             saveAccountEmail(email)
         }
@@ -142,6 +156,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// WebKit store, matching domains in the default jar, and
     /// `HTTPCookieStorage`). Shared by explicit sign-out and 401/403 invalidation.
     func clearBrowserState() {
+        sessionGeneration += 1
         removeStore(key: "session")
         removeStore(key: "email")
         if config.usesBearerToken { removeStore(key: "token") }

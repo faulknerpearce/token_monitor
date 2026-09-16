@@ -794,6 +794,42 @@ enum OpenCodeLocalStats {
         return nil
     }
 
+    /// Builds the last-7 daily-budget bars for the Go **weekly** window.
+    ///
+    /// Separate from the monthly bars: the cadence and denominator differ, so a
+    /// weekly bar is never mixed into the subscription-month series. Returns nil
+    /// when the weekly reset is unknown (a calendar week is never substituted).
+    static func weekDailyBudgetDays(
+        limitUSD: Double,
+        usedPercent: Double = 0,
+        periodResetsAt: Date?,
+        daysInPeriod: Int = 7,
+        now: Date = Date(),
+        spentByDay: [Date: Double]? = nil,
+        dbURL: URL = databaseURL,
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay]? {
+        guard let periodResetsAt else { return nil }
+        let usdSpends: [Date: Double]
+        if let spentByDay {
+            usdSpends = spentByDay
+        } else {
+            usdSpends = (try? fetchMonthDailySpends(dbURL: dbURL, now: now)) ?? [:]
+        }
+        let spendsPercent: [Date: Double] = limitUSD > 0
+            ? usdSpends.mapValues { $0 / limitUSD * 100 }
+            : [:]
+        let anchored = scaledSpendsPercent(spendsPercent, to: usedPercent)
+        return DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 100,
+            daysInPeriod: max(1, daysInPeriod),
+            resetsAt: periodResetsAt,
+            spentByDay: anchored,
+            now: now,
+            calendar: calendar
+        )
+    }
+
     /// Scales per-day percentage-point spends so their sum equals the consumed
     /// monthly usage (`usedPercent`). Returns the spends unchanged when there is
     /// nothing to anchor to.

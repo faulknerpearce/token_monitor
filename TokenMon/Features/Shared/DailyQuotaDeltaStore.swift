@@ -34,8 +34,9 @@ final class DailyQuotaDeltaStore: ObservableObject {
     }
 
     /// Records a new window utilization snapshot. Growth since the last sample is
-    /// added to the sampled calendar day; a drop is treated as a window reset and
-    /// the post-reset value is attributed to the day.
+    /// added to the sampled calendar day; a drop large enough to be a window reset
+    /// credits the post-reset value to the day, while a small downward tick is
+    /// treated as rounding noise and ignored.
     func record(windowUsedPercent: Double, at date: Date = Date()) {
         defer { persist() }
 
@@ -47,13 +48,17 @@ final class DailyQuotaDeltaStore: ObservableObject {
         let delta: Double
         if windowUsedPercent >= previous {
             delta = windowUsedPercent - previous
-        } else {
+        } else if previous - windowUsedPercent >= Percent.resetDropFloor {
             delta = windowUsedPercent
+        } else {
+            // A small downward tick is noise, not a reset. Crediting it as one
+            // would add the whole pool percent to the day.
+            delta = 0
         }
         lastUsedPercent = windowUsedPercent
 
         // Ignore tiny noise.
-        guard delta >= 0.05 else { return }
+        guard delta >= Percent.noiseFloor else { return }
 
         let dayKey = Calendar.current.startOfDay(for: date)
         var next = spentByDay

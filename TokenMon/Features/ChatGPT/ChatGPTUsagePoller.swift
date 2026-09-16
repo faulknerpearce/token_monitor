@@ -60,10 +60,11 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        let generation = auth.sessionGeneration
         let client = ChatGPTUsageClient(cookieHeader: cookieHeader)
         do {
             let (response, fetchedAt) = try await client.fetchUsage()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = ChatGPTSnapshot(
                 fetchedAt: fetchedAt,
                 planName: response.planName,
