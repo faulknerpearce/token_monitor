@@ -96,9 +96,37 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         loadCookieHeader()
     }
 
-    /// Persisted cookie header (Grok poller reads it directly).
+    /// Persisted cookie header, narrowed to the provider's essential cookies.
     func loadCookieHeader() -> String? {
-        readStore(key: "session")
+        guard let stored = readStore(key: "session") else { return nil }
+        let pruned = Self.pruneCookieHeader(stored, to: config.capturePolicy.essentialCookieNames)
+        if pruned != stored {
+            // A jar captured before the allowlist existed can still carry SSO
+            // cookies from another account (e.g. an X session in the Grok jar).
+            writeStore(key: "session", value: pruned)
+        }
+        return pruned
+    }
+
+    /// Narrows a stored `Cookie:` header to `names`, mirroring
+    /// `WebKitCookieCapture.select`: only narrow when one of the essential
+    /// cookies is present, so a provider without them keeps its stored jar.
+    static func pruneCookieHeader(_ header: String, to names: Set<String>) -> String {
+        guard !names.isEmpty else { return header }
+        let pairs = header
+            .split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        func name(of pair: String) -> String? {
+            guard let separator = pair.firstIndex(of: "=") else { return nil }
+            return pair[..<separator].lowercased()
+        }
+        guard pairs.contains(where: { name(of: $0).map(names.contains) ?? false }) else {
+            return header
+        }
+        return pairs
+            .filter { name(of: $0).map(names.contains) ?? false }
+            .joined(separator: "; ")
     }
 
     func saveAccountEmail(_ email: String) {
