@@ -279,12 +279,17 @@ final class SignInBrowserNavigationTests: XCTestCase {
 /// Fulfils once a probe navigation finishes.
 private final class UserAgentProbe: NSObject, WKNavigationDelegate {
     private let onFinish: () -> Void
+    private var didFinish = false
 
     init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
     }
 
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
+        // about:blank can report more than one finish; fulfilling twice is an
+        // XCTest API violation, so only the first one counts.
+        guard !didFinish else { return }
+        didFinish = true
         onFinish()
     }
 }
