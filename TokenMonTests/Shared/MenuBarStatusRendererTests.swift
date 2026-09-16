@@ -130,4 +130,75 @@ final class MenuBarStatusRendererTests: XCTestCase {
             accountEmail: nil
         )
     }
+
+    // MARK: - Provider hit regions
+
+    /// Composite layout exposes one non-overlapping region per visible provider
+    /// segment, in provider order, so a bar click maps back to its provider.
+    func testCompositeRegionsFollowProviderOrder() {
+        let status = renderStatus(provider: .grok, showSelectedProvider: false, showGrokbotBar: true)
+        XCTAssertEqual(
+            status.regions.map(\.provider),
+            [.grok, .cursor, .opencode, .claude, .grokbot]
+        )
+        for (index, region) in status.regions.enumerated() {
+            XCTAssertLessThanOrEqual(region.minX, region.maxX)
+            if index > 0 {
+                XCTAssertLessThanOrEqual(status.regions[index - 1].maxX, region.minX)
+            }
+            let mid = (region.minX + region.maxX) / 2
+            XCTAssertEqual(
+                MenuBarStatusRenderer.provider(atX: mid, in: status.regions),
+                region.provider
+            )
+        }
+        let last = status.regions.last!
+        XCTAssertNil(MenuBarStatusRenderer.provider(atX: last.maxX + 50, in: status.regions))
+        XCTAssertNil(MenuBarStatusRenderer.provider(atX: -5, in: status.regions))
+    }
+
+    /// The single-provider label is one region covering the whole bar.
+    func testSelectedProviderModeHasSingleRegion() {
+        let status = renderStatus(
+            provider: .claude,
+            showSelectedProvider: true,
+            claude: makeClaudeSnapshot()
+        )
+        XCTAssertEqual(status.regions.map(\.provider), [.claude])
+        XCTAssertEqual(status.regions.first?.minX, 0)
+        XCTAssertEqual(
+            status.regions.first?.maxX ?? 0,
+            status.image.size.width,
+            accuracy: 0.001
+        )
+    }
+
+    private func renderStatus(
+        provider: MonitorProvider,
+        showSelectedProvider: Bool,
+        claude: ClaudeSnapshot? = nil,
+        grokbot: GrokbotSnapshot? = nil,
+        showGrokbotBar: Bool = false
+    ) -> MenuBarStatusRenderer.RenderedStatus {
+        MenuBarStatusRenderer.render(
+            selectedProvider: provider,
+            showSelectedProvider: showSelectedProvider,
+            snapshot: nil,
+            openCodeSnapshot: nil,
+            cursorSnapshot: nil,
+            claudeSnapshot: claude,
+            chatGPTSnapshot: nil,
+            openRouterSnapshot: nil,
+            grokbotSnapshot: grokbot,
+            isGrokSignedIn: false,
+            showGrokBar: true,
+            showGrokCategories: true,
+            showOpenCodeBar: true,
+            showCursorBar: true,
+            showClaudeBar: true,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: MonitorProvider.usageProviders,
+            visibleProductIDs: Set(ProductCatalog.knownIDs)
+        )
+    }
 }

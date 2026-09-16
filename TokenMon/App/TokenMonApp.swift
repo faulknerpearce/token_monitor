@@ -5,16 +5,18 @@ import SwiftUI
 @main
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    @StateObject private var menuBar: MenuBarController
+
+    init() {
+        let model = AppModel()
+        _model = StateObject(wrappedValue: model)
+        // Owns the NSStatusItem + NSPopover that replace MenuBarExtra, so a click
+        // on a provider's menu bar graph opens that provider's dropdown section.
+        _menuBar = StateObject(wrappedValue: MenuBarController(model: model))
+    }
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarRoot(model: model)
-        } label: {
-            MenuBarLabelContainer(model: model)
-        }
-        .menuBarExtraStyle(.window)
-
         Window("TokenMon", id: "preferences") {
             PreferencesRoot(model: model)
         }
@@ -293,29 +295,3 @@ private struct PreferencesRoot: View {
 }
 
 /// Observes nested services so the menu bar label refreshes on poll/settings updates.
-struct MenuBarLabelContainer: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        MenuBarLabelView(
-            selectedProvider: model.settings.selectedProvider,
-            showSelectedProvider: model.settings.showSelectedProviderInMenuBar,
-            snapshot: model.poller.snapshot,
-            openCodeSnapshot: model.openCodePoller.snapshot,
-            cursorSnapshot: model.cursorPoller.snapshot,
-            claudeSnapshot: model.claudePoller.snapshot,
-            chatGPTSnapshot: model.chatGPTPoller.snapshot,
-            openRouterSnapshot: model.openRouterPoller.snapshot,
-            grokbotSnapshot: model.grokbotPoller.snapshot,
-            isGrokSignedIn: model.auth.isSignedIn && !model.auth.needsSignIn,
-            showGrokBar: model.settings.showGrokBarInMenuBar,
-            showGrokCategories: model.settings.showCategoriesInMenuBar,
-            showOpenCodeBar: model.settings.showOpenCodeBarInMenuBar,
-            showCursorBar: model.settings.showCursorBarInMenuBar,
-            showClaudeBar: model.settings.showClaudeBarInMenuBar,
-            showGrokbotBar: model.settings.showGrokbotBarInMenuBar,
-            providerOrder: model.settings.orderedUsageProviders,
-            visibleProductIDs: model.settings.visibleProductIDs
-        )
-    }
-}
