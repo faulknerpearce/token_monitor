@@ -65,9 +65,8 @@ final class MenuBarController: NSObject, ObservableObject {
             visibleProductIDs: settings.visibleProductIDs
         )
         regions = rendered.regions
-        // Match the status item to the bitmap so the drawn image fills the
-        // button and the click coordinate needs no extra offset.
-        statusItem.length = rendered.image.size.width
+        // Keep `variableLength`: assigning an explicit length animates the status
+        // item, which makes the whole menu bar shift when the label updates.
         statusItem.button?.image = rendered.image
     }
 
