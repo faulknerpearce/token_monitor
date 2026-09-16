@@ -77,7 +77,8 @@ struct ProviderSwitcherView: View {
                         .frame(width: 12, height: 12)
                 }
                 Text(provider.switcherLabel)
-                    .font(selection == provider ? PanelTypography.captionSemibold : PanelTypography.caption)
+                    // Keep label geometry identical when selection changes.
+                    .font(PanelTypography.caption)
                     .foregroundStyle(selection == provider ? Color.primary : Color.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

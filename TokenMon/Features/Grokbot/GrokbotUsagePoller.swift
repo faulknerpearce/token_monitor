@@ -82,10 +82,11 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        let generation = auth.sessionGeneration
         let client = GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: auth.accountEmail)
         do {
             let fresh = try await client.fetchSnapshot()
-            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = fresh
             lastError = nil
             lastRefreshedAt = Date()

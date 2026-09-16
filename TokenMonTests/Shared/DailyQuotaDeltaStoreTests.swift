@@ -68,6 +68,19 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[today] ?? 0, 0, accuracy: 0.001)
     }
 
+    /// A small downward tick (rounding/rebase noise) must not be credited as a
+    /// full window reset; `50.0 -> 49.9` used to add 49.9 to the day.
+    func testSmallDownwardNoiseIsNotCreditedAsReset() {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        store.record(windowUsedPercent: 50.0, at: date(dayOffset: 0, hour: 9))
+        store.record(windowUsedPercent: 49.9, at: date(dayOffset: 0, hour: 9, minute: 5))
+
+        let today = Calendar.current.startOfDay(for: date(dayOffset: 0, hour: 0))
+        XCTAssertEqual(store.spentByDay[today] ?? 0, 0, accuracy: 0.001)
+    }
+
     func testOldDaysArePrunedToRetentionWindow() {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

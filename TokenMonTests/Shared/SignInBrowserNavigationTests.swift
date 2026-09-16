@@ -93,6 +93,25 @@ final class SignInBrowserNavigationTests: XCTestCase {
         )
     }
 
+    /// The Clerk SSO host is an auth host, never a return page; a navigation to
+    /// `clerk.claude.ai/sign-in` must not trigger capture/dismiss.
+    func testClaudeReturnPageExcludesClerkAndAuthPaths() {
+        var gate = SignInReturnGate(
+            isAuthHost: ClaudeSignInView.isAuthHost,
+            isReturnPage: ClaudeSignInView.isReturnPage
+        )
+        let clerk = URL(string: "https://clerk.claude.ai/sign-in")!
+        XCTAssertEqual(gate.note(url: clerk), .authHost)
+        XCTAssertFalse(gate.matchesReturnPage(clerk))
+
+        XCTAssertTrue(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/new")!))
+        XCTAssertTrue(ClaudeSignInView.isReturnPage(URL(string: "https://www.claude.ai/chat/abc")!))
+        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/login")!))
+        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/signin")!))
+        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://clerk.claude.ai/sign-in")!))
+        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://auth.claude.ai/")!))
+    }
+
     // MARK: - Controller publishing
 
     /// Re-applying unchanged state must not publish `objectWillChange`.
@@ -260,12 +279,17 @@ final class SignInBrowserNavigationTests: XCTestCase {
 /// Fulfils once a probe navigation finishes.
 private final class UserAgentProbe: NSObject, WKNavigationDelegate {
     private let onFinish: () -> Void
+    private var didFinish = false
 
     init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
     }
 
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
+        // about:blank can report more than one finish; fulfilling twice is an
+        // XCTest API violation, so only the first one counts.
+        guard !didFinish else { return }
+        didFinish = true
         onFinish()
     }
 }

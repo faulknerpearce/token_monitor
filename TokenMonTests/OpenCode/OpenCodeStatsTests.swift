@@ -848,4 +848,85 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(preview.primaryUsedPercent, 16.9 / 60 * 100, accuracy: 0.01)
         XCTAssertGreaterThan(preview.inputTokens, 0)
     }
+
+    /// The OpenCode Daily Budget is the subscription month (100% / ~30 days,
+    /// about 3% per day), not a weekly cadence.
+    func testMonthlyDailyBudgetUsesSubscriptionMonthDenominator() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 12))!
+        let monthlyReset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 0))!
+
+        let monthly = try XCTUnwrap(
+            OpenCodeLocalStats.monthDailyBudgetDays(
+                limitUSD: 60,
+                usedPercent: 20,
+                periodResetsAt: monthlyReset,
+                now: now,
+                spentByDay: [:],
+                dbURL: dbURL,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertEqual(monthly.days.first?.budgetUSD ?? 0, 100.0 / 31, accuracy: 0.01)
+        XCTAssertLessThan(monthly.days.first?.budgetUSD ?? 100, 5)
+    }
+
+    /// The per-day spends are gathered inside the console billing window, not the
+    /// local subscription month, so the console percent is not diluted by days
+    /// outside the window.
+    func testFetchDailySpendsFiltersToWindow() throws {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        func day(_ day: Int, hour: Int = 12) -> Date {
+            utc.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour))!
+        }
+
+        insert(timeCreated: day(10), cost: 5, input: 1_000, model: modelJSON(provider: "opencode-go", id: "m"))
+        insert(timeCreated: day(16), cost: 3, input: 1_000, model: modelJSON(provider: "opencode-go", id: "m"))
+        insert(timeCreated: day(17), cost: 9, input: 1_000, model: modelJSON(provider: "opencode-go", id: "m"))
+
+        let spends = OpenCodeLocalStats.fetchDailySpends(
+            from: day(16, hour: 0),
+            to: day(18, hour: 0),
+            dbURL: dbURL
+        )
+
+        // `fetchDailySpends` buckets by `Calendar.current`, so compare on that.
+        let local = Calendar.current
+        XCTAssertNil(spends[local.startOfDay(for: day(10))])
+        XCTAssertEqual(spends[local.startOfDay(for: day(16))] ?? 0, 3, accuracy: 0.001)
+        XCTAssertEqual(spends[local.startOfDay(for: day(17))] ?? 0, 9, accuracy: 0.001)
+        XCTAssertEqual(spends.values.reduce(0, +), 12, accuracy: 0.001)
+    }
+
+    /// With no local rows for the console window the bars must not read zero
+    /// while the headline reports usage: spread the console total over elapsed
+    /// days instead.
+    func testMonthlyDailyBudgetSpreadsWhenNoLocalSpends() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let resetsAt = calendar.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 0))!
+        // Three days into the Aug 5 - Sep 5 window, so elapsed = 3.
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 7, hour: 12))!
+
+        let monthly = try XCTUnwrap(
+            OpenCodeLocalStats.monthDailyBudgetDays(
+                limitUSD: 60,
+                usedPercent: 12,
+                periodResetsAt: resetsAt,
+                now: now,
+                spentByDay: [:],
+                dbURL: dbURL,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertEqual(monthly.days.map(\.spentUSD).reduce(0, +), 12, accuracy: 0.01)
+        XCTAssertGreaterThan(
+            monthly.days.first { calendar.isDate($0.date, inSameDayAs: now) }?.spentUSD ?? 0,
+            0
+        )
+    }
 }

@@ -15,8 +15,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private let settings: AppSettings
     private let auth: CursorAuthSession
+    private let daily: DailyQuotaDeltaStore
     private let logger = Logger(category: "Cursor")
     private var cancellables = Set<AnyCancellable>()
+
+    /// Last observed billing-cycle end, so the chart stays anchored if a later
+    /// payload omits it.
+    private var billingCycleEnd: Date?
 
     /// Reuse the last refreshed result when a rapid consecutive poll lands within
     /// this window, avoiding redundant full-cycle event paging on every poll step.
@@ -27,9 +32,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: CursorAuthSession) {
+    init(settings: AppSettings, auth: CursorAuthSession, daily: DailyQuotaDeltaStore) {
         self.settings = settings
         self.auth = auth
+        self.daily = daily
         // Drop the Cursor snapshot as soon as this shared session signs out.
         auth.$isSignedIn
             .dropFirst()
@@ -52,9 +58,11 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         snapshot = nil
         dayHourlyUsage = nil
         dailyBudgetDays = nil
+        billingCycleEnd = nil
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
+        daily.clear()
     }
 
     func refreshNow() async {
@@ -80,16 +88,31 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        let generation = auth.sessionGeneration
         let client = CursorUsageClient(cookieHeader: cookieHeader)
         do {
-            let (snap, hourly, budgetDays) = try await client.fetchSnapshot()
-            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+            let (snap, hourly, estimatedWeightByDay) = try await client.fetchSnapshot()
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = snap
             dayHourlyUsage = hourly
-            dailyBudgetDays = budgetDays
             if let email = snap.accountEmail {
                 auth.saveAccountEmail(email)
             }
+            // The daily bars prefer the real day-over-day growth of the reported
+            // pool %, falling back to a list-price estimate for days this build
+            // never observed (see `buildDailyBudgetDays`).
+            if let cycleEnd = snap.billingCycleEnd {
+                billingCycleEnd = cycleEnd
+            }
+            daily.record(windowUsedPercent: snap.usedPercent, at: snap.fetchedAt)
+            dailyBudgetDays = Self.buildDailyBudgetDays(
+                observedByDay: daily.spentByDay,
+                estimatedWeightByDay: estimatedWeightByDay,
+                usedPercent: snap.usedPercent,
+                billingCycleStart: snap.billingCycleStart,
+                billingCycleEnd: snap.billingCycleEnd ?? billingCycleEnd,
+                now: snap.fetchedAt
+            )
             lastError = nil
             lastRefreshedAt = Date()
             dataSourceLabel = "Cursor dashboard"
@@ -119,5 +142,78 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private func currentInterval() -> TimeInterval {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    }
+
+    /// Daily bars for the current **billing cycle**.
+    ///
+    /// Days the app observed directly use the real day-over-day growth of the
+    /// reported pool % (`observedByDay`). Days it did not observe are back-filled
+    /// from a per-day pool-estimate weight (`estimatedWeightByDay`), scaled so the
+    /// whole cycle still sums to `usedPercent`. If tracked deltas exceed the live
+    /// pool %, they are rescaled down to match instead of overshooting. Returns
+    /// nil when the subscription month cannot be resolved (a calendar month is
+    /// never substituted).
+    static func buildDailyBudgetDays(
+        observedByDay: [Date: Double],
+        estimatedWeightByDay: [Date: Double],
+        usedPercent: Double,
+        billingCycleStart: Date?,
+        billingCycleEnd: Date?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay]? {
+        guard let bounds = DailyBudget.subscriptionMonth(
+            knownStart: billingCycleStart,
+            resetsAt: billingCycleEnd,
+            now: now,
+            calendar: calendar
+        ) else { return nil }
+        let cycleStartDay = calendar.startOfDay(for: bounds.start)
+        let observed = observedByDay.filter { $0.key >= cycleStartDay && $0.key < bounds.end }
+        let estimated = estimatedWeightByDay.filter { $0.key >= cycleStartDay && $0.key < bounds.end }
+
+        // The first day the app tracked is only partially observed (tracking began
+        // mid-day), so estimate it rather than paint a misleading sliver. Later
+        // days are covered fully and use their measured delta.
+        var effectiveObserved = observed
+        if let firstTrackedDay = observed.keys.min() {
+            effectiveObserved.removeValue(forKey: firstTrackedDay)
+        }
+
+        let tracked = effectiveObserved.values.reduce(0, +)
+        let unobserved = estimated.filter { effectiveObserved[$0.key] == nil }
+
+        var blended = effectiveObserved
+        if tracked > usedPercent + 0.001, tracked > 0 {
+            // Pool % fell below the sum of tracked daily deltas (downward tick,
+            // API rebase, or drift past the reset floor). Rescale so bars still
+            // sum to the live headline usedPercent instead of overshooting it.
+            let scale = usedPercent / tracked
+            for (day, value) in effectiveObserved {
+                blended[day] = value * scale
+            }
+        } else {
+            let untracked = max(0, usedPercent - tracked)
+            let weightSum = unobserved.values.reduce(0, +)
+            if untracked > 0.001, weightSum > 0 {
+                for (day, usd) in unobserved {
+                    blended[day, default: 0] += usd / weightSum * untracked
+                }
+            } else if untracked > 0.001, !unobserved.isEmpty {
+                let perDay = untracked / Double(unobserved.count)
+                for day in unobserved.keys {
+                    blended[day, default: 0] += perDay
+                }
+            }
+        }
+
+        return DailyBudget.buildLast7Days(
+            periodStart: bounds.start,
+            periodEnd: bounds.end,
+            limitUSD: 100,
+            spentByDay: blended,
+            now: now,
+            calendar: calendar
+        )
     }
 }

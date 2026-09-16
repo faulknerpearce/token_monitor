@@ -65,6 +65,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         let cookieHeader = auth.cookieHeader()
         if let cookieHeader, !cookieHeader.isEmpty {
             do {
+                let generation = auth.sessionGeneration
                 let client = OpenCodeConsoleClient(cookieHeader: cookieHeader)
                 let (consoleSnap, workspaceID) = try await client.fetchGoUsageSnapshot(
                     knownWorkspaceID: auth.workspaceID
@@ -81,7 +82,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 if let local = localBundle?.0 {
                     snap = Self.mergeLocalModels(into: snap, local: local)
                 }
-                guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+                guard !Task.isCancelled, auth.isCurrent(generation) else { return }
                 snapshot = snap
                 if let hourly = localBundle?.1 { dayHourlyUsage = hourly }
                 let budget = await Self.buildDailyBudgetDays(for: snap)

@@ -94,6 +94,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        let generation = auth.sessionGeneration
         let client = UsageClient(
             cookieHeader: auth.loadCookieHeader(),
             bearerToken: auth.loadBearerToken(),
@@ -102,7 +103,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
 
         do {
             var snap = try await client.fetchUsage()
-            guard auth.isSignedIn, !auth.needsSignIn else { return }
+            guard auth.isCurrent(generation) else { return }
             if snap.accountEmail == nil {
                 snap.accountEmail = auth.accountEmail
             }

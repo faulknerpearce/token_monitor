@@ -51,6 +51,17 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights[9], 0, accuracy: 0.001)
     }
 
+    /// A small downward tick must not be credited as a full window reset.
+    func testSmallDownwardNoiseIsNotCreditedAsReset() {
+        let (activity, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        activity.record(usedPercent: 50.0, at: date(hour: 9))
+        activity.record(usedPercent: 49.9, at: date(hour: 9, minute: 5))
+
+        XCTAssertEqual(activity.hourWeights[9], 0, accuracy: 0.001)
+    }
+
     func testDifferentKeysDoNotCollideOnDisk() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

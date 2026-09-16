@@ -60,10 +60,15 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
+        // A rejected key must stop the poller until the user saves a new one,
+        // instead of re-sending the same bearer token every interval.
+        guard auth.isSignedIn, !auth.needsSignIn else { return }
+
+        let generation = auth.sessionGeneration
         let client = OpenRouterUsageClient(apiKey: apiKey)
         do {
             let snap = try await client.fetchSnapshot()
-            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = snap
             lastError = nil
             lastRefreshedAt = Date()

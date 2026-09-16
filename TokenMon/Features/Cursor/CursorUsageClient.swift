@@ -12,7 +12,7 @@ struct CursorUsageClient: Sendable {
         self.cookieHeader = cookieHeader
     }
 
-    func fetchSnapshot(now: Date = Date()) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [DailyBudgetDay]?) {
+    func fetchSnapshot(now: Date = Date()) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double]) {
         async let summaryData = get(path: "/api/usage-summary")
         async let meData = try? get(path: "/api/auth/me")
         let summary = try await summaryData
@@ -34,7 +34,7 @@ struct CursorUsageClient: Sendable {
             hourWeights: Array(repeating: 0, count: 24),
             quotaHourWeights: Array(repeating: 0, count: 24)
         )
-        var dailyBudgetDays: [DailyBudgetDay]?
+        var estimatedWeightByDay: [Date: Double] = [:]
         if let events = try? await fetchAllEvents(from: windowStart, to: now) {
             snap.costStats = Self.aggregateCostStats(
                 events: events,
@@ -57,31 +57,22 @@ struct CursorUsageClient: Sendable {
                     calendar: calendar
                 )
             )
-            dailyBudgetDays = Self.dailyBudgetDays(
-                events: events,
-                planLimitUSD: snap.planLimitUSD,
-                usedPercent: snap.usedPercent,
-                billingCycleStart: snap.billingCycleStart,
-                billingCycleEnd: snap.billingCycleEnd,
-                now: now,
-                calendar: calendar
-            )
-        } else if snap.planLimitUSD != nil {
-            // No events yet — show an empty 7-bar budget when the
-            // subscription/billing month is known.
-            let percentLimit: Double = 100
-            if let built = DailyBudget.buildSubscriptionMonthLast7Days(
-                limitUSD: percentLimit,
-                spentByDay: [:],
+            // Per-day pool-estimate weights, used only to back-fill days the app
+            // did not observe directly (see `CursorUsagePoller.buildDailyBudgetDays`).
+            let bounds = DailyBudget.subscriptionMonth(
                 knownStart: snap.billingCycleStart,
                 resetsAt: snap.billingCycleEnd,
                 now: now,
                 calendar: calendar
-            ) {
-                dailyBudgetDays = built.days
-            }
+            )
+            estimatedWeightByDay = Self.dailyEstimateWeightByDay(
+                events: events,
+                cycleStart: bounds?.start ?? snap.billingCycleStart,
+                cycleEnd: bounds?.end ?? snap.billingCycleEnd,
+                calendar: calendar
+            )
         }
-        return (snap, hourly, dailyBudgetDays)
+        return (snap, hourly, estimatedWeightByDay)
     }
 
     func fetchDayHourlyUsage(now: Date = Date()) async throws -> CursorDayHourlyUsage {
@@ -259,6 +250,13 @@ struct CursorUsageClient: Sendable {
         return Int64(value)
     }
 
+    /// Cursor Bot (`grok-bot-*`) usage has its own allowance (tracked by the
+    /// Grokbot provider) and is not part of the Cursor plan pool, so it must be
+    /// excluded from every Cursor aggregation.
+    static func isGrokBotEvent(_ event: [String: Any]) -> Bool {
+        ((event["model"] as? String) ?? "").hasPrefix("grok-bot")
+    }
+
     static func aggregateCostStats(
         events: [[String: Any]],
         cycleStart: Date,
@@ -278,6 +276,7 @@ struct CursorUsageClient: Sendable {
         var last20dTokens: Int64 = 0
 
         for event in events {
+            guard !isGrokBotEvent(event) else { continue }
             guard let date = eventTimestamp(event) else { continue }
             let cents = chargedCents(event)
             let tokens = tokenCount(event)
@@ -339,6 +338,7 @@ struct CursorUsageClient: Sendable {
         guard let planLimitUSD, planLimitUSD > 0 else { return weights }
         let planLimitCents = planLimitUSD * 100 / QuotaNormalization.averageWeeksPerMonth
         for event in events {
+            guard !isGrokBotEvent(event) else { continue }
             guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
@@ -356,6 +356,7 @@ struct CursorUsageClient: Sendable {
     ) -> [Int64] {
         var weights = Array(repeating: Int64(0), count: 24)
         for event in events {
+            guard !isGrokBotEvent(event) else { continue }
             guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
@@ -512,11 +513,12 @@ struct CursorUsageClient: Sendable {
         return try Self.rejectUnauthorizedBody(data)
     }
 
-    /// A 200 response can still carry a `not_authenticated` error body.
-    private static func rejectUnauthorizedBody(_ data: Data) throws -> Data {
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let err = obj["error"] as? String,
-           err.lowercased().contains("not_authenticated") || err.lowercased().contains("unauthor") {
+    /// A 200 response can still signal an expired session: either a
+    /// `not_authenticated` error body, or an HTML page served after a redirect to
+    /// the WorkOS sign-in flow.
+    static func rejectUnauthorizedBody(_ data: Data) throws -> Data {
+        let object = try ProviderHTTP.jsonObject(data, context: .cursor)
+        if let err = object["error"] as? String, ProviderHTTP.isUnauthorizedMessage(err) {
             throw ProviderError.unauthorized(.cursor)
         }
         return data
@@ -544,12 +546,12 @@ struct CursorUsageClient: Sendable {
         return Percent.clamp(value)
     }
 
-    // MARK: - Daily budget aggregation
-
-    /// USD spend per calendar day (startOfDay → cents/100).
+    /// Per-day token weight for the pool-estimate back-fill.
     ///
-    /// When `cycleStart`/`cycleEnd` are set, events outside that half-open window are dropped.
-    static func dailySpendByDay(
+    /// Excludes Cursor Bot (`grok-bot-*`) usage: it has its own allowance (tracked
+    /// by the Grokbot provider) and is not part of the Cursor plan pool, so mixing
+    /// it in would dilute the estimate on days with heavy Bot usage.
+    static func dailyEstimateWeightByDay(
         events: [[String: Any]],
         cycleStart: Date? = nil,
         cycleEnd: Date? = nil,
@@ -560,63 +562,12 @@ struct CursorUsageClient: Sendable {
             guard let date = eventTimestamp(event) else { continue }
             if let cycleStart, date < cycleStart { continue }
             if let cycleEnd, date >= cycleEnd { continue }
-            let cents = chargedCents(event)
-            guard cents > 0 else { continue }
+            guard !Self.isGrokBotEvent(event) else { continue }
+            let tokens = Double(tokenCount(event))
+            guard tokens > 0 else { continue }
             let dayKey = calendar.startOfDay(for: date)
-            byDay[dayKey, default: 0] += cents / 100
+            byDay[dayKey, default: 0] += tokens
         }
         return byDay
-    }
-
-    /// Map list-price USD weights onto Cursor's usage-quota percent.
-    ///
-    /// Event `chargedCents` is token list price, not plan consumption. Days are
-    /// scaled so the cycle total equals `usedPercent` (the Usage bar), using
-    /// relative USD only to split that quota across calendar days.
-    static func quotaPercentsByDay(
-        usdSpends: [Date: Double],
-        usedPercent: Double
-    ) -> [Date: Double] {
-        let cycleUSD = usdSpends.values.reduce(0, +)
-        guard cycleUSD > 0, usedPercent > 0 else { return [:] }
-        let scale = usedPercent / cycleUSD
-        return usdSpends.mapValues { $0 * scale }
-    }
-
-    /// Builds 7-bar daily budget days for the current **billing cycle**.
-    /// Daily cap = `100% / daysInPeriod`. Each bar is that day's share of
-    /// `usedPercent`, not `chargedUSD / planLimit`. Returns nil when the
-    /// subscription month cannot be resolved (no calendar-month fallback).
-    static func dailyBudgetDays(
-        events: [[String: Any]],
-        planLimitUSD: Double?,
-        usedPercent: Double,
-        billingCycleStart: Date?,
-        billingCycleEnd: Date?,
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> [DailyBudgetDay]? {
-        guard let planLimitUSD, planLimitUSD > 0 else { return nil }
-        let percentLimit: Double = 100
-        guard let bounds = DailyBudget.subscriptionMonth(
-            knownStart: billingCycleStart,
-            resetsAt: billingCycleEnd,
-            now: now,
-            calendar: calendar
-        ) else { return nil }
-        let usdSpends = dailySpendByDay(
-            events: events,
-            cycleStart: bounds.start,
-            cycleEnd: bounds.end,
-            calendar: calendar
-        )
-        return DailyBudget.buildLast7Days(
-            periodStart: bounds.start,
-            periodEnd: bounds.end,
-            limitUSD: percentLimit,
-            spentByDay: quotaPercentsByDay(usdSpends: usdSpends, usedPercent: usedPercent),
-            now: now,
-            calendar: calendar
-        )
     }
 }

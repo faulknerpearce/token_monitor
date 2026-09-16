@@ -43,6 +43,31 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(snap.displayPlanName, "Cursor Ultra")
         XCTAssertNotNil(snap.pools[0].pace)
         XCTAssertEqual(snap.pools[0].pace?.isReserve, true)
+
+        // Daily Budget and event clipping key off these parsed dates, so assert
+        // them rather than only the percents.
+        XCTAssertNotNil(snap.billingCycleStart)
+        XCTAssertEqual(
+            snap.billingCycleStart,
+            ISO8601DateFormatter.parseFlexible("2026-07-13T00:00:00.000Z")
+        )
+        XCTAssertEqual(
+            snap.billingCycleEnd,
+            ISO8601DateFormatter.parseFlexible("2026-08-14T12:00:00.000Z")
+        )
+        XCTAssertEqual(snap.resetsAt, snap.billingCycleEnd)
+    }
+
+    /// A summary without billing-cycle fields must leave the dates nil rather than
+    /// substituting a calendar month.
+    func testParseSummaryLeavesCycleDatesNilWhenOmitted() throws {
+        let json = Data(
+            #"{"individualUsage":{"plan":{"enabled":true,"used":0,"limit":0,"totalPercentUsed":12}}}"#.utf8
+        )
+        let snap = try CursorUsageClient.parseSummary(data: json)
+        XCTAssertNil(snap.billingCycleStart)
+        XCTAssertNil(snap.billingCycleEnd)
+        XCTAssertNil(snap.resetsAt)
     }
 
     func testParseSummaryAveragesAutoAndAPIWhenTotalMissing() throws {
@@ -290,149 +315,125 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertFalse(CursorAuthSession.isCursorDomain("grok.com"))
     }
 
-    // MARK: - Daily budget (quota scale)
-
-    private func utcCalendar() -> Calendar {
+    /// The pool-estimate back-fill is token-weighted, clips to the half-open
+    /// billing cycle, and ignores Cursor Bot (`grok-bot-*`) usage — which has its
+    /// own allowance and is not part of the Cursor plan pool.
+    func testDailyEstimateWeightByDayExcludesBotAndClipsToCycle() {
         var gregorian = Calendar(identifier: .gregorian)
         gregorian.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        return gregorian
-    }
+        let calendar = gregorian
+        func event(_ date: Date, _ model: String, _ inputTokens: Double) -> [String: Any] {
+            [
+                "timestamp": String(Int64(date.timeIntervalSince1970 * 1000)),
+                "model": model,
+                "tokenUsage": ["inputTokens": inputTokens, "outputTokens": 0]
+            ]
+        }
+        func date(_ day: Int, hour: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: day, hour: hour))!
+        }
 
-    private func utcDate(
-        _ year: Int,
-        _ month: Int,
-        _ day: Int,
-        hour: Int = 12,
-        minute: Int = 0,
-        calendar: Calendar
-    ) -> Date {
-        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
-    }
-
-    private func event(at date: Date, chargedCents: Double) -> [String: Any] {
-        [
-            "timestamp": String(Int64(date.timeIntervalSince1970 * 1000)),
-            "chargedCents": chargedCents
-        ]
-    }
-
-    func testQuotaPercentsByDayScalesListPriceToUsedPercent() {
-        let calendar = utcCalendar()
-        let saturday = calendar.startOfDay(for: utcDate(2026, 8, 22, calendar: calendar))
-        let sunday = calendar.startOfDay(for: utcDate(2026, 8, 23, calendar: calendar))
-        let percents = CursorUsageClient.quotaPercentsByDay(
-            usdSpends: [saturday: 3.0, sunday: 12.2],
-            usedPercent: 4
-        )
-        let cycleUSD = 15.2
-        XCTAssertEqual(percents[saturday] ?? -1, 3.0 / cycleUSD * 4, accuracy: 0.001)
-        XCTAssertEqual(percents[sunday] ?? -1, 12.2 / cycleUSD * 4, accuracy: 0.001)
-        XCTAssertEqual(percents.values.reduce(0, +), 4, accuracy: 0.001)
-    }
-
-    func testQuotaPercentsByDayEmptyWhenNoSpendOrNoUsage() {
-        let day = utcCalendar().startOfDay(for: Date(timeIntervalSince1970: 1_754_236_800))
-        XCTAssertTrue(CursorUsageClient.quotaPercentsByDay(usdSpends: [day: 10], usedPercent: 0).isEmpty)
-        XCTAssertTrue(CursorUsageClient.quotaPercentsByDay(usdSpends: [:], usedPercent: 4).isEmpty)
-    }
-
-    func testDailySpendByDayClipsEventsBeforeCycleStart() {
-        let calendar = utcCalendar()
-        let cycleStart = utcDate(2026, 8, 22, hour: 17, minute: 57, calendar: calendar)
-        let cycleEnd = utcDate(2026, 9, 22, hour: 17, minute: 57, calendar: calendar)
-        let previousCycleSameMorning = utcDate(2026, 8, 22, hour: 10, calendar: calendar)
-        let afterReset = utcDate(2026, 8, 22, hour: 20, calendar: calendar)
-        let sunday = utcDate(2026, 8, 23, calendar: calendar)
-
-        let byDay = CursorUsageClient.dailySpendByDay(
+        let cycleStart = date(22, hour: 17)
+        let cycleEnd = date(23, hour: 17)
+        let byDay = CursorUsageClient.dailyEstimateWeightByDay(
             events: [
-                event(at: previousCycleSameMorning, chargedCents: 5000),
-                event(at: afterReset, chargedCents: 300),
-                event(at: sunday, chargedCents: 1220)
+                event(date(22, hour: 10), "default", 5000),
+                event(date(22, hour: 20), "default", 300),
+                event(date(22, hour: 21), "grok-bot-default", 999_999),
+                event(date(23, hour: 12), "composer-2.5-fast", 1220)
             ],
             cycleStart: cycleStart,
             cycleEnd: cycleEnd,
             calendar: calendar
         )
 
-        XCTAssertEqual(byDay[calendar.startOfDay(for: cycleStart)] ?? -1, 3.0, accuracy: 0.001)
-        XCTAssertEqual(byDay[calendar.startOfDay(for: sunday)] ?? -1, 12.2, accuracy: 0.001)
-        XCTAssertEqual(byDay.values.reduce(0, +), 15.2, accuracy: 0.001)
+        XCTAssertEqual(byDay[calendar.startOfDay(for: cycleStart)] ?? -1, 300, accuracy: 0.001)
+        XCTAssertEqual(byDay[calendar.startOfDay(for: date(23, hour: 12))] ?? -1, 1220, accuracy: 0.001)
+        XCTAssertEqual(byDay.values.reduce(0, +), 1520, accuracy: 0.001)
     }
 
-    func testDailyBudgetDaysUsesQuotaNotPlanLimitDollars() {
-        let calendar = utcCalendar()
-        let cycleStart = utcDate(2026, 8, 22, hour: 17, minute: 57, calendar: calendar)
-        let cycleEnd = utcDate(2026, 9, 22, hour: 17, minute: 57, calendar: calendar)
-        let now = utcDate(2026, 8, 23, hour: 20, calendar: calendar)
-        let previousCycleSameMorning = utcDate(2026, 8, 22, hour: 10, calendar: calendar)
+    /// An expired session can 200 with an HTML sign-in page instead of JSON; that
+    /// is an expired session, not a decode failure.
+    func testRejectUnauthorizedBodyTreatsHTMLAsUnauthorized() {
+        let html = Data("<!doctype html><html><body>Sign in to Cursor</body></html>".utf8)
+        XCTAssertThrowsError(try CursorUsageClient.rejectUnauthorizedBody(html)) { error in
+            XCTAssertEqual(error as? ProviderError, .unauthorized(.cursor))
+        }
+    }
 
-        let days = CursorUsageClient.dailyBudgetDays(
-            events: [
-                event(at: previousCycleSameMorning, chargedCents: 5000),
-                event(at: utcDate(2026, 8, 22, hour: 20, calendar: calendar), chargedCents: 300),
-                event(at: utcDate(2026, 8, 23, calendar: calendar), chargedCents: 1220)
-            ],
-            planLimitUSD: 20,
-            usedPercent: 4,
-            billingCycleStart: cycleStart,
-            billingCycleEnd: cycleEnd,
+    /// A 200 body can also carry a `not_authenticated` / `unauthorized` error.
+    func testRejectUnauthorizedBodyMapsErrorString() {
+        for message in ["not_authenticated", "unauthorized"] {
+            let data = Data(#"{"error":"\#(message)"}"#.utf8)
+            XCTAssertThrowsError(try CursorUsageClient.rejectUnauthorizedBody(data)) { error in
+                XCTAssertEqual(error as? ProviderError, .unauthorized(.cursor))
+            }
+        }
+    }
+
+    /// A truncated body must stay transient so the poller keeps the last-good
+    /// snapshot instead of signing the user out.
+    func testRejectUnauthorizedBodyTreatsMalformedAsBadResponse() {
+        let truncated = Data(#"{"individualUsage":"#.utf8)
+        XCTAssertThrowsError(try CursorUsageClient.rejectUnauthorizedBody(truncated)) { error in
+            guard let providerError = error as? ProviderError, case .badResponse = providerError else {
+                return XCTFail("expected badResponse, got \(error)")
+            }
+        }
+    }
+
+    /// A normal summary body must pass through untouched.
+    func testRejectUnauthorizedBodyPassesNormalSummary() throws {
+        let data = Data(#"{"individualUsage":{"plan":{"enabled":true,"used":0,"limit":0}}}"#.utf8)
+        XCTAssertNoThrow(try CursorUsageClient.rejectUnauthorizedBody(data))
+    }
+
+    /// Cursor Bot (`grok-bot-*`) usage belongs to the Grokbot allowance, not the
+    /// Cursor plan pool, so it must be excluded from every Cursor aggregation.
+    func testGrokBotEventsAreExcludedFromAggregations() {
+        let calendar = Calendar(identifier: .gregorian)
+        let dayStart = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_754_236_800))
+        let now = dayStart.addingTimeInterval(10 * 3600)
+        let cycleStart = dayStart.addingTimeInterval(-20 * 86400)
+
+        func event(_ model: String, cents: Double, tokens: Double) -> [String: Any] {
+            [
+                "timestamp": String(Int64(now.timeIntervalSince1970 * 1000)),
+                "model": model,
+                "chargedCents": cents,
+                "tokenUsage": ["inputTokens": tokens, "outputTokens": 0]
+            ]
+        }
+
+        let events = [
+            event("default", cents: 100, tokens: 1000),
+            event("grok-bot-default", cents: 900, tokens: 9000)
+        ]
+
+        let stats = CursorUsageClient.aggregateCostStats(
+            events: events,
+            cycleStart: cycleStart,
             now: now,
             calendar: calendar
         )
+        XCTAssertEqual(stats.meteredCycleUSD, 1.0, accuracy: 0.001)
+        XCTAssertEqual(stats.cycleTokens, 1000)
+        XCTAssertEqual(stats.todayTokens, 1000)
 
-        XCTAssertEqual(days?.count, 7)
-        let saturday = days?.first { calendar.isDate($0.date, inSameDayAs: cycleStart) }
-        let sunday = days?.first { calendar.isDate($0.date, inSameDayAs: now) }
-        XCTAssertEqual(saturday?.spentUSD ?? -1, 3.0 / 15.2 * 4, accuracy: 0.001)
-        XCTAssertEqual(sunday?.spentUSD ?? -1, 12.2 / 15.2 * 4, accuracy: 0.001)
-        XCTAssertEqual((saturday?.spentUSD ?? 0) + (sunday?.spentUSD ?? 0), 4, accuracy: 0.001)
-
-        let expectedDaily = 100.0 / Double(DailyBudget.daysInBillingCycle(
-            start: cycleStart,
-            end: cycleEnd,
-            calendar: calendar
-        ))
-        XCTAssertEqual(saturday?.budgetUSD ?? -1, expectedDaily, accuracy: 0.001)
-        XCTAssertEqual(Int((saturday?.budgetUSD ?? 0).rounded()), 3)
-
-        // Per-day spend follows the quota scale, not the $20 plan limit.
-        XCTAssertLessThan(saturday?.spentUSD ?? 100, 2)
-        XCTAssertFalse(sunday?.isOverBudget ?? true)
-    }
-
-    /// A payload whose billingCycleEnd already passed must paint the running
-    /// cycle (today), not the last 7 days of the closed month.
-    func testDailyBudgetDaysAdvancesStaleBillingCycle() {
-        let calendar = utcCalendar()
-        let now = utcDate(2026, 8, 25, hour: 12, calendar: calendar)
-        let days = CursorUsageClient.dailyBudgetDays(
-            events: [],
-            planLimitUSD: 20,
-            usedPercent: 0,
-            billingCycleStart: utcDate(2026, 6, 16, hour: 17, minute: 57, calendar: calendar),
-            billingCycleEnd: utcDate(2026, 7, 16, hour: 17, minute: 57, calendar: calendar),
-            now: now,
+        let hour = calendar.component(.hour, from: now)
+        let tokens = CursorUsageClient.tokenHourWeights(
+            fromEvents: events,
+            dayStart: dayStart,
             calendar: calendar
         )
-        XCTAssertEqual(days?.count, 7)
-        XCTAssertTrue(days?.contains { calendar.isDate($0.date, inSameDayAs: now) } ?? false)
-        XCTAssertFalse(days?.contains { $0.date < calendar.startOfDay(for: utcDate(2026, 8, 16, calendar: calendar)) } ?? true)
-    }
+        XCTAssertEqual(tokens[hour], 1000)
 
-    /// No billing-cycle signal → no Daily Budget at all. A calendar-month
-    /// fallback would silently paint the wrong pool.
-    func testDailyBudgetDaysNilWithoutCycleDates() {
-        let calendar = utcCalendar()
-        let days = CursorUsageClient.dailyBudgetDays(
-            events: [event(at: utcDate(2026, 8, 23, hour: 10, calendar: calendar), chargedCents: 100)],
-            planLimitUSD: 20,
-            usedPercent: 4,
-            billingCycleStart: nil,
-            billingCycleEnd: nil,
-            now: utcDate(2026, 8, 23, hour: 12, calendar: calendar),
+        let quota = CursorUsageClient.quotaHourWeights(
+            fromEvents: events,
+            dayStart: dayStart,
+            planLimitUSD: 400,
             calendar: calendar
         )
-        XCTAssertNil(days)
+        XCTAssertLessThan(quota[hour], 2.0)
     }
 }

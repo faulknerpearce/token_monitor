@@ -12,6 +12,12 @@ final class AuthSessionService: ProviderAuthSession {
         "x-session", "xai", "oidc", "refresh", "access"
     ]
 
+    /// The grok.com/xAI session cookies the usage requests send. Narrowing the
+    /// persisted jar to these keeps an X/Twitter session (`auth_token`, `ct0`)
+    /// out of `auth_session.dat`; when none is present the capture falls back to
+    /// the full domain jar so sign-in still works.
+    static let essentialCookieNames: Set<String> = ["sso", "sso-rw"]
+
     init() {
         super.init(
             config: ProviderAuthConfig(
@@ -26,15 +32,19 @@ final class AuthSessionService: ProviderAuthSession {
         )
     }
 
-    private static func grokPolicy() -> WebKitCookieCapture.Policy {
+    static func grokPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: grokHosts) },
+            isPreferredSessionCookie: { cookie in
+                Self.essentialCookieNames.contains(cookie.name.lowercased())
+            },
             looksLikeAuthCookie: { cookie in
                 let name = cookie.name.lowercased()
                 guard Self.authCookieHints.contains(where: { name.contains($0) }) else { return false }
                 return cookie.isSecure || cookie.isHTTPOnly
             },
             includeAllDomainCookiesWhenSessionFound: true,
+            essentialCookieNames: Self.essentialCookieNames,
             maxAttempts: 4,
             failureMessage: "No session cookies found. Finish signing in, then click Capture Session."
         )

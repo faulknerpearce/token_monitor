@@ -5,16 +5,18 @@ import SwiftUI
 @main
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    @StateObject private var menuBar: MenuBarController
+
+    init() {
+        let model = AppModel()
+        _model = StateObject(wrappedValue: model)
+        // Owns the NSStatusItem + NSPopover that replace MenuBarExtra, so a click
+        // on a provider's menu bar graph opens that provider's dropdown section.
+        _menuBar = StateObject(wrappedValue: MenuBarController(model: model))
+    }
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarRoot(model: model)
-        } label: {
-            MenuBarLabelContainer(model: model)
-        }
-        .menuBarExtraStyle(.window)
-
         Window("TokenMon", id: "preferences") {
             PreferencesRoot(model: model)
         }
@@ -111,6 +113,7 @@ final class AppModel: ObservableObject {
     let grokHourly = HourlyDeltaActivityStore(storageKey: "grok_hourly_today")
     let claudeHourly = HourlyDeltaActivityStore(storageKey: "claude_hourly_today")
     let claudeDaily = DailyQuotaDeltaStore(storageKey: "claude_daily_usage")
+    let cursorDaily = DailyQuotaDeltaStore(storageKey: "cursor_daily_usage")
     let grokbotHourly = HourlyDeltaActivityStore(storageKey: "grokbot_hourly_today")
     let grokbotDaily = DailyQuotaDeltaStore(storageKey: "grokbot_daily_usage")
     let poller: UsagePoller
@@ -153,7 +156,7 @@ final class AppModel: ObservableObject {
             grokHourly: grokHourly
         )
         openCodePoller = OpenCodeUsagePoller(settings: settings, auth: openCodeAuth)
-        cursorPoller = CursorUsagePoller(settings: settings, auth: cursorAuth)
+        cursorPoller = CursorUsagePoller(settings: settings, auth: cursorAuth, daily: cursorDaily)
         claudePoller = ClaudeUsagePoller(settings: settings, auth: claudeAuth, hourly: claudeHourly, daily: claudeDaily)
         chatGPTPoller = ChatGPTUsagePoller(settings: settings, auth: chatGPTAuth)
         openRouterPoller = OpenRouterUsagePoller(settings: settings, auth: openRouterAuth)
@@ -179,6 +182,7 @@ final class AppModel: ObservableObject {
         forwardChanges(from: grokHourly)
         forwardChanges(from: claudeHourly)
         forwardChanges(from: claudeDaily)
+        forwardChanges(from: cursorDaily)
         forwardChanges(from: grokbotHourly)
         forwardChanges(from: grokbotDaily)
         for (_, providerPoller) in providers.all {
@@ -293,29 +297,3 @@ private struct PreferencesRoot: View {
 }
 
 /// Observes nested services so the menu bar label refreshes on poll/settings updates.
-struct MenuBarLabelContainer: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        MenuBarLabelView(
-            selectedProvider: model.settings.selectedProvider,
-            showSelectedProvider: model.settings.showSelectedProviderInMenuBar,
-            snapshot: model.poller.snapshot,
-            openCodeSnapshot: model.openCodePoller.snapshot,
-            cursorSnapshot: model.cursorPoller.snapshot,
-            claudeSnapshot: model.claudePoller.snapshot,
-            chatGPTSnapshot: model.chatGPTPoller.snapshot,
-            openRouterSnapshot: model.openRouterPoller.snapshot,
-            grokbotSnapshot: model.grokbotPoller.snapshot,
-            isGrokSignedIn: model.auth.isSignedIn && !model.auth.needsSignIn,
-            showGrokBar: model.settings.showGrokBarInMenuBar,
-            showGrokCategories: model.settings.showCategoriesInMenuBar,
-            showOpenCodeBar: model.settings.showOpenCodeBarInMenuBar,
-            showCursorBar: model.settings.showCursorBarInMenuBar,
-            showClaudeBar: model.settings.showClaudeBarInMenuBar,
-            showGrokbotBar: model.settings.showGrokbotBarInMenuBar,
-            providerOrder: model.settings.orderedUsageProviders,
-            visibleProductIDs: model.settings.visibleProductIDs
-        )
-    }
-}
