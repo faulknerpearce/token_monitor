@@ -346,6 +346,7 @@ final class DailyBudgetTests: XCTestCase {
         let start = DailyBudget.monthlyPacePeriodStart(
             days: days,
             resetsAt: date(2026, 9, 16),
+            now: today,
             calendar: calendar
         )
         XCTAssertTrue(calendar.isDate(start!, inSameDayAs: date(2026, 8, 16)))

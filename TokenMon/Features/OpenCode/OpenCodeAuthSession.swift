@@ -23,8 +23,10 @@ final class OpenCodeAuthSession: ProviderAuthSession {
                 return hints.contains { name.contains($0) }
             },
             includeAllDomainCookiesWhenSessionFound: true,
-            // OpenAuth issues a single `auth` cookie for the console.
-            essentialCookieNames: ["auth"],
+            // The console usage request sends both cookies (`auth=…; provider=…`);
+            // narrowing to `auth` alone dropped `provider` and broke workspace
+            // binding. Unrelated analytics cookies are still excluded.
+            essentialCookieNames: ["auth", "provider"],
             maxAttempts: 4,
             failureMessage: "No OpenCode console session cookie found. Finish signing in until you see your workspace, then click Capture Session."
         )
