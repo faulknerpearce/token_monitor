@@ -79,6 +79,7 @@
 		811665EA3B9506975CF1C6D7 /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E556046181C6EE06EFD5596 /* HistoryStore.swift */; };
 		855931B379EEDF03BAB71943 /* OpenRouterPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD292D52481609A3C0369D3 /* OpenRouterPanelView.swift */; };
 		86208DBEB0D029C1E2E2603D /* HistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37FC6F12B3E19C5C9A8C445 /* HistoryStoreTests.swift */; };
+		86D71E244BD09649ED14515F /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E04123306AF45F2E0DD879C /* MenuBarPanel.swift */; };
 		87F758D86BCA5AABC2B9959F /* SlimUsageTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295E6C1B0146F0086543DCB /* SlimUsageTrack.swift */; };
 		8BB76C62F022DC30E7C84C5C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A5C6B1CABD31B8A6B55C5D7 /* AppDelegate.swift */; };
 		8C1B8D193D5C61242DCE5B6B /* WebKitCookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D9F017AB73B92AB3B01F10 /* WebKitCookieStore.swift */; };
@@ -237,6 +238,7 @@
 		7C452AEAE4FAB699B18DF456 /* AppVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionTests.swift; sourceTree = "<group>"; };
 		7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokPanelView.swift; sourceTree = "<group>"; };
 		7DB9D8707EA6CA028C761114 /* BackoffTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackoffTimer.swift; sourceTree = "<group>"; };
+		7E04123306AF45F2E0DD879C /* MenuBarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanel.swift; sourceTree = "<group>"; };
 		7F8A22FFDA52059B9779F01E /* ColorPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPaletteTests.swift; sourceTree = "<group>"; };
 		85A90F5DA9774809DA84546D /* OpenCodeLimitBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLimitBar.swift; sourceTree = "<group>"; };
 		85EFE5125A1EF1DFE9803712 /* OverviewPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPanelView.swift; sourceTree = "<group>"; };
@@ -605,6 +607,7 @@
 				CC222617652A6DEB37620B31 /* CategoryRow.swift */,
 				3C4E9D4A9882DA1D0ECA5BD5 /* DailyUsageChartView.swift */,
 				22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */,
+				7E04123306AF45F2E0DD879C /* MenuBarPanel.swift */,
 				CD4C88DCF208BC0FCA1749B3 /* MenuBarPanelView.swift */,
 				A3E0CB1C6A364F5D4CD66107 /* MenuBarStatusRenderer.swift */,
 				14A89536F38C6EF369AC30C7 /* SegmentedUsageBar.swift */,
@@ -915,6 +918,7 @@
 				5D7A7A76F3B84FD799EC60D6 /* ISO8601.swift in Sources */,
 				DA58E39BFEF29D0BEB50A10B /* JSON.swift in Sources */,
 				406057DDBA0CC8F66F0EAC5C /* MenuBarController.swift in Sources */,
+				86D71E244BD09649ED14515F /* MenuBarPanel.swift in Sources */,
 				CEB8AB90691113AF7E5FEFB4 /* MenuBarPanelView.swift in Sources */,
 				5E6675043A9CDD8400400AEE /* MenuBarStatusRenderer.swift in Sources */,
 				A2273C5F2494A76B8EF40B64 /* MetricStat.swift in Sources */,
