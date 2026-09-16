@@ -49,15 +49,22 @@ final class ClaudeUsageClientTests: XCTestCase {
         XCTAssertEqual(response.fiveHour?.usedPercent, 100)
     }
 
-    /// An expired session 200s with an HTML sign-in page (or other non-JSON body);
-    /// that is an expired session, not a malformed payload.
-    func testParseNonJSONBodyIsUnauthorized() {
+    /// An expired session 200s with an HTML sign-in page; that is an expired
+    /// session, not a malformed payload.
+    func testParseHTMLBodyIsUnauthorized() {
         let html = Data("<!doctype html><html><body>Sign in to Claude</body></html>".utf8)
         XCTAssertThrowsError(try ClaudeUsageResponse.parse(html)) { error in
             XCTAssertEqual(error as? ProviderError, .unauthorized(.claude))
         }
+    }
+
+    /// A malformed body must stay transient so the poller keeps the last-good
+    /// snapshot instead of signing the user out.
+    func testParseMalformedBodyIsBadResponse() {
         XCTAssertThrowsError(try ClaudeUsageResponse.parse(Data("not json".utf8))) { error in
-            XCTAssertEqual(error as? ProviderError, .unauthorized(.claude))
+            guard let providerError = error as? ProviderError, case .badResponse = providerError else {
+                return XCTFail("expected badResponse, got \(error)")
+            }
         }
     }
 

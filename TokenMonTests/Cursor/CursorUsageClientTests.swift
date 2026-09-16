@@ -371,6 +371,17 @@ final class CursorUsageClientTests: XCTestCase {
         }
     }
 
+    /// A truncated body must stay transient so the poller keeps the last-good
+    /// snapshot instead of signing the user out.
+    func testRejectUnauthorizedBodyTreatsMalformedAsBadResponse() {
+        let truncated = Data(#"{"individualUsage":"#.utf8)
+        XCTAssertThrowsError(try CursorUsageClient.rejectUnauthorizedBody(truncated)) { error in
+            guard let providerError = error as? ProviderError, case .badResponse = providerError else {
+                return XCTFail("expected badResponse, got \(error)")
+            }
+        }
+    }
+
     /// A normal summary body must pass through untouched.
     func testRejectUnauthorizedBodyPassesNormalSummary() throws {
         let data = Data(#"{"individualUsage":{"plan":{"enabled":true,"used":0,"limit":0}}}"#.utf8)

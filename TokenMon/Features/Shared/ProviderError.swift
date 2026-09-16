@@ -138,18 +138,28 @@ enum ProviderHTTP {
 
     /// Decodes a 2xx body as a JSON object.
     ///
-    /// A non-JSON or non-object body is almost always an HTML sign-in page a
-    /// provider served after an expired-session redirect (WorkOS, Clerk), so it
-    /// maps to `.unauthorized` rather than a malformed-payload error. This is the
-    /// same rule Grokbot applies to its WorkOS HTML body.
+    /// An HTML body is a provider's sign-in page served after an expired-session
+    /// redirect (WorkOS, Clerk), so it maps to `.unauthorized`. Any other
+    /// malformed body stays transient, so the poller keeps the last-good
+    /// snapshot instead of signing the user out on a truncated response.
     static func jsonObject(
         _ data: Data,
         context: ProviderErrorContext
     ) throws -> [String: Any] {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ProviderError.unauthorized(context)
+            if looksLikeHTML(data) {
+                throw ProviderError.unauthorized(context)
+            }
+            throw ProviderError.badResponse(context, "Malformed response body")
         }
         return object
+    }
+
+    /// True when `data` looks like an HTML document (a sign-in page), as opposed
+    /// to a malformed or truncated JSON payload.
+    static func looksLikeHTML(_ data: Data) -> Bool {
+        guard let text = String(data: data.prefix(512), encoding: .utf8) else { return false }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<")
     }
 
     /// Provider payloads signal an expired session with an `error` string
