@@ -11,8 +11,32 @@ import SwiftUI
 /// to the main actor since rendering drives off SwiftUI's main-actor label.
 @MainActor
 enum MenuBarStatusRenderer {
-    private static let _cache: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
+    /// A provider's clickable span in the rendered status image, in image
+    /// coordinates. Used to open the provider's dropdown on a bar click.
+    struct Region: Equatable {
+        let provider: MonitorProvider
+        let minX: CGFloat
+        let maxX: CGFloat
+    }
+
+    /// The rendered bitmap plus the provider hit regions for the same layout.
+    struct RenderedStatus {
+        let image: NSImage
+        let regions: [Region]
+    }
+
+    private final class CachedStatus: NSObject {
+        let image: NSImage
+        let regions: [Region]
+
+        init(image: NSImage, regions: [Region]) {
+            self.image = image
+            self.regions = regions
+        }
+    }
+
+    private static let _cache: NSCache<NSString, CachedStatus> = {
+        let cache = NSCache<NSString, CachedStatus>()
         cache.countLimit = 40
         return cache
     }()
@@ -40,6 +64,51 @@ enum MenuBarStatusRenderer {
         providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>
     ) -> NSImage {
+        render(
+            selectedProvider: selectedProvider,
+            showSelectedProvider: showSelectedProvider,
+            snapshot: snapshot,
+            openCodeSnapshot: openCodeSnapshot,
+            cursorSnapshot: cursorSnapshot,
+            claudeSnapshot: claudeSnapshot,
+            chatGPTSnapshot: chatGPTSnapshot,
+            openRouterSnapshot: openRouterSnapshot,
+            grokbotSnapshot: grokbotSnapshot,
+            isGrokSignedIn: isGrokSignedIn,
+            showGrokBar: showGrokBar,
+            showGrokCategories: showGrokCategories,
+            showOpenCodeBar: showOpenCodeBar,
+            showCursorBar: showCursorBar,
+            showClaudeBar: showClaudeBar,
+            showGrokbotBar: showGrokbotBar,
+            providerOrder: providerOrder,
+            visibleProductIDs: visibleProductIDs
+        ).image
+    }
+
+    // Renders the status item plus the provider hit regions for the same layout,
+    // so a status-item click maps back to the provider whose bar it landed on.
+    // swiftlint:disable:next function_parameter_count
+    static func render(
+        selectedProvider: MonitorProvider,
+        showSelectedProvider: Bool,
+        snapshot: WeeklyUsageSnapshot?,
+        openCodeSnapshot: OpenCodeSnapshot?,
+        cursorSnapshot: CursorSnapshot?,
+        claudeSnapshot: ClaudeSnapshot?,
+        chatGPTSnapshot: ChatGPTSnapshot?,
+        openRouterSnapshot: OpenRouterSnapshot?,
+        grokbotSnapshot: GrokbotSnapshot?,
+        isGrokSignedIn: Bool,
+        showGrokBar: Bool,
+        showGrokCategories: Bool,
+        showOpenCodeBar: Bool,
+        showCursorBar: Bool,
+        showClaudeBar: Bool,
+        showGrokbotBar: Bool,
+        providerOrder: [MonitorProvider],
+        visibleProductIDs: Set<String>
+    ) -> RenderedStatus {
         ensureAppearanceObserver()
 
         let grokProducts: [ProductUsage] = {
@@ -69,10 +138,10 @@ enum MenuBarStatusRenderer {
             visibleProductIDs: visibleProductIDs
         )
         if let cached = _cache.object(forKey: cacheKey as NSString) {
-            return cached
+            return RenderedStatus(image: cached.image, regions: cached.regions)
         }
 
-        let image = _render(
+        let status = _render(
             grokProducts: grokProducts,
             selectedProvider: selectedProvider,
             showSelectedProvider: showSelectedProvider,
@@ -92,8 +161,11 @@ enum MenuBarStatusRenderer {
             showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder
         )
-        _cache.setObject(image, forKey: cacheKey as NSString)
-        return image
+        _cache.setObject(
+            CachedStatus(image: status.image, regions: status.regions),
+            forKey: cacheKey as NSString
+        )
+        return status
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -152,7 +224,14 @@ enum MenuBarStatusRenderer {
 
     private enum CompositePiece {
         case grok
-        case solid(CompositeSolidSegment)
+        case solid(provider: MonitorProvider, segment: CompositeSolidSegment)
+
+        var provider: MonitorProvider {
+            switch self {
+            case .grok: return .grok
+            case let .solid(provider, _): return provider
+            }
+        }
     }
 
     private static func compositePieces(
@@ -191,7 +270,7 @@ enum MenuBarStatusRenderer {
                 pieces.append(.grok)
             case .cursor:
                 guard showCursorBar else { continue }
-                pieces.append(.solid(solid(
+                pieces.append(.solid(provider: .cursor, segment: solid(
                     used: cursorSnapshot?.usedPercent,
                     color: ConcentricUsageRingView.cursorSRGB.nsColor,
                     icon: ProviderLogo.cursor,
@@ -199,7 +278,7 @@ enum MenuBarStatusRenderer {
                 )))
             case .opencode:
                 guard showOpenCodeBar else { continue }
-                pieces.append(.solid(solid(
+                pieces.append(.solid(provider: .opencode, segment: solid(
                     used: openCodeSnapshot?.primaryUsedPercent,
                     color: NSColor(calibratedRed: 0.90, green: 0.45, blue: 0.20, alpha: 1),
                     icon: ProviderLogo.openCode,
@@ -207,7 +286,7 @@ enum MenuBarStatusRenderer {
                 )))
             case .claude:
                 guard showClaudeBar else { continue }
-                pieces.append(.solid(solid(
+                pieces.append(.solid(provider: .claude, segment: solid(
                     used: claudeSnapshot?.headlineUsedPercent,
                     color: ConcentricUsageRingView.claudeSRGB.nsColor,
                     icon: ProviderLogo.claude,
@@ -215,7 +294,7 @@ enum MenuBarStatusRenderer {
                 )))
             case .grokbot:
                 guard showGrokbotBar else { continue }
-                pieces.append(.solid(solid(
+                pieces.append(.solid(provider: .grokbot, segment: solid(
                     used: grokbotSnapshot?.usedPercent,
                     color: ConcentricUsageRingView.grokbotSRGB.nsColor,
                     icon: ProviderLogo.grokbot,
@@ -248,7 +327,7 @@ enum MenuBarStatusRenderer {
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider]
-    ) -> NSImage {
+    ) -> RenderedStatus {
         if showSelectedProvider {
             return renderSelectedProvider(
                 selectedProvider,
@@ -330,19 +409,21 @@ enum MenuBarStatusRenderer {
             switch piece {
             case .grok:
                 width += grokBlockWidth
-            case let .solid(segment):
+            case let .solid(_, segment):
                 width += iconSize + gap + segment.textSize.width + gap + barWidth
             }
         }
 
         width = ceil(width + 2)
         let size = NSSize(width: max(width, 20), height: height)
-        return makeImage(size: size) {
+        var regions: [Region] = []
+        let image = makeImage(size: size) {
             var x: CGFloat = 0
             let midY = height / 2
 
             for (index, piece) in pieces.enumerated() {
                 if index > 0 { x += segmentGap }
+                let pieceStart = x
                 switch piece {
                 case .grok:
                     drawGrokIcon(in: NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize))
@@ -380,7 +461,7 @@ enum MenuBarStatusRenderer {
                             x += item.size.width
                         }
                     }
-                case let .solid(segment):
+                case let .solid(_, segment):
                     let iconRect = NSRect(x: x, y: midY - iconSize / 2, width: iconSize, height: iconSize)
                     drawProviderIcon(segment.icon, in: iconRect, inset: segment.iconInset)
                     x += iconSize + gap
@@ -395,8 +476,16 @@ enum MenuBarStatusRenderer {
                     drawSolidBar(in: barRect, usedPercent: segment.usedPercent ?? 0, color: segment.color)
                     x += barWidth
                 }
+                regions.append(Region(provider: piece.provider, minX: pieceStart, maxX: x))
             }
         }
+        return RenderedStatus(image: image, regions: regions)
+    }
+
+    /// Maps a pointer x (in status-image coordinates) to the provider whose
+    /// segment contains it, so a bar click opens that provider's dropdown.
+    static func provider(atX x: CGFloat, in regions: [Region]) -> MonitorProvider? {
+        regions.first { x >= $0.minX && x <= $0.maxX }?.provider
     }
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
@@ -415,7 +504,7 @@ enum MenuBarStatusRenderer {
         openRouterSnapshot: OpenRouterSnapshot?,
         grokbotSnapshot: GrokbotSnapshot?,
         isGrokSignedIn: Bool
-    ) -> NSImage {
+    ) -> RenderedStatus {
         let height: CGFloat = 22
         let iconSize: CGFloat = 16
         let gap: CGFloat = 7
@@ -452,7 +541,7 @@ enum MenuBarStatusRenderer {
         let width = ceil(barX + barWidth + 2)
 
         let size = NSSize(width: max(width, 20), height: height)
-        return makeImage(size: size) {
+        let image = makeImage(size: size) {
             let midY = height / 2
             let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
             drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
@@ -465,6 +554,11 @@ enum MenuBarStatusRenderer {
                 color: providerAccent(provider)
             )
         }
+        // The single-provider label is one provider's whole bar.
+        return RenderedStatus(
+            image: image,
+            regions: [Region(provider: provider, minX: 0, maxX: size.width)]
+        )
     }
 
     /// Bake a bitmap via `NSBitmapImageRep`; `lockFocus` can produce an empty image

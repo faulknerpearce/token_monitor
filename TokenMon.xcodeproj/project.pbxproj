@@ -42,6 +42,7 @@
 		3D1CA4A9AF09623D3E343004 /* CursorAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED36AE2584D7EB89D2F38BC /* CursorAuthSession.swift */; };
 		3F4D8F82AFD4D3993B37CC29 /* DailyQuotaDeltaStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06D2986FD8F4702604E852D /* DailyQuotaDeltaStoreTests.swift */; };
 		404713A354B6A8F71295AF31 /* FileBackedStringStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */; };
+		406057DDBA0CC8F66F0EAC5C /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */; };
 		42C8875C17360F7FD10EC91E /* DailyBudget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28EC6D5B67D08C3107DCBD35 /* DailyBudget.swift */; };
 		433B2FEACC4CCD5241D0DAA6 /* ColorPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8A22FFDA52059B9779F01E /* ColorPaletteTests.swift */; };
 		43AD17BBF1053D89C6FC6425 /* ProviderAuthSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585A7CA4EC26E9EC85F11B08 /* ProviderAuthSessionTests.swift */; };
@@ -136,7 +137,6 @@
 		DDF4ECFB095899864828DE3C /* UsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11611A9328AF1EECD2E0A93C /* UsageModels.swift */; };
 		E141DD24CE9930A269665594 /* CursorUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E17B841EF448C0AF47E291 /* CursorUsageClientTests.swift */; };
 		E2B7FFB468F2D30856670B81 /* OpenCodeLimitBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A90F5DA9774809DA84546D /* OpenCodeLimitBar.swift */; };
-		E915F187288D1275E7F37F06 /* MenuBarLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6AC35F4CA9880F1717E452 /* MenuBarLabelView.swift */; };
 		EAF6DBB0C67989D2A7900BF1 /* SegmentedUsageBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A89536F38C6EF369AC30C7 /* SegmentedUsageBar.swift */; };
 		EB1CF81AA2469CEC513A247A /* OpenRouterUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6477629704DECD1265006252 /* OpenRouterUsagePoller.swift */; };
 		ECF4D935AA82598C077C7045 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0D256F75FC792D8E73069426 /* PrivacyInfo.xcprivacy */; };
@@ -191,6 +191,7 @@
 		1E5C44595A52641A03B41C72 /* UsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageClient.swift; sourceTree = "<group>"; };
 		1EAAAEF33F777C3DC9A5FFD4 /* AuthenticatedRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedRequestTests.swift; sourceTree = "<group>"; };
 		20CC9D28BC66E69522E91B11 /* OpenCodeConsoleClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeConsoleClientTests.swift; sourceTree = "<group>"; };
+		22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		24166148544CA5C059FC8F1F /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		28EC6D5B67D08C3107DCBD35 /* DailyBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudget.swift; sourceTree = "<group>"; };
 		2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcentricUsageRingView.swift; sourceTree = "<group>"; };
@@ -270,7 +271,6 @@
 		B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBackedStringStore.swift; sourceTree = "<group>"; };
 		BDF40560D85850DB0EC7F326 /* HourlyDeltaActivityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlyDeltaActivityStoreTests.swift; sourceTree = "<group>"; };
 		BF58255DAC5BC7E940010E74 /* JSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTests.swift; sourceTree = "<group>"; };
-		BF6AC35F4CA9880F1717E452 /* MenuBarLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelView.swift; sourceTree = "<group>"; };
 		C16C9B6ED2EA4419F6622D08 /* HourlyDeltaActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlyDeltaActivityStore.swift; sourceTree = "<group>"; };
 		C31933106A9D643D9A424D46 /* OverviewHourlyUsageChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewHourlyUsageChart.swift; sourceTree = "<group>"; };
 		C3E3A7943BED7C1C7868926A /* BillingPeriodWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingPeriodWindowTests.swift; sourceTree = "<group>"; };
@@ -604,7 +604,7 @@
 			children = (
 				CC222617652A6DEB37620B31 /* CategoryRow.swift */,
 				3C4E9D4A9882DA1D0ECA5BD5 /* DailyUsageChartView.swift */,
-				BF6AC35F4CA9880F1717E452 /* MenuBarLabelView.swift */,
+				22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */,
 				CD4C88DCF208BC0FCA1749B3 /* MenuBarPanelView.swift */,
 				A3E0CB1C6A364F5D4CD66107 /* MenuBarStatusRenderer.swift */,
 				14A89536F38C6EF369AC30C7 /* SegmentedUsageBar.swift */,
@@ -914,7 +914,7 @@
 				299B5762DBAA0D2EED375F6D /* HourlyDeltaActivityStore.swift in Sources */,
 				5D7A7A76F3B84FD799EC60D6 /* ISO8601.swift in Sources */,
 				DA58E39BFEF29D0BEB50A10B /* JSON.swift in Sources */,
-				E915F187288D1275E7F37F06 /* MenuBarLabelView.swift in Sources */,
+				406057DDBA0CC8F66F0EAC5C /* MenuBarController.swift in Sources */,
 				CEB8AB90691113AF7E5FEFB4 /* MenuBarPanelView.swift in Sources */,
 				5E6675043A9CDD8400400AEE /* MenuBarStatusRenderer.swift in Sources */,
 				A2273C5F2494A76B8EF40B64 /* MetricStat.swift in Sources */,
