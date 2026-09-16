@@ -849,28 +849,14 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertGreaterThan(preview.inputTokens, 0)
     }
 
-    /// The weekly and monthly Daily Budget series must not share a denominator:
-    /// a weekly bar is 1/7 of the weekly allocation, a monthly bar is a slice of
-    /// the subscription month.
-    func testWeekAndMonthDailyBudgetsUseDifferentDenominators() throws {
+    /// The OpenCode Daily Budget is the subscription month (100% / ~30 days,
+    /// about 3% per day), not a weekly cadence.
+    func testMonthlyDailyBudgetUsesSubscriptionMonthDenominator() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 12))!
-        let weeklyReset = calendar.date(from: DateComponents(year: 2026, month: 8, day: 23, hour: 0))!
         let monthlyReset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 0))!
 
-        let weekly = try XCTUnwrap(
-            OpenCodeLocalStats.weekDailyBudgetDays(
-                limitUSD: 30,
-                usedPercent: 20,
-                periodResetsAt: weeklyReset,
-                daysInPeriod: 7,
-                now: now,
-                spentByDay: [:],
-                dbURL: dbURL,
-                calendar: calendar
-            )
-        )
         let monthly = try XCTUnwrap(
             OpenCodeLocalStats.monthDailyBudgetDays(
                 limitUSD: 60,
@@ -883,22 +869,7 @@ final class OpenCodeStatsTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(weekly.first?.budgetUSD ?? 0, 100.0 / 7, accuracy: 0.001)
         XCTAssertEqual(monthly.days.first?.budgetUSD ?? 0, 100.0 / 31, accuracy: 0.01)
-        XCTAssertNotEqual(weekly.first?.budgetUSD, monthly.days.first?.budgetUSD)
-    }
-
-    /// Without a weekly reset there is no weekly series (a calendar week is
-    /// never substituted).
-    func testWeekDailyBudgetRefusesMissingReset() {
-        XCTAssertNil(
-            OpenCodeLocalStats.weekDailyBudgetDays(
-                limitUSD: 30,
-                usedPercent: 20,
-                periodResetsAt: nil,
-                spentByDay: [:],
-                dbURL: dbURL
-            )
-        )
+        XCTAssertLessThan(monthly.days.first?.budgetUSD ?? 100, 5)
     }
 }

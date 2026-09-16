@@ -9,9 +9,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
     /// Full monthly-period start matching `dailyBudgetDays` (for pace captions).
     @Published private(set) var dailyBudgetPeriodStart: Date?
-    /// Last-7 bars for the Go **weekly** window; kept separate from the monthly
-    /// series so the two cadences never share a denominator.
-    @Published private(set) var weeklyDailyBudgetDays: [DailyBudgetDay]?
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
@@ -53,7 +50,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         dayHourlyUsage = nil
         dailyBudgetDays = nil
         dailyBudgetPeriodStart = nil
-        weeklyDailyBudgetDays = nil
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
@@ -92,7 +88,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 let budget = await Self.buildDailyBudgetDays(for: snap)
                 dailyBudgetDays = budget?.days
                 dailyBudgetPeriodStart = budget?.periodStart
-                weeklyDailyBudgetDays = await Self.buildWeeklyBudgetDays(for: snap)
                 lastError = nil
                 lastRefreshedAt = Date()
                 dataSourceLabel = "OpenCode console"
@@ -128,7 +123,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             let budget = await Self.buildDailyBudgetDays(for: snap)
             dailyBudgetDays = budget?.days
             dailyBudgetPeriodStart = budget?.periodStart
-            weeklyDailyBudgetDays = await Self.buildWeeklyBudgetDays(for: snap)
             dataSourceLabel = "Local estimate"
             if cookieHeader == nil || cookieHeader?.isEmpty == true {
                 lastError = "Showing local estimate. Sign in to OpenCode for official Go usage."
@@ -166,25 +160,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         return await Task.detached(priority: .utility) {
             OpenCodeLocalStats.monthDailyBudgetDays(
                 limitUSD: monthlyLimit,
-                usedPercent: usedPercent,
-                periodResetsAt: resetsAt
-            )
-        }.value
-    }
-
-    /// Builds last-7 bars for the Go weekly window, anchored to the console
-    /// weekly reset. Returns nil when no weekly reset is known.
-    private static func buildWeeklyBudgetDays(
-        for snapshot: OpenCodeSnapshot
-    ) async -> [DailyBudgetDay]? {
-        let weekly = snapshot.windows.first { $0.kind == .weekly }
-        let weeklyLimit = weekly?.limitUSD ?? OpenCodeWindowKind.weekly.defaultLimitUSD
-        guard weeklyLimit > 0 else { return nil }
-        let usedPercent = weekly?.usedPercent ?? 0
-        let resetsAt = weekly?.resetsAt
-        return await Task.detached(priority: .utility) {
-            OpenCodeLocalStats.weekDailyBudgetDays(
-                limitUSD: weeklyLimit,
                 usedPercent: usedPercent,
                 periodResetsAt: resetsAt
             )

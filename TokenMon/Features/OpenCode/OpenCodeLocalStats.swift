@@ -712,6 +712,24 @@ enum OpenCodeLocalStats {
         return dailySpendsByDay(rows: monthRows)
     }
 
+    /// Go-plan USD spend per calendar day within an explicit window, so the
+    /// per-day shape matches the console billing window.
+    static func fetchDailySpends(
+        from start: Date,
+        to end: Date,
+        dbURL: URL = databaseURL
+    ) -> [Date: Double] {
+        guard FileManager.default.fileExists(atPath: dbURL.path),
+              let db = try? openConnection(at: dbURL) else { return [:] }
+        defer { sqlite3_close(db) }
+        guard let rows = try? readAssistantMessageRows(
+            from: db,
+            startMS: Int64(start.timeIntervalSince1970 * 1000),
+            endMS: Int64(end.timeIntervalSince1970 * 1000)
+        ) else { return [:] }
+        return dailySpendsByDay(rows: rows.filter { goEligibleProvider($0.providerID) })
+    }
+
     static func dailySpendsByDay(rows: [SessionRow], calendar: Calendar = .current) -> [Date: Double] {
         var byDay: [Date: Double] = [:]
         for row in rows {
@@ -747,9 +765,26 @@ enum OpenCodeLocalStats {
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
     ) -> (days: [DailyBudgetDay], periodStart: Date)? {
+        // Prefer the console billing window when we have it. The per-day shares
+        // must cover exactly the days the monthly percent was measured over, or
+        // the rescale below spreads the console total across days outside the
+        // window and dilutes the days that are actually in it.
+        let consoleBounds = DailyBudget.subscriptionMonth(
+            knownStart: nil,
+            resetsAt: periodResetsAt,
+            now: now,
+            calendar: calendar
+        )
+
         let usdSpends: [Date: Double]
         if let spentByDay {
             usdSpends = spentByDay
+        } else if let consoleBounds {
+            usdSpends = fetchDailySpends(
+                from: consoleBounds.start,
+                to: consoleBounds.end,
+                dbURL: dbURL
+            )
         } else {
             usdSpends = (try? fetchMonthDailySpends(dbURL: dbURL, now: now)) ?? [:]
         }
@@ -792,42 +827,6 @@ enum OpenCodeLocalStats {
         }
 
         return nil
-    }
-
-    /// Builds the last-7 daily-budget bars for the Go **weekly** window.
-    ///
-    /// Separate from the monthly bars: the cadence and denominator differ, so a
-    /// weekly bar is never mixed into the subscription-month series. Returns nil
-    /// when the weekly reset is unknown (a calendar week is never substituted).
-    static func weekDailyBudgetDays(
-        limitUSD: Double,
-        usedPercent: Double = 0,
-        periodResetsAt: Date?,
-        daysInPeriod: Int = 7,
-        now: Date = Date(),
-        spentByDay: [Date: Double]? = nil,
-        dbURL: URL = databaseURL,
-        calendar: Calendar = .current
-    ) -> [DailyBudgetDay]? {
-        guard let periodResetsAt else { return nil }
-        let usdSpends: [Date: Double]
-        if let spentByDay {
-            usdSpends = spentByDay
-        } else {
-            usdSpends = (try? fetchMonthDailySpends(dbURL: dbURL, now: now)) ?? [:]
-        }
-        let spendsPercent: [Date: Double] = limitUSD > 0
-            ? usdSpends.mapValues { $0 / limitUSD * 100 }
-            : [:]
-        let anchored = scaledSpendsPercent(spendsPercent, to: usedPercent)
-        return DailyBudget.buildWeeklyWindowDays(
-            limitUSD: 100,
-            daysInPeriod: max(1, daysInPeriod),
-            resetsAt: periodResetsAt,
-            spentByDay: anchored,
-            now: now,
-            calendar: calendar
-        )
     }
 
     /// Scales per-day percentage-point spends so their sum equals the consumed
