@@ -152,14 +152,16 @@ enum DailyBudget {
         return days
     }
 
-    /// Even-pace headroom through today vs live period consumption.
+    /// Even-pace headroom vs live period consumption.
     ///
     /// `periodConsumed` is the pulled used % for the pool, not the sum of bar
-    /// spends. Pass `elapsedDaysInPeriod` so earned days match the full pool on
-    /// monthly charts.
+    /// spends. `earned` credits **completed** days only — today is still running,
+    /// so it earns nothing until it is over. Pass `completedDaysInPeriod` so
+    /// earned days match the full pool on monthly charts.
     struct PaceHeadroom: Hashable, Sendable {
         var dailyBudget: Double
-        var earnedThroughToday: Double
+        /// Pool percent earned from completed (finished) days.
+        var earned: Double
         var periodConsumed: Double
         var headroomToday: Double
     }
@@ -185,6 +187,17 @@ enum DailyBudget {
         guard today >= start else { return 0 }
         let gap = calendar.dateComponents([.day], from: start, to: today).day ?? 0
         return gap + 1
+    }
+
+    /// Completed calendar days from `periodStart` up to (but not including) today.
+    /// Today is in progress, so it has not earned a full day's share of the pool
+    /// yet — the period's last day must not be credited before it is over.
+    static func completedDaysThroughToday(
+        from periodStart: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        max(0, elapsedDaysThroughToday(from: periodStart, now: now, calendar: calendar) - 1)
     }
 
     /// Subscription / billing month bounds, never the calendar month of `now`.
@@ -327,15 +340,16 @@ enum DailyBudget {
         return max(1, Int((100.0 / daily).rounded()))
     }
 
-    /// Earned = dailyBudget × elapsed days (full period when `elapsedDaysInPeriod`
-    /// is set; otherwise sum of budgets for visible bars with `date <= today`).
-    /// Headroom = earned − consumed. Future bars do not earn. Elapsed is capped
-    /// at the period length implied by the daily share so clock skew cannot
-    /// push earned above ~100%.
+    /// Earned = dailyBudget × completed days. Today is still running, so it earns
+    /// nothing — the footer can never credit a day's share the period has not
+    /// finished. Pass `completedDaysInPeriod` for a full-period window; otherwise
+    /// the budgets of visible bars **before** today are summed. Headroom =
+    /// earned − consumed. Completed days are capped at the period length implied
+    /// by the daily share so clock skew cannot push earned above ~100%.
     static func paceHeadroom(
         days: [DailyBudgetDay],
         periodConsumed: Double,
-        elapsedDaysInPeriod: Int? = nil,
+        completedDaysInPeriod: Int? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> PaceHeadroom? {
@@ -346,18 +360,18 @@ enum DailyBudget {
             daysInPeriod(fromDailyBudget: first.budgetUSD, fallback: days.count)
         )
         let earned: Double
-        if let elapsed = elapsedDaysInPeriod {
-            let capped = min(max(0, elapsed), periodLength)
+        if let completed = completedDaysInPeriod {
+            let capped = min(max(0, completed), periodLength)
             earned = first.budgetUSD * Double(capped)
         } else {
             earned = days
-                .filter { calendar.startOfDay(for: $0.date) <= today }
+                .filter { calendar.startOfDay(for: $0.date) < today }
                 .reduce(0.0) { $0 + $1.budgetUSD }
         }
         let consumed = max(0, periodConsumed)
         return PaceHeadroom(
             dailyBudget: first.budgetUSD,
-            earnedThroughToday: earned,
+            earned: earned,
             periodConsumed: consumed,
             headroomToday: earned - consumed
         )

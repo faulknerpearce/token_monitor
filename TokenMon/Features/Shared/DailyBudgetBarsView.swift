@@ -106,19 +106,20 @@ struct DailyBudgetBarsView: View {
             days: days
         )
         // Weekly windows earn from visible bars when start is unknown;
-        // monthly requires a subscription start.
-        let elapsed: Int?
+        // monthly requires a subscription start. Only completed days earn —
+        // today's in-progress day is not credited yet.
+        let completedDays: Int?
         if let start {
-            elapsed = DailyBudget.elapsedDaysThroughToday(from: start)
+            completedDays = DailyBudget.completedDaysThroughToday(from: start)
         } else if allowancePeriod == .weekly {
-            elapsed = nil
+            completedDays = nil
         } else {
             return nil
         }
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            elapsedDaysInPeriod: elapsed
+            completedDaysInPeriod: completedDays
         )
     }
 
@@ -171,7 +172,7 @@ struct DailyBudgetBarsView: View {
 
     private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
         if pace.periodConsumed <= 0.001 {
-            if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
+            if pace.earned > pace.dailyBudget + Self.bankEpsilon {
                 return String(
                     format: "Up to %.1f%% available today from unused earlier days.",
                     pace.headroomToday
@@ -181,9 +182,9 @@ struct DailyBudgetBarsView: View {
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "Used %.0f%% with only %.1f%% available through today.",
+                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
                 pace.periodConsumed,
-                pace.earnedThroughToday
+                pace.earned
             )
         }
         if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {

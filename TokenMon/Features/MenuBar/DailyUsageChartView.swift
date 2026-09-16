@@ -28,11 +28,12 @@ struct DailyUsageChartView: View {
             )
         }
         // Billing-period week already spans the full SuperGrok pool window.
-        let elapsed = DailyBudget.elapsedDaysThroughToday(from: week.weekStart)
+        // Credit only completed days: today's in-progress day earns nothing yet.
+        let completed = DailyBudget.completedDaysThroughToday(from: week.weekStart)
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            elapsedDaysInPeriod: elapsed
+            completedDaysInPeriod: completed
         )
     }
 
@@ -86,7 +87,7 @@ struct DailyUsageChartView: View {
 
     private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
         if pace.periodConsumed <= 0.001 {
-            if pace.earnedThroughToday > pace.dailyBudget + Self.bankEpsilon {
+            if pace.earned > pace.dailyBudget + Self.bankEpsilon {
                 return String(
                     format: "Up to %.1f%% available today from unused earlier days.",
                     pace.headroomToday
@@ -96,9 +97,9 @@ struct DailyUsageChartView: View {
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "Used %.0f%% with only %.1f%% available through today.",
+                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
                 pace.periodConsumed,
-                pace.earnedThroughToday
+                pace.earned
             )
         }
         if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {
