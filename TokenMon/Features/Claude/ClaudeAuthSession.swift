@@ -41,8 +41,4 @@ final class ClaudeAuthSession: ProviderAuthSession {
             )
         )
     }
-
-    nonisolated static func isClaudeDomain(_ domain: String) -> Bool {
-        Domain.matches(domain, hosts: claudeHosts)
-    }
 }

@@ -6,14 +6,15 @@ import SwiftUI
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model: AppModel
-    @StateObject private var menuBar: MenuBarController
+    /// Owns the `NSStatusItem` + dropdown that replace `MenuBarExtra`. Self-registers
+    /// in `init`, so it is retained for the app's lifetime and never read directly.
+    private let menuBar: MenuBarController
 
     init() {
         let model = AppModel()
         _model = StateObject(wrappedValue: model)
-        // Owns the NSStatusItem + NSPopover that replace MenuBarExtra, so a click
-        // on a provider's menu bar graph opens that provider's dropdown section.
-        _menuBar = StateObject(wrappedValue: MenuBarController(model: model))
+        // A click on a provider's menu bar graph opens that provider's dropdown.
+        menuBar = MenuBarController(model: model)
     }
 
     var body: some Scene {

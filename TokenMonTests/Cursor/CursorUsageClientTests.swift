@@ -41,8 +41,6 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(snap.planLimitUSD ?? -1, 400, accuracy: 0.01)
         XCTAssertEqual(snap.membershipType, "ultra")
         XCTAssertEqual(snap.displayPlanName, "Cursor Ultra")
-        XCTAssertNotNil(snap.pools[0].pace)
-        XCTAssertEqual(snap.pools[0].pace?.isReserve, true)
 
         // Daily Budget and event clipping key off these parsed dates, so assert
         // them rather than only the percents.
@@ -110,18 +108,6 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(snap.planUsedUSD ?? -1, 25, accuracy: 0.01)
         XCTAssertEqual(snap.planLimitUSD ?? -1, 100, accuracy: 0.01)
         XCTAssertEqual(snap.pools.count, 1)
-    }
-
-    func testPaceReserveMath() {
-        let start = Date(timeIntervalSince1970: 0)
-        let end = Date(timeIntervalSince1970: 100)
-        // 50% elapsed → expected 50% used. Actual 20% → 30% reserve.
-        let now = Date(timeIntervalSince1970: 50)
-        let pace = CursorPace.compute(usedPercent: 20, cycleStart: start, cycleEnd: end, now: now)
-        XCTAssertEqual(pace?.expectedUsedPercent ?? -1, 50, accuracy: 0.01)
-        XCTAssertEqual(pace?.deltaPercent ?? -1, 30, accuracy: 0.01)
-        XCTAssertEqual(pace?.paceLabel, "30% in reserve")
-        XCTAssertEqual(pace?.willLastUntilReset, true)
     }
 
     func testAggregateCostStats() {

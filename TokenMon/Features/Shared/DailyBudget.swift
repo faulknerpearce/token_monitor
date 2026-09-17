@@ -376,4 +376,34 @@ enum DailyBudget {
             headroomToday: earned - consumed
         )
     }
+
+    /// Footer caption for a pace headroom. Shared by the Grok daily-use chart and
+    /// the weekly/monthly bars so the wording and thresholds cannot drift.
+    static func paceCaption(_ pace: PaceHeadroom) -> String? {
+        /// Headroom meaningfully above one daily share → show the banked caption.
+        let bankEpsilon = 0.05
+        if pace.periodConsumed <= 0.001 {
+            if pace.earned > pace.dailyBudget + bankEpsilon {
+                return String(
+                    format: "Up to %.1f%% available today from unused earlier days.",
+                    pace.headroomToday
+                )
+            }
+            return nil
+        }
+        if pace.headroomToday < 0 {
+            return String(
+                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
+                pace.periodConsumed,
+                pace.earned
+            )
+        }
+        if pace.headroomToday > pace.dailyBudget + bankEpsilon {
+            return String(
+                format: "%.1f%% still available today from unused earlier days.",
+                pace.headroomToday
+            )
+        }
+        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
+    }
 }

@@ -76,8 +76,6 @@ struct DailyBudgetBarsView: View {
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
-    /// Headroom meaningfully above one daily share → show banked caption.
-    private static let bankEpsilon = 0.05
 
     /// Render a day reliably (weekday + day-of-month), cached per calendar.
     private static let formatterCacheLock = NSLock()
@@ -125,7 +123,7 @@ struct DailyBudgetBarsView: View {
 
     private var footerCaption: String? {
         if let pace {
-            return paceCaption(pace)
+            return DailyBudget.paceCaption(pace)
         }
         // Fallback when no live used % was passed.
         if days.allSatisfy({ $0.spentUSD <= 0.001 }) {
@@ -168,32 +166,6 @@ struct DailyBudgetBarsView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-    }
-
-    private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
-        if pace.periodConsumed <= 0.001 {
-            if pace.earned > pace.dailyBudget + Self.bankEpsilon {
-                return String(
-                    format: "Up to %.1f%% available today from unused earlier days.",
-                    pace.headroomToday
-                )
-            }
-            return nil
-        }
-        if pace.headroomToday < 0 {
-            return String(
-                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
-                pace.periodConsumed,
-                pace.earned
-            )
-        }
-        if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {
-            return String(
-                format: "%.1f%% still available today from unused earlier days.",
-                pace.headroomToday
-            )
-        }
-        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
     }
 
     private func dayColumn(_ day: DailyBudgetDay) -> some View {

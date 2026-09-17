@@ -56,8 +56,4 @@ final class ChatGPTAuthSession: ProviderAuthSession {
             )
         )
     }
-
-    nonisolated static func isChatGPTDomain(_ domain: String) -> Bool {
-        Domain.matches(domain, hosts: chatgptHosts)
-    }
 }

@@ -14,62 +14,12 @@ enum CursorPoolKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// Pace vs even-consumption budget across the billing cycle.
-struct CursorPace: Hashable, Sendable {
-    /// Even-rate expected used % at `now`.
-    var expectedUsedPercent: Double
-    /// `expected - actual`. Positive = reserve (ahead), negative = deficit.
-    var deltaPercent: Double
-    var willLastUntilReset: Bool
-
-    var isReserve: Bool { deltaPercent > 2 }
-    var isDeficit: Bool { deltaPercent < -2 }
-
-    var paceLabel: String {
-        if isReserve {
-            return "\(Int(deltaPercent.rounded()))% in reserve"
-        }
-        if isDeficit {
-            return "\(Int((-deltaPercent).rounded()))% in deficit"
-        }
-        return "On pace"
-    }
-
-    var forecastLabel: String {
-        willLastUntilReset ? "Lasts until reset" : "May run out before reset"
-    }
-
-    static func compute(
-        usedPercent: Double,
-        cycleStart: Date?,
-        cycleEnd: Date?,
-        now: Date = Date()
-    ) -> CursorPace? {
-        guard let start = cycleStart, let end = cycleEnd, end > start else { return nil }
-        let duration = end.timeIntervalSince(start)
-        let elapsed = now.timeIntervalSince(start)
-        guard duration > 0 else { return nil }
-        // Hide pace until a few percent of the cycle has elapsed.
-        let fraction = min(1, max(0, elapsed / duration))
-        guard fraction >= 0.03 else { return nil }
-
-        let expected = fraction * 100
-        let delta = expected - usedPercent
-        let projectedEnd = usedPercent / fraction
-        return CursorPace(
-            expectedUsedPercent: expected,
-            deltaPercent: delta,
-            willLastUntilReset: projectedEnd <= 100.5
-        )
-    }
-}
-
+/// One Cursor quota pool (total / auto / API).
 struct CursorPoolUsage: Identifiable, Hashable, Sendable {
     var kind: CursorPoolKind
     /// 0…100 used (matches Cursor dashboard percent fields).
     var usedPercent: Double
     var resetsAt: Date?
-    var pace: CursorPace?
 
     var id: CursorPoolKind { kind }
 

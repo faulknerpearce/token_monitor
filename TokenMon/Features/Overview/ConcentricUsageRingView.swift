@@ -7,18 +7,18 @@ struct ConcentricUsageRingView: View {
     let openCodePercent: Double?
     let cursorPercent: Double?
 
-    static let grokColor = SRGB(red: 0.11, green: 0.38, blue: 0.82).color.opacity(0.85)
-    static let openCodeColor = ModelPalette.orange.color.opacity(0.78)
+    static let grokColor = ProviderAccent.grok.color.opacity(0.85)
+    static let openCodeColor = ProviderAccent.openCode.color.opacity(0.78)
     /// Canonical Cursor sRGB, shared with other renderers (e.g. the menu bar icon).
-    static let cursorSRGB = SRGB(red: 0.18, green: 0.53, blue: 0.38)
+    static let cursorSRGB = ProviderAccent.cursor
     static let cursorColor = cursorSRGB.color.opacity(0.85)
-    static let claudeSRGB = SRGB(red: 0.85, green: 0.47, blue: 0.34)
+    static let claudeSRGB = ProviderAccent.claude
     static let claudeColor = claudeSRGB.color.opacity(0.85)
-    static let chatgptColor = SRGB(red: 0.16, green: 0.52, blue: 0.46).color.opacity(0.85)
-    static let openRouterColor = SRGB(red: 0.45, green: 0.36, blue: 0.90).color.opacity(0.85)
+    static let chatgptColor = ProviderAccent.chatGPT.color.opacity(0.85)
+    static let openRouterColor = ProviderAccent.openRouter.color.opacity(0.85)
     /// Grok Bot brand graphite; stays legible as a bar fill without colliding with
     /// Grok navy or Cursor green.
-    static let grokbotSRGB = SRGB(red: 0.38, green: 0.42, blue: 0.50)
+    static let grokbotSRGB = ProviderAccent.grokbot
     static let grokbotColor = grokbotSRGB.color.opacity(0.85)
 
     private let size: CGFloat = 112

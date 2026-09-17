@@ -170,8 +170,7 @@ struct CursorUsageClient: Sendable {
             CursorPoolUsage(
                 kind: .total,
                 usedPercent: totalPercent,
-                resetsAt: cycleEnd,
-                pace: CursorPace.compute(usedPercent: totalPercent, cycleStart: cycleStart, cycleEnd: cycleEnd, now: fetchedAt)
+                resetsAt: cycleEnd
             )
         ]
         if let autoPercent {
@@ -179,8 +178,7 @@ struct CursorUsageClient: Sendable {
                 CursorPoolUsage(
                     kind: .auto,
                     usedPercent: autoPercent,
-                    resetsAt: cycleEnd,
-                    pace: CursorPace.compute(usedPercent: autoPercent, cycleStart: cycleStart, cycleEnd: cycleEnd, now: fetchedAt)
+                    resetsAt: cycleEnd
                 )
             )
         }
@@ -189,8 +187,7 @@ struct CursorUsageClient: Sendable {
                 CursorPoolUsage(
                     kind: .api,
                     usedPercent: apiPercent,
-                    resetsAt: cycleEnd,
-                    pace: CursorPace.compute(usedPercent: apiPercent, cycleStart: cycleStart, cycleEnd: cycleEnd, now: fetchedAt)
+                    resetsAt: cycleEnd
                 )
             )
         }
@@ -436,25 +433,6 @@ struct CursorUsageClient: Sendable {
     static func outputTokenCount(_ event: [String: Any]) -> Int64 {
         guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
         return safeInt64(JSON.number(tokenUsage["outputTokens"]) ?? 0)
-    }
-
-    private static func modelIdentifier(from event: [String: Any]) -> String? {
-        let directKeys = ["model", "modelName", "modelID", "modelId", "modelSlug", "model_name", "model_id"]
-        for key in directKeys {
-            if let value = event[key] as? String,
-               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return value.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if let object = event[key] as? [String: Any] {
-                for nestedKey in ["name", "id", "model", "modelName", "modelID", "modelId"] {
-                    if let value = object[nestedKey] as? String,
-                       !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                }
-            }
-        }
-        return nil
     }
 
     // MARK: - HTTP

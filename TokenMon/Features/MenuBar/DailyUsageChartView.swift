@@ -16,7 +16,6 @@ struct DailyUsageChartView: View {
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
-    private static let bankEpsilon = 0.05
 
     private var pace: DailyBudget.PaceHeadroom? {
         guard let periodUsedPercent else { return nil }
@@ -38,7 +37,7 @@ struct DailyUsageChartView: View {
     }
 
     private var footerCaption: String? {
-        if let pace, let caption = paceCaption(pace) {
+        if let pace, let caption = DailyBudget.paceCaption(pace) {
             return caption
         }
         if week.isEstimated || !week.hasDailyData {
@@ -83,32 +82,6 @@ struct DailyUsageChartView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-    }
-
-    private func paceCaption(_ pace: DailyBudget.PaceHeadroom) -> String? {
-        if pace.periodConsumed <= 0.001 {
-            if pace.earned > pace.dailyBudget + Self.bankEpsilon {
-                return String(
-                    format: "Up to %.1f%% available today from unused earlier days.",
-                    pace.headroomToday
-                )
-            }
-            return nil
-        }
-        if pace.headroomToday < 0 {
-            return String(
-                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
-                pace.periodConsumed,
-                pace.earned
-            )
-        }
-        if pace.headroomToday > pace.dailyBudget + Self.bankEpsilon {
-            return String(
-                format: "%.1f%% still available today from unused earlier days.",
-                pace.headroomToday
-            )
-        }
-        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
     }
 
     private func dayColumn(_ day: DailyUsageDay) -> some View {

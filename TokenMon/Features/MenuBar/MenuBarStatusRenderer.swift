@@ -285,7 +285,7 @@ enum MenuBarStatusRenderer {
                 // match their glyph height and keep the icon-to-text gap even.
                 pieces.append(.solid(provider: .opencode, segment: solid(
                     used: openCodeSnapshot?.primaryUsedPercent,
-                    color: NSColor(calibratedRed: 0.90, green: 0.45, blue: 0.20, alpha: 1),
+                    color: ProviderAccent.openCode.nsColor,
                     icon: ProviderLogo.openCode,
                     iconBox: 13
                 )))
@@ -613,25 +613,25 @@ enum MenuBarStatusRenderer {
         return image
     }
 
-    /// Brand accent per provider; values mirror `ConcentricUsageRingView`.
+    /// Brand accent per provider, from the shared `ProviderAccent` palette.
     private static func providerAccent(_ provider: MonitorProvider) -> NSColor {
         switch provider {
         case .overview:
             return chromeColor
         case .grok:
-            return SRGB(red: 0.11, green: 0.38, blue: 0.82).nsColor
+            return ProviderAccent.grok.nsColor
         case .opencode:
-            return ModelPalette.orange.nsColor
+            return ProviderAccent.openCode.nsColor
         case .cursor:
-            return ConcentricUsageRingView.cursorSRGB.nsColor
+            return ProviderAccent.cursor.nsColor
         case .claude:
-            return ConcentricUsageRingView.claudeSRGB.nsColor
+            return ProviderAccent.claude.nsColor
         case .chatgpt:
-            return SRGB(red: 0.16, green: 0.52, blue: 0.46).nsColor
+            return ProviderAccent.chatGPT.nsColor
         case .openrouter:
-            return SRGB(red: 0.45, green: 0.36, blue: 0.90).nsColor
+            return ProviderAccent.openRouter.nsColor
         case .grokbot:
-            return ConcentricUsageRingView.grokbotSRGB.nsColor
+            return ProviderAccent.grokbot.nsColor
         }
     }
 
