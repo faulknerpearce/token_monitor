@@ -12,23 +12,32 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     /// Last known workspace id (`wrk_…`) from redirect or prior fetch.
     @Published private(set) var workspaceID: String?
 
+    /// Console session cookie. The console authenticates separately from the
+    /// site's `auth` cookie, so this must be captured and sent to `/console/api/*`.
+    static let consoleSessionCookieName = "__host-console_session"
+
     static func openCodePolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: openCodeHosts) },
-            isPreferredSessionCookie: { $0.name.lowercased() == "auth" },
+            isPreferredSessionCookie: {
+                let name = $0.name.lowercased()
+                return name == "auth" || name == Self.consoleSessionCookieName
+            },
             looksLikeAuthCookie: { cookie in
                 let name = cookie.name.lowercased()
                 if name == "auth" || name == "session" || name == "sid" { return true }
+                if name == Self.consoleSessionCookieName { return true }
                 let hints = ["auth", "session", "token", "jwt", "sid", "account", "openid", "oauth"]
                 return hints.contains { name.contains($0) }
             },
             includeAllDomainCookiesWhenSessionFound: true,
-            // The console usage request sends both cookies (`auth=…; provider=…`);
-            // narrowing to `auth` alone dropped `provider` and broke workspace
-            // binding. Unrelated analytics cookies are still excluded.
-            essentialCookieNames: ["auth", "provider"],
+            // The console API request needs both the console session
+            // (`__Host-console_session`) and the site cookies (`auth=…; provider=…`);
+            // narrowing to `auth`/`provider` alone dropped the console session and
+            // broke workspace binding. Unrelated analytics cookies are still excluded.
+            essentialCookieNames: ["auth", "provider", Self.consoleSessionCookieName],
             maxAttempts: 4,
-            failureMessage: "No OpenCode console session cookie found. Finish signing in until you see your workspace, then click Capture Session."
+            failureMessage: "No OpenCode console session cookie found. Finish signing in until you see the console, then click Finish Sign-In."
         )
     }
 
@@ -54,9 +63,5 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     func saveWorkspaceID(_ id: String) {
         writeStore(key: "workspace", value: id)
         workspaceID = id
-    }
-
-    nonisolated static func isOpenCodeDomain(_ domain: String) -> Bool {
-        Domain.matches(domain, hosts: openCodeHosts)
     }
 }

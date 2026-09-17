@@ -42,17 +42,18 @@ final class ProviderCookieAllowlistTests: XCTestCase {
         )
     }
 
-    /// The console usage request sends `auth` and `provider`; both must be kept
-    /// while unrelated analytics cookies are dropped.
-    func testOpenCodePolicyKeepsAuthAndProviderCookies() {
+    /// The console API sends the console session (`__Host-console_session`) plus
+    /// the site cookies; all must be kept while analytics cookies are dropped.
+    func testOpenCodePolicyKeepsConsoleAndSiteCookies() {
         let cookies = [
+            cookie("__Host-console_session", value: "console", domain: "opencode.ai"),
             cookie("auth", value: "tok", domain: "opencode.ai"),
             cookie("provider", value: "wrk_abc", domain: "opencode.ai"),
             cookie("_ga", value: "tracker", domain: "opencode.ai")
         ]
         XCTAssertEqual(
             selectedNames(cookies, policy: OpenCodeAuthSession.openCodePolicy()),
-            ["auth", "provider"]
+            ["__Host-console_session", "auth", "provider"]
         )
     }
 

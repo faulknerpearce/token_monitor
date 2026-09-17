@@ -67,10 +67,10 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             do {
                 let generation = auth.sessionGeneration
                 let client = OpenCodeConsoleClient(cookieHeader: cookieHeader)
-                let (consoleSnap, workspaceID) = try await client.fetchGoUsageSnapshot(
-                    knownWorkspaceID: auth.workspaceID
+                let (consoleSnap, orgID) = try await client.fetchGoUsageSnapshot(
+                    knownOrgID: auth.workspaceID
                 )
-                auth.saveWorkspaceID(workspaceID)
+                auth.saveWorkspaceID(orgID)
 
                 let localBundle = try? await Task.detached(priority: .userInitiated) {
                     (
