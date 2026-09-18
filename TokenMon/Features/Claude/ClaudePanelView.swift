@@ -40,12 +40,15 @@ struct ClaudePanelView: View {
                 }
 
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
+                    let share = days.first?.budgetUSD ?? 0
                     PanelCard {
                         WeeklyDailyBudgetBarsView(
                             days: days,
                             accent: ConcentricUsageRingView.claudeColor,
-                            infoText: "Share of weekly allowance per day "
-                                + "(budget 14.3%/day).",
+                            infoText: String(
+                                format: "Share of weekly allowance per day (budget %.1f%%/day).",
+                                share
+                            ),
                             periodUsedPercent: snapshot.sevenDay?.usedPercent
                         )
                     }
