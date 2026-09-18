@@ -104,20 +104,20 @@ struct DailyBudgetBarsView: View {
             days: days
         )
         // Weekly windows earn from visible bars when start is unknown;
-        // monthly requires a subscription start. Only completed days earn —
-        // today's in-progress day is not credited yet.
-        let completedDays: Int?
+        // monthly requires a subscription start. Today is an elapsed day so the
+        // on-track allowance includes the current day's share.
+        let elapsedDays: Int?
         if let start {
-            completedDays = DailyBudget.completedDaysThroughToday(from: start)
+            elapsedDays = DailyBudget.elapsedDaysThroughToday(from: start)
         } else if allowancePeriod == .weekly {
-            completedDays = nil
+            elapsedDays = nil
         } else {
             return nil
         }
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            completedDaysInPeriod: completedDays
+            elapsedDaysInPeriod: elapsedDays
         )
     }
 
@@ -127,12 +127,12 @@ struct DailyBudgetBarsView: View {
         }
         // Fallback when no live used % was passed.
         if days.allSatisfy({ $0.spentUSD <= 0.001 }) {
-            return String(format: "No usage yet. Budget is %.1f%% per day.", dailyBudget)
+            return String(format: "No usage yet · %.1f%%/day", dailyBudget)
         }
         if days.contains(where: {
             Calendar.current.isDate($0.date, inSameDayAs: Date()) && $0.spentUSD > $0.budgetUSD
         }) {
-            return "Over today's daily allowance."
+            return "Over today's allowance"
         }
         return nil
     }
@@ -140,7 +140,7 @@ struct DailyBudgetBarsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: dailyBudget > 0 ? "\(title) \(Int(dailyBudget.rounded()))%" : title)
+                PanelSectionHeader(title: dailyBudget > 0 ? "\(title) \(String(format: "%.1f%%", dailyBudget))" : title)
                 if let infoText {
                     Image(systemName: "info.circle")
                         .font(.system(size: 11, weight: .regular))

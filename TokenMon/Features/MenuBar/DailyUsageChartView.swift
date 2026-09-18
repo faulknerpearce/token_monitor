@@ -27,12 +27,12 @@ struct DailyUsageChartView: View {
             )
         }
         // Billing-period week already spans the full SuperGrok pool window.
-        // Credit only completed days: today's in-progress day earns nothing yet.
-        let completed = DailyBudget.completedDaysThroughToday(from: week.weekStart)
+        // Credit days elapsed through today so the on-track allowance includes today.
+        let elapsed = DailyBudget.elapsedDaysThroughToday(from: week.weekStart)
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            completedDaysInPeriod: completed
+            elapsedDaysInPeriod: elapsed
         )
     }
 
@@ -41,7 +41,7 @@ struct DailyUsageChartView: View {
             return caption
         }
         if week.isEstimated || !week.hasDailyData {
-            return "Daily bars only show changes between samples. Week totals are above."
+            return "Bars update between polls · week totals above"
         }
         return nil
     }
@@ -49,11 +49,14 @@ struct DailyUsageChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: "Daily Budget \(Int(DailyUsageBuilder.dailyCapPercent.rounded()))%")
+                PanelSectionHeader(title: "Daily Budget \(String(format: "%.1f%%", DailyUsageBuilder.dailyCapPercent))")
                 Image(systemName: "info.circle")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(.tertiary)
-                    .help("Share of weekly allowance per day (budget 14.3%/day).")
+                    .help(String(
+                        format: "Share of weekly allowance per day (budget %.1f%%/day).",
+                        DailyUsageBuilder.dailyCapPercent
+                    ))
                 Spacer(minLength: 8)
                 PanelPill(text: week.rangeLabel)
             }

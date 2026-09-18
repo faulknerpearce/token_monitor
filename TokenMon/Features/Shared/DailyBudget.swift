@@ -155,12 +155,13 @@ enum DailyBudget {
     /// Even-pace headroom vs live period consumption.
     ///
     /// `periodConsumed` is the pulled used % for the pool, not the sum of bar
-    /// spends. `earned` credits **completed** days only — today is still running,
-    /// so it earns nothing until it is over. Pass `completedDaysInPeriod` so
-    /// earned days match the full pool on monthly charts.
+    /// spends. `earned` credits **elapsed** days through today so cumulative
+    /// consumption is compared against the allowance accrued over the same span.
+    /// Pass `elapsedDaysInPeriod` so earned days match the full pool on monthly
+    /// charts.
     struct PaceHeadroom: Hashable, Sendable {
         var dailyBudget: Double
-        /// Pool percent earned from completed (finished) days.
+        /// Pool percent earned through today (elapsed days × daily share).
         var earned: Double
         var periodConsumed: Double
         var headroomToday: Double
@@ -187,17 +188,6 @@ enum DailyBudget {
         guard today >= start else { return 0 }
         let gap = calendar.dateComponents([.day], from: start, to: today).day ?? 0
         return gap + 1
-    }
-
-    /// Completed calendar days from `periodStart` up to (but not including) today.
-    /// Today is in progress, so it has not earned a full day's share of the pool
-    /// yet — the period's last day must not be credited before it is over.
-    static func completedDaysThroughToday(
-        from periodStart: Date,
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> Int {
-        max(0, elapsedDaysThroughToday(from: periodStart, now: now, calendar: calendar) - 1)
     }
 
     /// Subscription / billing month bounds, never the calendar month of `now`.
@@ -340,16 +330,17 @@ enum DailyBudget {
         return max(1, Int((100.0 / daily).rounded()))
     }
 
-    /// Earned = dailyBudget × completed days. Today is still running, so it earns
-    /// nothing — the footer can never credit a day's share the period has not
-    /// finished. Pass `completedDaysInPeriod` for a full-period window; otherwise
-    /// the budgets of visible bars **before** today are summed. Headroom =
-    /// earned − consumed. Completed days are capped at the period length implied
-    /// by the daily share so clock skew cannot push earned above ~100%.
+    /// Earned = dailyBudget × elapsed days through today. Today counts toward the
+    /// accrued allowance so cumulative consumption is measured against the same
+    /// span of time — otherwise normal early-period usage reads as over-pace.
+    /// Pass `elapsedDaysInPeriod` for a full-period window; otherwise the budgets
+    /// of visible bars **through** today are summed. Headroom = earned − consumed.
+    /// Elapsed days are capped at the period length implied by the daily share so
+    /// clock skew cannot push earned above ~100%.
     static func paceHeadroom(
         days: [DailyBudgetDay],
         periodConsumed: Double,
-        completedDaysInPeriod: Int? = nil,
+        elapsedDaysInPeriod: Int? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> PaceHeadroom? {
@@ -360,12 +351,12 @@ enum DailyBudget {
             daysInPeriod(fromDailyBudget: first.budgetUSD, fallback: days.count)
         )
         let earned: Double
-        if let completed = completedDaysInPeriod {
-            let capped = min(max(0, completed), periodLength)
+        if let elapsed = elapsedDaysInPeriod {
+            let capped = min(max(0, elapsed), periodLength)
             earned = first.budgetUSD * Double(capped)
         } else {
             earned = days
-                .filter { calendar.startOfDay(for: $0.date) < today }
+                .filter { calendar.startOfDay(for: $0.date) <= today }
                 .reduce(0.0) { $0 + $1.budgetUSD }
         }
         let consumed = max(0, periodConsumed)
@@ -389,13 +380,14 @@ enum DailyBudget {
                     pace.headroomToday
                 )
             }
-            return nil
+            guard pace.dailyBudget > 0 else { return nil }
+            return String(format: "No usage yet · %.1f%% today", pace.dailyBudget)
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "Used %.0f%% with only %.1f%% earned from earlier days.",
+                format: "%.0f%% used · %.1f%% over pace",
                 pace.periodConsumed,
-                pace.earned
+                -pace.headroomToday
             )
         }
         if pace.headroomToday > pace.dailyBudget + bankEpsilon {
@@ -404,6 +396,9 @@ enum DailyBudget {
                 pace.headroomToday
             )
         }
-        return String(format: "%.1f%% usage left through today.", pace.headroomToday)
+        if pace.headroomToday < bankEpsilon {
+            return "On pace for today"
+        }
+        return String(format: "%.1f%% left today", pace.headroomToday)
     }
 }

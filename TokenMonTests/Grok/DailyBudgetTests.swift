@@ -177,8 +177,8 @@ final class DailyBudgetTests: XCTestCase {
 
     // MARK: paceHeadroom
 
-    /// Two completed days at 3%/day, zero API consumed → 6% headroom (banked prior).
-    /// Today is in progress and must not earn.
+    /// Three elapsed days at 3%/day, zero API consumed → 9% headroom (banked prior).
+    /// Today counts as an elapsed day.
     func testPaceHeadroomZeroConsumedBanksPriorDays() throws {
         let today = date(2026, 8, 25)
         let days = (0..<7).map { offset -> DailyBudgetDay in
@@ -197,9 +197,9 @@ final class DailyBudgetTests: XCTestCase {
         )
         let unwrapped = try XCTUnwrap(pace)
         XCTAssertEqual(unwrapped.dailyBudget, 3, accuracy: 1e-9)
-        XCTAssertEqual(unwrapped.earned, 6, accuracy: 1e-9)
+        XCTAssertEqual(unwrapped.earned, 9, accuracy: 1e-9)
         XCTAssertEqual(unwrapped.periodConsumed, 0, accuracy: 1e-9)
-        XCTAssertEqual(unwrapped.headroomToday, 6, accuracy: 1e-9)
+        XCTAssertEqual(unwrapped.headroomToday, 9, accuracy: 1e-9)
     }
 
     func testPaceHeadroomPartialConsumedReducesHeadroom() throws {
@@ -218,8 +218,8 @@ final class DailyBudgetTests: XCTestCase {
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, 6, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, 1, accuracy: 1e-9)
+        XCTAssertEqual(pace.earned, 9, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, 4, accuracy: 1e-9)
     }
 
     func testPaceHeadroomOverPaceWhenConsumedExceedsEarned() throws {
@@ -238,12 +238,12 @@ final class DailyBudgetTests: XCTestCase {
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, 6, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, -6, accuracy: 1e-9)
+        XCTAssertEqual(pace.earned, 9, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, -3, accuracy: 1e-9)
     }
 
-    func testPaceHeadroomExcludesTodayAndFutureDaysFromEarned() throws {
-        // Window: Aug 20…26; "today" is Aug 22 → only Aug 20-21 (completed) earn.
+    func testPaceHeadroomIncludesTodayExcludesFutureDaysFromEarned() throws {
+        // Window: Aug 20…26; "today" is Aug 22 → Aug 20-22 (through today) earn.
         let today = date(2026, 8, 22)
         let days = (0..<7).map { offset -> DailyBudgetDay in
             let day = date(2026, 8, 20 + offset)
@@ -259,8 +259,8 @@ final class DailyBudgetTests: XCTestCase {
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, 20, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, 20, accuracy: 1e-9)
+        XCTAssertEqual(pace.earned, 30, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, 30, accuracy: 1e-9)
     }
 
     func testPaceHeadroomNilWhenBudgetZero() {
@@ -272,7 +272,7 @@ final class DailyBudgetTests: XCTestCase {
     }
 
     /// Monthly 7-bar slice: elapsed days must come from the full period, not the window.
-    func testPaceHeadroomUsesCompletedDaysForFullPeriod() throws {
+    func testPaceHeadroomUsesElapsedDaysForFullPeriod() throws {
         let today = date(2026, 8, 25)
         // Visible bars are only the last 7 days, each ~3.226% of a 31-day month.
         let daily = 100.0 / 31.0
@@ -287,20 +287,20 @@ final class DailyBudgetTests: XCTestCase {
         let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: 20,
-            completedDaysInPeriod: 24, // Aug 1…24 completed; today is Aug 25
+            elapsedDaysInPeriod: 25, // Aug 1…25 elapsed; today is Aug 25
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, daily * 24, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, daily * 24 - 20, accuracy: 1e-9)
-        // Without completedDays, earned caps at the visible bars before today.
+        XCTAssertEqual(pace.earned, daily * 25, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, daily * 25 - 20, accuracy: 1e-9)
+        // Without elapsedDays, earned sums the visible bars through today.
         let short = try XCTUnwrap(DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: 20,
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(short.earned, daily * 6, accuracy: 1e-9)
+        XCTAssertEqual(short.earned, daily * 7, accuracy: 1e-9)
     }
 
     func testElapsedDaysThroughTodayIsInclusive() {
@@ -322,29 +322,9 @@ final class DailyBudgetTests: XCTestCase {
         )
     }
 
-    func testCompletedDaysThroughTodayExcludesToday() {
-        XCTAssertEqual(
-            DailyBudget.completedDaysThroughToday(
-                from: date(2026, 8, 1),
-                now: date(2026, 8, 25),
-                calendar: calendar
-            ),
-            24
-        )
-        // Period starts today → nothing completed yet.
-        XCTAssertEqual(
-            DailyBudget.completedDaysThroughToday(
-                from: date(2026, 8, 25),
-                now: date(2026, 8, 25),
-                calendar: calendar
-            ),
-            0
-        )
-    }
-
-    /// The period's final calendar day must not be credited before it is over.
-    /// Sep 16 (reset Sep 17) earns six of seven days, not the whole pool.
-    func testPaceHeadroomDoesNotCreditTodayOnFinalPeriodDay() throws {
+    /// Today's elapsed day is credited even on the period's final calendar day
+    /// (Sep 16, reset Sep 17): the whole pool has elapsed, so earned is 7/7 days.
+    func testPaceHeadroomCreditsTodayOnFinalPeriodDay() throws {
         let today = date(2026, 9, 16)
         let days = (0..<7).map { offset -> DailyBudgetDay in
             let day = calendar.date(byAdding: .day, value: offset - 6, to: today)!
@@ -354,21 +334,21 @@ final class DailyBudgetTests: XCTestCase {
                 budgetUSD: 100.0 / 7
             )
         }
-        let completed = DailyBudget.completedDaysThroughToday(
+        let elapsed = DailyBudget.elapsedDaysThroughToday(
             from: days[0].date,
             now: today,
             calendar: calendar
         )
-        XCTAssertEqual(completed, 6)
+        XCTAssertEqual(elapsed, 7)
         let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: 82,
-            completedDaysInPeriod: completed,
+            elapsedDaysInPeriod: elapsed,
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, 100.0 / 7 * 6, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, 100.0 / 7 * 6 - 82, accuracy: 1e-9)
+        XCTAssertEqual(pace.earned, 100.0 / 7 * 7, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, 100.0 / 7 * 7 - 82, accuracy: 1e-9)
     }
 
     func testPacePeriodStartPrefersKnownStart() {
@@ -535,7 +515,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(built.periodStart, calendar.startOfDay(for: date(2026, 8, 16)))
     }
 
-    func testPaceHeadroomZeroCompletedDaysEarnsNothing() throws {
+    func testPaceHeadroomPeriodStartCreditsToday() throws {
         let today = date(2026, 8, 25)
         let days = [
             DailyBudgetDay(date: calendar.startOfDay(for: today), spentUSD: 0, budgetUSD: 10)
@@ -543,15 +523,15 @@ final class DailyBudgetTests: XCTestCase {
         let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: 5,
-            completedDaysInPeriod: 0,
+            elapsedDaysInPeriod: 1,
             now: today,
             calendar: calendar
         ))
-        XCTAssertEqual(pace.earned, 0, accuracy: 1e-9)
-        XCTAssertEqual(pace.headroomToday, -5, accuracy: 1e-9)
+        XCTAssertEqual(pace.earned, 10, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, 5, accuracy: 1e-9)
     }
 
-    func testPaceHeadroomCapsCompletedDaysAtPeriodLength() throws {
+    func testPaceHeadroomCapsElapsedDaysAtPeriodLength() throws {
         let today = date(2026, 8, 25)
         let daily = 100.0 / 31.0
         let days = [
@@ -560,7 +540,7 @@ final class DailyBudgetTests: XCTestCase {
         let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: 50,
-            completedDaysInPeriod: 40, // beyond 31-day month
+            elapsedDaysInPeriod: 40, // beyond 31-day month
             now: today,
             calendar: calendar
         ))
