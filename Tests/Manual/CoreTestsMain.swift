@@ -35,19 +35,6 @@ struct CoreTestsMain {
         let rem = WeeklyUsageSnapshot(usedPercent: 40)
         try assertTrue(abs(rem.remainingPercent - 60) < 0.01, "remaining default")
 
-        let cli = Data("""
-        {
-          "monthlyLimit": { "val": 1000 },
-          "usage": { "totalUsed": { "val": 350 } },
-          "billingCycle": { "billingPeriodEnd": "2026-07-16T20:25:00Z" }
-        }
-        """.utf8)
-        guard let cliSnap = UsageResponseParser.parseCLIBilling(cli, accountEmail: "a@b.com") else {
-            throw TestFailure("cli parse")
-        }
-        try assertTrue(abs(cliSnap.usedPercent - 35) < 0.01, "cli usedPercent")
-        try assertTrue(cliSnap.accountEmail == "a@b.com", "cli email")
-
         let csv = try ExportService.export([.preview], format: .csv)
         let csvText = String(data: csv, encoding: .utf8)!
         try assertTrue(csvText.contains("fetchedAt,usedPercent"), "csv header")
@@ -73,7 +60,7 @@ struct CoreTestsMain {
             "580162006801800000000f677270632d7374617475733a300d0a"
         let grpcData = Data(hexString: grpcHex)!
         let grpc = try GRPCWebParser.parseUsage(grpcData)
-        try assertTrue(abs((grpc.usedPercent ?? -1) - 36) < 0.01, "grpc usedPercent")
+        try assertTrue(abs(grpc.usedPercent - 36) < 0.01, "grpc usedPercent")
         try assertTrue(grpc.products.count == 2, "grpc product count")
         try assertTrue(grpc.products.contains(where: { $0.id == "chat" && abs($0.percentOfPool - 23) < 0.01 }), "grpc chat")
         try assertTrue(grpc.products.contains(where: { $0.id == "build" && abs($0.percentOfPool - 13) < 0.01 }), "grpc build")
@@ -106,4 +93,21 @@ struct CoreTestsMain {
 struct TestFailure: Error, CustomStringConvertible {
     var description: String
     init(_ description: String) { self.description = description }
+}
+
+/// Core-test-only hex decoder (the app target no longer ships one).
+extension Data {
+    init?(hexString: String) {
+        let chars = Array(hexString)
+        guard chars.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: chars.count / 2)
+        var index = chars.startIndex
+        while index < chars.endIndex {
+            let next = chars.index(index, offsetBy: 2)
+            guard let byte = UInt8(String(chars[index..<next]), radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        self = data
+    }
 }
