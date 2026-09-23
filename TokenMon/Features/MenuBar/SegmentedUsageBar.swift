@@ -25,25 +25,37 @@ struct SegmentedUsageBar: View {
             let gapTotal = segmentGap * CGFloat(max(0, slotCount - 1))
             let usable = max(0, geo.size.width - gapTotal)
 
+            let widths = Self.segmentWidths(
+                percents: visible.map(\.percentOfPool) + (remainder > 0.5 ? [remainder] : []),
+                usable: usable,
+                minWidth: minSegmentWidth
+            )
+
             HStack(spacing: segmentGap) {
-                ForEach(visible) { product in
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, product in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(Color.product(product.colorToken))
-                        .frame(
-                            width: max(
-                                minSegmentWidth,
-                                usable * CGFloat(product.percentOfPool / 100)
-                            ),
-                            height: height
-                        )
+                        .frame(width: widths[index], height: height)
                 }
-                if remainder > 0.5 {
+                if remainder > 0.5, let remainderWidth = widths.last {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(Color.usageRemainingTrack)
-                        .frame(width: max(minSegmentWidth, usable * CGFloat(remainder / 100)), height: height)
+                        .frame(width: remainderWidth, height: height)
                 }
             }
         }
         .frame(height: height)
+    }
+
+    /// Segment widths that sum to at most `usable`: proportional to `percents`,
+    /// each floored at `minWidth`, then scaled down when the floors together
+    /// overflow the track (several tiny slices would otherwise compress or spill
+    /// past `usable`).
+    static func segmentWidths(percents: [Double], usable: CGFloat, minWidth: CGFloat) -> [CGFloat] {
+        let clamped = percents.map { max(minWidth, usable * CGFloat(max(0, $0) / 100)) }
+        let total = clamped.reduce(0, +)
+        guard usable > 0, total > usable else { return clamped }
+        let scale = usable / total
+        return clamped.map { $0 * scale }
     }
 }

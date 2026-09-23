@@ -54,27 +54,31 @@ struct OpenCodePanelView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 0) {
-                    PanelSectionHeader(title: "Stats")
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
-                    OpenCodeStatsRow(
-                        monthlySpendUSD: snapshot.monthlyEstimatedUSD,
-                        totalTokens: snapshot.monthlyTokens,
-                        inputTokens: snapshot.monthlyInputTokens,
-                        outputTokens: snapshot.monthlyOutputTokens
+                // Only show Stats when the local session DB supplied data; a
+                // console-only snapshot would otherwise render $0.00 / 0 tokens.
+                if snapshot.hasLocalStats {
+                    VStack(alignment: .leading, spacing: 0) {
+                        PanelSectionHeader(title: "Stats")
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                        OpenCodeStatsRow(
+                            monthlySpendUSD: snapshot.monthlyEstimatedUSD,
+                            totalTokens: snapshot.monthlyTokens,
+                            inputTokens: snapshot.monthlyInputTokens,
+                            outputTokens: snapshot.monthlyOutputTokens
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                     )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                )
 
                 if auth.needsSignIn || poller.lastError != nil {
                     if let err = poller.lastError {

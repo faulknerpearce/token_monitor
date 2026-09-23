@@ -62,7 +62,11 @@ struct DailyUsageChartView: View {
             }
 
             HStack(spacing: 8) {
-                weekNavButton(systemName: "chevron.left", action: onPreviousWeek)
+                weekNavButton(
+                    systemName: "chevron.left",
+                    action: onPreviousWeek,
+                    disabled: onPreviousWeek == nil
+                )
                 Spacer(minLength: 0)
                 weekNavButton(
                     systemName: "chevron.right",

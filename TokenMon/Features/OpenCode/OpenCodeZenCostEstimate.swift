@@ -75,16 +75,6 @@ enum OpenCodeZenCostEstimate {
         "muse-spark": Rates(input: 0.40, output: 1.60, cacheRead: 0.04, cacheWrite: 0.50)
     ]
 
-    private static let freeModelIDs: Set<String> = [
-        "big-pickle",
-        "deepseek-v4-flash-free",
-        "mimo-v2.5-free",
-        "laguna-s-2.1-free",
-        "ling-3.0-flash-free",
-        "north-mini-code-free",
-        "nemotron-3-ultra-free"
-    ]
-
     static func isPlanProvider(_ providerID: String) -> Bool {
         providerID.lowercased() == "opencode" || providerID.lowercased() == "opencode-go"
     }
@@ -116,7 +106,10 @@ enum OpenCodeZenCostEstimate {
             cacheReadTokens: cacheReadTokens,
             cacheWriteTokens: cacheWriteTokens
         )
-        return (value, freeModelIDs.contains(modelID.lowercased()))
+        // Any token-derived value is an estimate (recorded cost was zero), so it
+        // must carry the `~` prefix. A free model with no rate entry estimates to
+        // 0 and stays unmarked.
+        return (value, value > 0)
     }
 
     static func estimate(

@@ -261,6 +261,36 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(OpenCodeWindowUsage.clampedPercent(usedUSD: 3, limitUSD: 0), 0, accuracy: 0.01)
     }
 
+    func testHasLocalStatsReflectsLocalContribution() {
+        // A console-only snapshot carries no local models/tokens.
+        let consoleOnly = OpenCodeConsoleClient.snapshot(from: OpenCodeGoMeters(), now: Date())
+        XCTAssertFalse(consoleOnly.hasLocalStats)
+
+        let withModels = OpenCodeSnapshot(
+            windows: [],
+            models: [
+                OpenCodeModelUsage(
+                    providerID: "opencode-go",
+                    modelID: "minimax-m3",
+                    sessionCount: 1,
+                    inputTokens: 100,
+                    outputTokens: 10,
+                    cacheReadTokens: 0,
+                    cacheWriteTokens: 0,
+                    costUSD: 0,
+                    percentOfWindow: 0
+                )
+            ],
+            modelsWindowLabel: "",
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            totalSessions: 0
+        )
+        XCTAssertTrue(withModels.hasLocalStats)
+    }
+
     func testWindowLabelsAndLimits() {
         XCTAssertEqual(OpenCodeWindowKind.rolling5h.label, "5-Hour")
         XCTAssertEqual(OpenCodeWindowKind.weekly.label, "Weekly")

@@ -173,12 +173,31 @@ final class MenuBarStatusRendererTests: XCTestCase {
         )
     }
 
+    /// A disabled provider must not leave a frozen segment in the composite.
+    func testCompositeOmitsDisabledProviderRegion() {
+        let enabled = renderStatus(
+            provider: .grok,
+            showSelectedProvider: false,
+            claude: makeClaudeSnapshot()
+        )
+        XCTAssertTrue(enabled.regions.map(\.provider).contains(.claude))
+
+        let disabled = renderStatus(
+            provider: .grok,
+            showSelectedProvider: false,
+            claude: makeClaudeSnapshot(),
+            enabledProviders: Set(MonitorProvider.usageProviders).subtracting([.claude])
+        )
+        XCTAssertFalse(disabled.regions.map(\.provider).contains(.claude))
+    }
+
     private func renderStatus(
         provider: MonitorProvider,
         showSelectedProvider: Bool,
         claude: ClaudeSnapshot? = nil,
         grokbot: GrokbotSnapshot? = nil,
-        showGrokbotBar: Bool = false
+        showGrokbotBar: Bool = false,
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
     ) -> MenuBarStatusRenderer.RenderedStatus {
         MenuBarStatusRenderer.render(
             selectedProvider: provider,
@@ -198,7 +217,8 @@ final class MenuBarStatusRendererTests: XCTestCase {
             showClaudeBar: true,
             showGrokbotBar: showGrokbotBar,
             providerOrder: MonitorProvider.usageProviders,
-            visibleProductIDs: Set(ProductCatalog.knownIDs)
+            visibleProductIDs: Set(ProductCatalog.knownIDs),
+            enabledProviders: enabledProviders
         )
     }
 }

@@ -413,6 +413,9 @@ struct PreferencesView: View {
     }
 
     private func export(_ format: ExportService.Format) {
+        // Clear any prior failure so the red banner does not persist after a
+        // later successful export.
+        exportError = nil
         do {
             let data = try ExportService.export(history.allSnapshots(), format: format)
             let panel = NSSavePanel()

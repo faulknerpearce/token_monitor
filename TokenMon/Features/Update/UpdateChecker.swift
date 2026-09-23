@@ -9,9 +9,11 @@ import os
 @MainActor
 final class UpdateChecker: ObservableObject {
     @Published private(set) var availableRelease: AvailableRelease?
-    @Published private(set) var isChecking = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastCheckedAt: Date?
+    /// Re-entrancy guard for overlapping checks; not surfaced in the UI.
+    private var isChecking = false
+    /// Last check failure, kept for diagnostics/tests. The checker is notify-only
+    /// and only `availableRelease` drives the menu, so this is not published.
+    private(set) var lastError: String?
 
     /// Poll interval: releases are rare and the API is rate-limited for
     /// unauthenticated callers.
@@ -73,7 +75,6 @@ final class UpdateChecker: ObservableObject {
             guard settings.checksForUpdates else { return }
             availableRelease = try ReleaseFeed.newerRelease(in: data, than: currentVersion)
             lastError = nil
-            lastCheckedAt = Date()
             if let availableRelease {
                 logger.info("Update available: \(availableRelease.version.description, privacy: .public)")
             }

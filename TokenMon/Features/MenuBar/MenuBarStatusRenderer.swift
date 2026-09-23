@@ -62,7 +62,8 @@ enum MenuBarStatusRenderer {
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>
+        visibleProductIDs: Set<String>,
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
     ) -> NSImage {
         render(
             selectedProvider: selectedProvider,
@@ -82,7 +83,8 @@ enum MenuBarStatusRenderer {
             showClaudeBar: showClaudeBar,
             showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
-            visibleProductIDs: visibleProductIDs
+            visibleProductIDs: visibleProductIDs,
+            enabledProviders: enabledProviders
         ).image
     }
 
@@ -107,7 +109,8 @@ enum MenuBarStatusRenderer {
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>
+        visibleProductIDs: Set<String>,
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
     ) -> RenderedStatus {
         ensureAppearanceObserver()
 
@@ -135,7 +138,8 @@ enum MenuBarStatusRenderer {
             showClaudeBar: showClaudeBar,
             showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
-            visibleProductIDs: visibleProductIDs
+            visibleProductIDs: visibleProductIDs,
+            enabledProviders: enabledProviders
         )
         if let cached = _cache.object(forKey: cacheKey as NSString) {
             return RenderedStatus(image: cached.image, regions: cached.regions)
@@ -159,7 +163,8 @@ enum MenuBarStatusRenderer {
             showCursorBar: showCursorBar,
             showClaudeBar: showClaudeBar,
             showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder
+            providerOrder: providerOrder,
+            enabledProviders: enabledProviders
         )
         _cache.setObject(
             CachedStatus(image: status.image, regions: status.regions),
@@ -188,7 +193,8 @@ enum MenuBarStatusRenderer {
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>
+        visibleProductIDs: Set<String>,
+        enabledProviders: Set<MonitorProvider>
     ) -> String {
         let chrome = menuBarAppearanceName
         let grok = snapshot.map { Int($0.usedPercent.rounded()) } ?? -1
@@ -208,6 +214,7 @@ enum MenuBarStatusRenderer {
                 + "-\(claude)-\(chatGPT)-\(openRouter)-\(grokbot)",
             "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)-\(showGrokbotBar)",
             "\(providerOrder.map(\.rawValue).joined(separator: ","))",
+            "\(enabledProviders.map(\.rawValue).sorted().joined(separator: ","))",
             "\(productKey)-\(productIDs)-\(chrome)"
         ]
         return parts.joined(separator: "-")
@@ -247,7 +254,8 @@ enum MenuBarStatusRenderer {
         showOpenCodeBar: Bool,
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider]
+        providerOrder: [MonitorProvider],
+        enabledProviders: Set<MonitorProvider>
     ) -> [CompositePiece] {
         func solid(
             used: Double?,
@@ -268,6 +276,9 @@ enum MenuBarStatusRenderer {
 
         var pieces: [CompositePiece] = []
         for provider in MonitorProvider.normalizedOrder(providerOrder) {
+            // A disabled provider must not leave a frozen "—/last %" segment:
+            // polling is gated, so its snapshot would never update.
+            guard enabledProviders.contains(provider) else { continue }
             switch provider {
             case .grok:
                 pieces.append(.grok)
@@ -329,7 +340,8 @@ enum MenuBarStatusRenderer {
         showCursorBar: Bool,
         showClaudeBar: Bool,
         showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider]
+        providerOrder: [MonitorProvider],
+        enabledProviders: Set<MonitorProvider>
     ) -> RenderedStatus {
         if showSelectedProvider {
             return renderSelectedProvider(
@@ -409,7 +421,8 @@ enum MenuBarStatusRenderer {
             showOpenCodeBar: showOpenCodeBar,
             showClaudeBar: showClaudeBar,
             showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder
+            providerOrder: providerOrder,
+            enabledProviders: enabledProviders
         )
 
         var width: CGFloat = 0

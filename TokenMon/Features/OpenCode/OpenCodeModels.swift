@@ -330,6 +330,13 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     /// Menu-bar metric: monthly Go usage (same window as the overview ring).
     var primaryUsedPercent: Double { monthlyUsedPercent }
 
+    /// True when the local session DB contributed model/token/spend stats. The
+    /// console snapshot alone carries none, so the Stats card is omitted rather
+    /// than rendered as `$0.00 / 0 tokens`.
+    var hasLocalStats: Bool {
+        !models.isEmpty || monthlyTokens > 0 || monthlyEstimatedUSD > 0
+    }
+
     /// Overview ring metric: monthly Go usage window.
     var monthlyUsedPercent: Double {
         windows.first { $0.kind == .monthly }?.usedPercent

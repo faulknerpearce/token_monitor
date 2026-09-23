@@ -19,7 +19,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let auth: OpenCodeAuthSession
     /// Injected console/local fetch seams (tests supply fakes); default to live.
     private let fetchConsole: (String, String?) async throws -> (OpenCodeSnapshot, String)
-    private let fetchLocal: () async throws -> (OpenCodeSnapshot, OpenCodeDayHourlyUsage?)
+    private let fetchLocal: () async throws -> (OpenCodeSnapshot?, OpenCodeDayHourlyUsage?)
     private let logger = Logger(category: "OpenCode")
     private var cancellables = Set<AnyCancellable>()
 
@@ -32,7 +32,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         settings: AppSettings,
         auth: OpenCodeAuthSession,
         fetchConsole: ((String, String?) async throws -> (OpenCodeSnapshot, String))? = nil,
-        fetchLocal: (() async throws -> (OpenCodeSnapshot, OpenCodeDayHourlyUsage?))? = nil
+        fetchLocal: (() async throws -> (OpenCodeSnapshot?, OpenCodeDayHourlyUsage?))? = nil
     ) {
         self.settings = settings
         self.auth = auth
@@ -42,8 +42,10 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         }
         self.fetchLocal = fetchLocal ?? {
             try await Task.detached(priority: .userInitiated) {
+                // Fetch independently: a snapshot failure must not discard a
+                // successful hourly read (which would blank the Overview chart).
                 (
-                    try OpenCodeLocalStats.fetchSnapshot(),
+                    try? OpenCodeLocalStats.fetchSnapshot(),
                     try? OpenCodeLocalStats.fetchDayHourlyUsage()
                 )
             }.value
@@ -89,7 +91,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 let (consoleSnap, orgID) = try await fetchConsole(cookieHeader, auth.workspaceID)
                 let localBundle = try? await fetchLocal()
                 var snap = consoleSnap
-                if let local = localBundle?.0 {
+                if let local = localBundle?.0 ?? nil {
                     snap = Self.mergeLocalModels(into: snap, local: local)
                 }
                 guard !Task.isCancelled, auth.isCurrent(generation) else { return }
@@ -136,8 +138,16 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             // snapshot while this poll was in flight (generation moved). A poll
             // that *started* signed-out keeps working: its generation is stable.
             guard !Task.isCancelled, auth.sessionGeneration == generation else { return }
-            snapshot = snap
             if let hourly { dayHourlyUsage = hourly }
+            guard let snap else {
+                // The hourly read may still have succeeded; only the snapshot is
+                // missing, so keep any prior card rather than blanking it.
+                if snapshot == nil {
+                    lastError = "Could not read local OpenCode usage."
+                }
+                return
+            }
+            snapshot = snap
             let budget = await Self.buildDailyBudgetDays(for: snap)
             dailyBudgetDays = budget?.days
             dailyBudgetPeriodStart = budget?.periodStart

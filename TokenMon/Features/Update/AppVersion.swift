@@ -51,8 +51,30 @@ struct AppVersion: Comparable, CustomStringConvertible, Sendable {
         case (nil, nil): return false
         case (nil, .some): return false
         case (.some, nil): return true
-        case let (.some(left), .some(right)): return left < right
+        case let (.some(left), .some(right)):
+            return Self.prereleaseIsOrderedBefore(left, right)
         }
+    }
+
+    /// Compares dot-separated pre-release identifiers the semver way: numeric
+    /// identifiers compare numerically (`beta.2 < beta.10`), numeric sorts before
+    /// alphanumeric, and a shorter identifier list precedes a longer one when the
+    /// shared prefix is equal.
+    private static func prereleaseIsOrderedBefore(_ lhs: String, _ rhs: String) -> Bool {
+        let left = lhs.split(separator: ".").map(String.init)
+        let right = rhs.split(separator: ".").map(String.init)
+        for index in 0..<min(left.count, right.count) {
+            let leftID = left[index]
+            let rightID = right[index]
+            if leftID == rightID { continue }
+            if let leftNumber = Int(leftID), let rightNumber = Int(rightID) {
+                return leftNumber < rightNumber
+            }
+            if Int(leftID) != nil { return true }
+            if Int(rightID) != nil { return false }
+            return leftID < rightID
+        }
+        return left.count < right.count
     }
 
     static func == (lhs: AppVersion, rhs: AppVersion) -> Bool {

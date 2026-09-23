@@ -64,10 +64,15 @@ final class MenuBarController: NSObject, ObservableObject {
 
         model.objectWillChange
             .sink { [weak self] _ in
-                self?.refreshStatusItem()
-                // Content height can change (e.g. switching provider tabs);
-                // let SwiftUI lay out, then re-fit the panel's bottom edge.
-                DispatchQueue.main.async { self?.resizePanelIfNeeded() }
+                // `@Published` emits in `willSet`, before the new value is
+                // assigned, so defer a tick to read the updated settings/snapshot
+                // (the panel resize below is deferred for the same reason).
+                DispatchQueue.main.async {
+                    self?.refreshStatusItem()
+                    // Content height can change (e.g. switching provider tabs);
+                    // re-fit the panel's bottom edge after SwiftUI lays out.
+                    self?.resizePanelIfNeeded()
+                }
             }
             .store(in: &cancellables)
 
@@ -94,7 +99,8 @@ final class MenuBarController: NSObject, ObservableObject {
             showClaudeBar: settings.showClaudeBarInMenuBar,
             showGrokbotBar: settings.showGrokbotBarInMenuBar,
             providerOrder: settings.orderedUsageProviders,
-            visibleProductIDs: settings.visibleProductIDs
+            visibleProductIDs: settings.visibleProductIDs,
+            enabledProviders: settings.enabledProviderIDs
         )
         regions = rendered.regions
         // Keep `variableLength`: assigning an explicit length animates the status
