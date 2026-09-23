@@ -547,4 +547,68 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(pace.earned, daily * 31, accuracy: 1e-9)
         XCTAssertEqual(pace.headroomToday, daily * 31 - 50, accuracy: 1e-9)
     }
+
+    // MARK: - paceCaption
+
+    private func pace(
+        dailyBudget: Double,
+        earned: Double = 0,
+        periodConsumed: Double = 0,
+        headroomToday: Double
+    ) -> DailyBudget.PaceHeadroom {
+        DailyBudget.PaceHeadroom(
+            dailyBudget: dailyBudget,
+            earned: earned,
+            periodConsumed: periodConsumed,
+            headroomToday: headroomToday
+        )
+    }
+
+    func testPaceCaptionNoUsageBanked() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, earned: 20, periodConsumed: 0, headroomToday: 20)
+        )
+        XCTAssertEqual(caption, "Up to 20.0% available today from unused earlier days.")
+    }
+
+    func testPaceCaptionNoUsageNotBanked() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, earned: 10, periodConsumed: 0, headroomToday: 10)
+        )
+        XCTAssertEqual(caption, "No usage yet · 10.0% today")
+    }
+
+    func testPaceCaptionNilWithoutBudget() {
+        XCTAssertNil(DailyBudget.paceCaption(
+            pace(dailyBudget: 0, periodConsumed: 0, headroomToday: 0)
+        ))
+    }
+
+    func testPaceCaptionOverPace() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, periodConsumed: 55, headroomToday: -5)
+        )
+        XCTAssertEqual(caption, "55% used · 5.0% over pace")
+    }
+
+    func testPaceCaptionBankedRemaining() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 25)
+        )
+        XCTAssertEqual(caption, "25.0% still available today from unused earlier days.")
+    }
+
+    func testPaceCaptionOnPace() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 0)
+        )
+        XCTAssertEqual(caption, "On pace for today")
+    }
+
+    func testPaceCaptionLeftToday() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 4)
+        )
+        XCTAssertEqual(caption, "4.0% left today")
+    }
 }

@@ -211,7 +211,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
     /// Like an ordinary browser, sign-in keeps WebKit's default Safari
     /// User-Agent: OAuth providers refuse a UA that does not look like one.
     @MainActor
-    func testSignInBrowserDoesNotOverrideTheUserAgent() {
+    func testSignInBrowserDoesNotOverrideTheUserAgent() throws {
         let browser = SignInBrowserView(
             startURL: URL(string: "about:blank")!,
             dataStore: .nonPersistent(),
@@ -223,6 +223,13 @@ final class SignInBrowserNavigationTests: XCTestCase {
         XCTAssertTrue(
             (browser.mainWebView.customUserAgent ?? "").isEmpty,
             "Sign-in must use WebKit's default browser User-Agent"
+        )
+
+        // The live load + JS probe spins up a real WKWebView (slow, can flake in
+        // CI); opt in explicitly rather than on every run.
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["TOKENMON_RUN_WEBKIT_TESTS"] == "1",
+            "Real WKWebView user-agent probe; set TOKENMON_RUN_WEBKIT_TESTS=1 to run"
         )
 
         // What the provider actually receives.

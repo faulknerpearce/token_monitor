@@ -6,7 +6,14 @@ import UserNotifications
 @MainActor
 final class ThresholdNotifier: ObservableObject {
     private let logger = Logger(category: "Alerts")
-    private var lastNotifiedThreshold: Double?
+    private let defaults: UserDefaults
+    /// Delivery seam (tests record calls); defaults to a local notification.
+    private let deliver: (Double, Double) -> Void
+
+    init(defaults: UserDefaults = .standard, deliver: ((Double, Double) -> Void)? = nil) {
+        self.defaults = defaults
+        self.deliver = deliver ?? Self.postLocalNotification
+    }
 
     func requestAuthorizationIfNeeded() {
         Task { @MainActor [weak self] in
@@ -24,22 +31,30 @@ final class ThresholdNotifier: ObservableObject {
         }
     }
 
-    func evaluate(usedPercent: Double, settings: AppSettings) {
+    func evaluate(usedPercent: Double, settings: AppSettings, account: String?) {
         guard settings.thresholdEnabled else { return }
         let threshold = settings.thresholdPercent
+        // Persisted, account-scoped so a relaunch (or account switch) does not
+        // re-fire an alert the user already saw while still above the threshold.
+        let key = Self.notifiedKey(account: account)
+        let last = defaults.object(forKey: key) as? Double
         guard usedPercent >= threshold else {
-            if let last = lastNotifiedThreshold, usedPercent < last - 5 {
-                lastNotifiedThreshold = nil
+            if let last, usedPercent < last - 5 {
+                defaults.removeObject(forKey: key)
             }
             return
         }
         guard Self.shouldNotify(
             usedPercent: usedPercent,
             threshold: threshold,
-            lastNotifiedThreshold: lastNotifiedThreshold
+            lastNotifiedThreshold: last
         ) else { return }
-        lastNotifiedThreshold = threshold
-        send(usedPercent: usedPercent, threshold: threshold)
+        defaults.set(threshold, forKey: key)
+        deliver(usedPercent, threshold)
+    }
+
+    static func notifiedKey(account: String?) -> String {
+        "thresholdNotified.\(account ?? "default")"
     }
 
     /// Fires once per threshold crossing; re-arms only after usage drops 5+ points
@@ -54,7 +69,7 @@ final class ThresholdNotifier: ObservableObject {
         return true
     }
 
-    private func send(usedPercent: Double, threshold: Double) {
+    private static func postLocalNotification(usedPercent: Double, threshold: Double) {
         let content = UNMutableNotificationContent()
         content.title = "TokenMon Alert"
         content.body = String(
@@ -69,6 +84,5 @@ final class ThresholdNotifier: ObservableObject {
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request)
-        logger.info("Sent threshold notification at \(usedPercent, privacy: .public)%")
     }
 }

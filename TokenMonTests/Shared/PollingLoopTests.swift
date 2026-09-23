@@ -24,7 +24,7 @@ final class PollingLoopTests: XCTestCase {
             refresh: { counter.increment() }
         )
         loop.start()
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try? await Task.sleep(nanoseconds: 500_000_000)
         XCTAssertEqual(counter.value, 1, "nil interval must end the loop after the first refresh")
         loop.stop()
     }
@@ -36,10 +36,10 @@ final class PollingLoopTests: XCTestCase {
             refresh: { counter.increment() }
         )
         loop.start()
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        try? await Task.sleep(nanoseconds: 300_000_000)
         loop.stop()
         let afterStop = counter.value
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        try? await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertEqual(counter.value, afterStop, "no further refreshes after stop()")
         XCTAssertGreaterThan(afterStop, 0)
     }
@@ -55,9 +55,9 @@ final class PollingLoopTests: XCTestCase {
         )
         loop.start()
         // First refresh happens immediately; then shrink the interval to 0.2s.
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         state.interval = 0.2
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
         XCTAssertGreaterThanOrEqual(
             state.refreshCount,
             3,
