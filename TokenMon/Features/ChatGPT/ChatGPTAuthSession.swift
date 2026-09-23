@@ -47,7 +47,6 @@ final class ChatGPTAuthSession: ProviderAuthSession {
         ProviderAuthConfig(
             storeFilenamePrefix: "chatgpt_auth_",
             logCategory: "ChatGPTAuth",
-            usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: chatgptHosts,
             capturePolicy: chatgptPolicy(),

@@ -61,36 +61,6 @@ struct OpenCodeModelUsage: Identifiable, Hashable, Sendable {
     }
 }
 
-/// One row in the OpenCode week heatmap (model across 7 UTC week days).
-struct OpenCodeHeatmapRow: Identifiable, Hashable, Sendable {
-    var providerID: String
-    var modelID: String
-    /// Cost (or session count fallback) per day index 0…6.
-    var dayValues: [Double]
-
-    var id: String { "\(providerID)/\(modelID)" }
-
-    var displayName: String {
-        OpenCodeCatalog.modelDisplayName(providerID: providerID, modelID: modelID)
-    }
-
-    var weekTotal: Double { dayValues.reduce(0, +) }
-}
-
-struct OpenCodeWeekHeatmap: Hashable, Sendable {
-    var weekStart: Date
-    var dayLabels: [String]
-    var rows: [OpenCodeHeatmapRow]
-
-    var maxValue: Double {
-        rows.flatMap(\.dayValues).max() ?? 0
-    }
-
-    var isEmpty: Bool {
-        rows.isEmpty || maxValue <= 0
-    }
-}
-
 /// One stacked segment inside an hour column.
 struct OpenCodeHourSegment: Identifiable, Hashable, Sendable {
     var providerID: String
@@ -279,12 +249,6 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     var fetchedAt: Date
     var windows: [OpenCodeWindowUsage]
     var models: [OpenCodeModelUsage]
-    var modelsWindowLabel: String
-    var inputTokens: Int64
-    var outputTokens: Int64
-    var cacheReadTokens: Int64
-    var cacheWriteTokens: Int64
-    var totalSessions: Int
     var isEstimated: Bool
     /// Plan (Go/Zen) tokens in the current billing month.
     var monthlyTokens: Int64
@@ -298,12 +262,6 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
         fetchedAt: Date = Date(),
         windows: [OpenCodeWindowUsage],
         models: [OpenCodeModelUsage],
-        modelsWindowLabel: String,
-        inputTokens: Int64,
-        outputTokens: Int64,
-        cacheReadTokens: Int64,
-        cacheWriteTokens: Int64,
-        totalSessions: Int,
         isEstimated: Bool = true,
         monthlyTokens: Int64 = 0,
         monthlyEstimatedUSD: Double = 0,
@@ -314,12 +272,6 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
         self.fetchedAt = fetchedAt
         self.windows = windows
         self.models = models
-        self.modelsWindowLabel = modelsWindowLabel
-        self.inputTokens = inputTokens
-        self.outputTokens = outputTokens
-        self.cacheReadTokens = cacheReadTokens
-        self.cacheWriteTokens = cacheWriteTokens
-        self.totalSessions = totalSessions
         self.isEstimated = isEstimated
         self.monthlyTokens = monthlyTokens
         self.monthlyEstimatedUSD = monthlyEstimatedUSD
@@ -374,12 +326,6 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
                 percentOfWindow: 30
             )
         ],
-        modelsWindowLabel: "All models this week",
-        inputTokens: 23_100_000,
-        outputTokens: 1_720_000,
-        cacheReadTokens: 813_000_000,
-        cacheWriteTokens: 0,
-        totalSessions: 12,
         monthlyTokens: 48_000_000,
         monthlyEstimatedUSD: 22.4,
         monthlyInputTokens: 35_000_000,

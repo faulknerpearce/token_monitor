@@ -45,7 +45,6 @@ final class OpenCodeAuthSession: ProviderAuthSession {
         ProviderAuthConfig(
             storeFilenamePrefix: "opencode_auth_",
             logCategory: "OpenCodeAuth",
-            usesBearerToken: false,
             extraStoreKeys: ["workspace"],
             signOutHosts: openCodeHosts,
             capturePolicy: openCodePolicy(),

@@ -16,7 +16,6 @@ final class CredentialStoreTests: XCTestCase {
         ProviderAuthConfig(
             storeFilenamePrefix: "auth_",
             logCategory: "TestAuth",
-            usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: ["example.com"],
             capturePolicy: WebKitCookieCapture.Policy(

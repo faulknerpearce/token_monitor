@@ -37,27 +37,6 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         return result
     }
 
-    /// Reorders the visible subsequence in `order` while leaving hidden
-    /// providers in their existing slots.
-    static func movingVisible(
-        order: [MonitorProvider],
-        visible: [MonitorProvider],
-        from source: IndexSet,
-        to destination: Int
-    ) -> [MonitorProvider] {
-        let normalized = normalizedOrder(order)
-        var moved = visible
-        moved.move(fromOffsets: source, toOffset: destination)
-        var iterator = moved.makeIterator()
-        let visibleSet = Set(visible)
-        return normalized.map { provider in
-            guard visibleSet.contains(provider), let next = iterator.next() else {
-                return provider
-            }
-            return next
-        }
-    }
-
     var displayName: String {
         switch self {
         case .overview: return "Overview"

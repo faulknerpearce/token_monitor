@@ -206,12 +206,6 @@ struct OpenCodeConsoleClient: Sendable {
                 window(kind: .monthly, meter: meters.month, fallbackResetsAt: meters.monthResetsAt)
             ].compactMap { $0 },
             models: [],
-            modelsWindowLabel: "All models this week",
-            inputTokens: 0,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            totalSessions: 0,
             isEstimated: false
         )
     }

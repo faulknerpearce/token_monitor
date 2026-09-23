@@ -199,12 +199,6 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         var merged = server
         if !local.models.isEmpty {
             merged.models = local.models
-            merged.modelsWindowLabel = local.modelsWindowLabel
-            merged.inputTokens = local.inputTokens
-            merged.outputTokens = local.outputTokens
-            merged.cacheReadTokens = local.cacheReadTokens
-            merged.cacheWriteTokens = local.cacheWriteTokens
-            merged.totalSessions = local.totalSessions
         }
         if local.monthlyTokens > 0 || local.monthlyEstimatedUSD > 0 {
             merged.monthlyTokens = local.monthlyTokens

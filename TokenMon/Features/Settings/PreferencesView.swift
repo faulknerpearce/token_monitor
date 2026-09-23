@@ -69,7 +69,8 @@ struct PreferencesView: View {
                         )
                     )
                 }
-                .onMove(perform: settings.moveOrderedProviders)
+                // Reordering uses the explicit drop delegate above; `onMove` is
+                // effectively inert on a macOS `List` and duplicated the drag path.
             } header: {
                 Text("Providers")
             } footer: {

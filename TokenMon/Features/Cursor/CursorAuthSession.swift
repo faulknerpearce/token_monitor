@@ -36,7 +36,6 @@ final class CursorAuthSession: ProviderAuthSession {
         ProviderAuthConfig(
             storeFilenamePrefix: "cursor_auth_",
             logCategory: "CursorAuth",
-            usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: cursorHosts,
             capturePolicy: cursorPolicy(),

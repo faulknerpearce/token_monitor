@@ -12,7 +12,6 @@
 		039A40DE079117CD5ADBFE5D /* ReleaseFeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB794058AE925A033C64BDC4 /* ReleaseFeedTests.swift */; };
 		06229CC9A8E3CA8B2FEF0312 /* ProviderUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7532E728359574D2F985E60E /* ProviderUsagePoller.swift */; };
 		076A8034DCB0D156E353E9D6 /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA281FA162A6CB5D1F2A2904 /* ExportService.swift */; };
-		08E55E6E8941B7800D091106 /* ConcentricUsageRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */; };
 		0A05E33E0D64AE786F3D5B2A /* SignInBrowserNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */; };
 		0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45F0294D7F6833156223A81 /* UsageErrorTests.swift */; };
 		0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF58255DAC5BC7E940010E74 /* JSONTests.swift */; };
@@ -39,6 +38,7 @@
 		3486AED10838CF0CCEE45B1B /* CursorUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44005D10711D80DFD2267A59 /* CursorUsagePollerTests.swift */; };
 		36D3EEAB4EBE83485D790F09 /* ClaudeUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 143BF16874370C0F29819E10 /* ClaudeUsagePollerTests.swift */; };
 		38ADEEF601C40BAB714AEE62 /* SignInBrowserNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A56B7777DF3F15D254F4F7 /* SignInBrowserNavigationTests.swift */; };
+		3CEF7FD1DDF091CA013504A1 /* ProviderColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CAD82843E69523E7D33840 /* ProviderColors.swift */; };
 		3D1CA4A9AF09623D3E343004 /* CursorAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED36AE2584D7EB89D2F38BC /* CursorAuthSession.swift */; };
 		3F4D8F82AFD4D3993B37CC29 /* DailyQuotaDeltaStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06D2986FD8F4702604E852D /* DailyQuotaDeltaStoreTests.swift */; };
 		404713A354B6A8F71295AF31 /* FileBackedStringStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */; };
@@ -197,8 +197,8 @@
 		22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		24166148544CA5C059FC8F1F /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		28EC6D5B67D08C3107DCBD35 /* DailyBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudget.swift; sourceTree = "<group>"; };
-		2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcentricUsageRingView.swift; sourceTree = "<group>"; };
 		3048C8A62D66B3ED0E61C3E0 /* ClaudeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeModels.swift; sourceTree = "<group>"; };
+		30CAD82843E69523E7D33840 /* ProviderColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColors.swift; sourceTree = "<group>"; };
 		3134A3D28E86BDE453FDADB0 /* CursorUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorUsageClient.swift; sourceTree = "<group>"; };
 		3168BE9937ECEAE2E723DCD3 /* GrokbotUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsageClient.swift; sourceTree = "<group>"; };
 		3236D1884085409D04BB2A13 /* AppSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSupportTests.swift; sourceTree = "<group>"; };
@@ -531,9 +531,9 @@
 		93B452F56631339DB2F9C9D6 /* Overview */ = {
 			isa = PBXGroup;
 			children = (
-				2F665FA86ABF19BA115EFB4B /* ConcentricUsageRingView.swift */,
 				C31933106A9D643D9A424D46 /* OverviewHourlyUsageChart.swift */,
 				85EFE5125A1EF1DFE9803712 /* OverviewPanelView.swift */,
+				30CAD82843E69523E7D33840 /* ProviderColors.swift */,
 				B161EEE25050CED17FBFC98B /* ProviderHourlyUsage.swift */,
 			);
 			path = Overview;
@@ -899,7 +899,6 @@
 				F9C2F0789C729F88EE3511E5 /* ClaudeUsageClient.swift in Sources */,
 				1A87513EEBB6591936457416 /* ClaudeUsagePoller.swift in Sources */,
 				2247415495F4C60331207D12 /* ColorPalette.swift in Sources */,
-				08E55E6E8941B7800D091106 /* ConcentricUsageRingView.swift in Sources */,
 				33BAB3A11884D10836B4A91D /* CredentialStore.swift in Sources */,
 				3D1CA4A9AF09623D3E343004 /* CursorAuthSession.swift in Sources */,
 				F7D57567E667D8F732A0F0FC /* CursorModels.swift in Sources */,
@@ -953,6 +952,7 @@
 				80DB39EBA05C82FB0AC57377 /* PollingLoop.swift in Sources */,
 				02F9895A5FE317B177F0A7BA /* PreferencesView.swift in Sources */,
 				B3C82E011CEE192CDEBB3395 /* ProviderAuthSession.swift in Sources */,
+				3CEF7FD1DDF091CA013504A1 /* ProviderColors.swift in Sources */,
 				BF563457B5C35B5CFD03432F /* ProviderError.swift in Sources */,
 				CA6B7B3C386361E3CB4E8288 /* ProviderHourlyUsage.swift in Sources */,
 				1B0037A17BFF85E89026011A /* ProviderLogo.swift in Sources */,

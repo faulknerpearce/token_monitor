@@ -12,7 +12,7 @@ struct GrokPanelView: View {
     @State private var weekOffset: Int = 0
 
     var body: some View {
-        if auth.needsSignIn && auth.isSignedIn {
+        if auth.needsSignIn, auth.lastAuthError != nil {
             sessionExpiredHeader
         } else if auth.isSignedIn, let snapshot = poller.snapshot {
             usageHeader(snapshot)

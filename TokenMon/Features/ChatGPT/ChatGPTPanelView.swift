@@ -23,7 +23,7 @@ struct ChatGPTPanelView: View {
                     SlimUsageTrack(
                         label: "5-Hour Window",
                         percent: snapshot.primary?.usedPercent ?? 0,
-                        color: ConcentricUsageRingView.chatgptColor,
+                        color: ProviderColors.chatgptColor,
                         caption: snapshot.limitReached
                             ? "Limit reached"
                             : snapshot.primary?.resetsAt.map { Format.resetCaption($0) }
@@ -31,7 +31,7 @@ struct ChatGPTPanelView: View {
                     SlimUsageTrack(
                         label: "Weekly",
                         percent: snapshot.secondary?.usedPercent ?? 0,
-                        color: ConcentricUsageRingView.chatgptColor,
+                        color: ProviderColors.chatgptColor,
                         caption: snapshot.secondary?.resetsAt.map { Format.resetCaption($0) }
                     )
                     if !snapshot.allowed {

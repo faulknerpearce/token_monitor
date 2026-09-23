@@ -100,7 +100,7 @@ struct DailyUsageChartView: View {
                 Color.primary.opacity(0.12)
 
                 if fraction > 0 {
-                    ConcentricUsageRingView.grokColor
+                    ProviderColors.grokColor
                         .frame(height: min(trackHeight, fillHeight))
                 }
             }

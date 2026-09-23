@@ -32,7 +32,7 @@ struct GrokbotPanelView: View {
                         SlimUsageTrack(
                             label: "Weekly",
                             percent: snapshot.usedPercent,
-                            color: ConcentricUsageRingView.grokbotColor,
+                            color: ProviderColors.grokbotColor,
                             caption: snapshot.resetsAt.map { Format.resetCaption($0) },
                             showsLabel: false
                         )
@@ -51,7 +51,7 @@ struct GrokbotPanelView: View {
                     PanelCard {
                         WeeklyDailyBudgetBarsView(
                             days: days,
-                            accent: ConcentricUsageRingView.grokbotColor,
+                            accent: ProviderColors.grokbotColor,
                             infoText: String(
                                 format: "Share of the Bot allowance per day (budget %.1f%%/day).",
                                 share

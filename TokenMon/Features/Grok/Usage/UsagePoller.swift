@@ -97,7 +97,6 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         let generation = auth.sessionGeneration
         let client = UsageClient(
             cookieHeader: auth.loadCookieHeader(),
-            bearerToken: auth.loadBearerToken(),
             accountEmail: auth.accountEmail
         )
 
@@ -111,7 +110,6 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             lastError = nil
             lastRefreshedAt = Date()
             backoff.reset()
-            auth.needsSignIn = false
             history.append(snap)
             grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
             notifier.evaluate(usedPercent: snap.usedPercent, settings: settings)

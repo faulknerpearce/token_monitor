@@ -28,13 +28,13 @@ struct ClaudePanelView: View {
                     SlimUsageTrack(
                         label: "5-Hour Window",
                         percent: snapshot.fiveHour?.usedPercent ?? 0,
-                        color: ConcentricUsageRingView.claudeColor,
+                        color: ProviderColors.claudeColor,
                         caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: "Weekly",
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
-                        color: ConcentricUsageRingView.claudeColor,
+                        color: ProviderColors.claudeColor,
                         caption: snapshot.sevenDay?.resetsAt.map { Format.resetCaption($0) }
                     )
                 }
@@ -44,7 +44,7 @@ struct ClaudePanelView: View {
                     PanelCard {
                         WeeklyDailyBudgetBarsView(
                             days: days,
-                            accent: ConcentricUsageRingView.claudeColor,
+                            accent: ProviderColors.claudeColor,
                             infoText: String(
                                 format: "Share of weekly allowance per day (budget %.1f%%/day).",
                                 share

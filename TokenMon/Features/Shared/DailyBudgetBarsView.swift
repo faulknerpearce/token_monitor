@@ -270,7 +270,7 @@ struct DailyBudgetBarsView: View {
     }
     return WeeklyDailyBudgetBarsView(
         days: days,
-        accent: ConcentricUsageRingView.claudeColor,
+        accent: ProviderColors.claudeColor,
         periodUsedPercent: 40
     )
     .padding()

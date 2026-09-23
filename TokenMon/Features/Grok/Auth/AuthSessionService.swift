@@ -1,6 +1,6 @@
 import Foundation
 
-/// Persists grok.com session cookies and optional bearer token under Application Support.
+/// Persists grok.com session cookies under Application Support.
 /// Uses file-based storage instead of Keychain; debug builds prompt repeatedly for Keychain access.
 @MainActor
 final class AuthSessionService: ProviderAuthSession {
@@ -23,7 +23,6 @@ final class AuthSessionService: ProviderAuthSession {
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "auth_",
                 logCategory: "Auth",
-                usesBearerToken: true,
                 extraStoreKeys: [],
                 signOutHosts: Self.grokHosts,
                 capturePolicy: Self.grokPolicy(),

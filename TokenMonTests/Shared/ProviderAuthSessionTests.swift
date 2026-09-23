@@ -10,7 +10,6 @@ final class ProviderAuthSessionTests: XCTestCase {
         ProviderAuthConfig(
             storeFilenamePrefix: filenamePrefix,
             logCategory: "TestAuth",
-            usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: ["example.com"],
             capturePolicy: WebKitCookieCapture.Policy(

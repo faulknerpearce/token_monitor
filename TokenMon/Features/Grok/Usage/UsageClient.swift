@@ -35,11 +35,6 @@ struct UsageClient: Sendable {
         string: "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
     )!
 
-    /// CLI billing JSON fallback (when bearer from `grok login` is available).
-    static let cliBillingEndpoint = URL(
-        string: "https://cli-chat-proxy.grok.com/v1/billing"
-    )!
-
     /// Candidate REST paths probed for product breakdown JSON.
     static let restCandidates: [URL] = [
         URL(string: "https://grok.com/rest/subscriptions")!,
@@ -49,12 +44,11 @@ struct UsageClient: Sendable {
     ]
 
     var cookieHeader: String?
-    var bearerToken: String?
     var accountEmail: String?
     var session: URLSession = .shared
 
     func fetchUsage() async throws -> WeeklyUsageSnapshot {
-        if cookieHeader == nil && bearerToken == nil {
+        if cookieHeader == nil {
             throw ProviderError.notSignedIn(.grok)
         }
 
@@ -81,16 +75,6 @@ struct UsageClient: Sendable {
         } catch {
             lastError = error
             logger.warning("gRPC-web billing failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // 3) CLI billing JSON with bearer.
-        if bearerToken != nil {
-            do {
-                return try await fetchCLIBilling()
-            } catch {
-                lastError = error
-                logger.warning("CLI billing failed: \(error.localizedDescription, privacy: .public)")
-            }
         }
 
         if let lastError {
@@ -160,16 +144,13 @@ struct UsageClient: Sendable {
 
         try GRPCWebParser.validateTrailers(data)
         let parsed = try GRPCWebParser.parseUsage(data)
-        let used = parsed.usedPercent ?? 0
+        let used = parsed.usedPercent
         let products = parsed.products.isEmpty
             ? Self.synthesizeProducts(usedPercent: used)
             : parsed.products
         let productLog = products.map { "\($0.id):\(String(format: "%.1f", $0.percentOfPool))%" }.joined(separator: ", ")
         logger.info("gRPC parsed products: \(productLog, privacy: .public)")
         #if DEBUG
-        if !parsed.dailySeries.isEmpty {
-            logger.info("gRPC daily series rows: \(parsed.dailySeries.count, privacy: .public)")
-        }
         logger.debug("gRPC field dump:\n\(GRPCWebParser.debugFieldDump(data), privacy: .public)")
         #endif
         return WeeklyUsageSnapshot(
@@ -177,45 +158,11 @@ struct UsageClient: Sendable {
             remainingPercent: max(0, 100 - used),
             resetsAt: parsed.resetsAt,
             products: products,
-            accountEmail: accountEmail,
-            dailySeries: parsed.dailySeries
+            accountEmail: accountEmail
         )
     }
 
-    // MARK: - CLI JSON
-
-    private func fetchCLIBilling() async throws -> WeeklyUsageSnapshot {
-        var request = URLRequest(url: Self.cliBillingEndpoint)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 15
-        if let bearerToken {
-            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("xai-grok-cli", forHTTPHeaderField: "x-xai-token-auth")
-        }
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw ProviderError.network(.grok, "Invalid response")
-        }
-        if http.statusCode == 401 || http.statusCode == 403 {
-            throw ProviderError.unauthorized(.grok)
-        }
-        guard http.statusCode == 200 else {
-            let body = String(data: data.prefix(400), encoding: .utf8) ?? ""
-                throw ProviderError.grokHTTPStatus(http.statusCode, body: body)
-        }
-
-        if let snapshot = UsageResponseParser.parseCLIBilling(data, accountEmail: accountEmail) {
-            return snapshot
-        }
-        throw ProviderError.grokDecoding("CLI billing JSON shape unrecognized")
-    }
-
     private func applyAuth(to request: inout URLRequest) {
-        if let bearerToken, !bearerToken.isEmpty {
-            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-        }
         if let cookieHeader, !cookieHeader.isEmpty {
             request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
         }
@@ -241,32 +188,6 @@ enum UsageResponseParser {
     static func parseJSON(_ data: Data, accountEmail: String?) -> WeeklyUsageSnapshot? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) else { return nil }
         return parseAny(obj, accountEmail: accountEmail)
-    }
-
-    static func parseCLIBilling(_ data: Data, accountEmail: String?) -> WeeklyUsageSnapshot? {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        // Shape: { monthlyLimit: {val}, usage: { totalUsed: {val} }, billingCycle: { billingPeriodEnd } }
-        // or nested under "config"
-        let config = (root["config"] as? [String: Any]) ?? root
-        let limit = numberValue(config["monthlyLimit"]) ?? numberValue(nested(config, "monthlyLimit", "val"))
-        let used = numberValue(nested(config, "usage", "totalUsed", "val"))
-            ?? numberValue(config["used"])
-            ?? numberValue(nested(config, "usage", "includedUsed", "val"))
-        let end = stringValue(nested(config, "billingCycle", "billingPeriodEnd"))
-            ?? stringValue(config["billingPeriodEnd"])
-
-        guard let limit, limit > 0, let used else { return nil }
-        let usedPercent = Percent.clamp((used / limit) * 100)
-        let resetsAt = end.flatMap { ISO8601DateFormatter.parseFlexible($0) }
-        return WeeklyUsageSnapshot(
-            usedPercent: usedPercent,
-            remainingPercent: max(0, 100 - usedPercent),
-            resetsAt: resetsAt,
-            products: UsageClient.synthesizeProducts(usedPercent: usedPercent),
-            accountEmail: accountEmail
-        )
     }
 
     private static let wrapperKeys = ["usage", "data", "subscription", "billing", "credits", "result"]
@@ -363,45 +284,18 @@ enum UsageResponseParser {
         JSON.firstDecimal(dict, keys: keys)
     }
 
-    private static func numberValue(_ any: Any?) -> Double? {
-        JSON.number(any)
-    }
-
     private static func stringValue(_ any: Any?) -> String? {
         JSON.string(any)
-    }
-
-    private static func nested(_ dict: [String: Any], _ keys: String...) -> Any? {
-        JSON.nested(dict, keys)
     }
 }
 
 // MARK: - gRPC-web protobuf scan
 
-extension Data {
-    /// Shared with unit/manual tests that decode raw protobuf samples.
-    init?(hexString: String) {
-        let chars = Array(hexString)
-        guard chars.count.isMultiple(of: 2) else { return nil }
-        var data = Data(capacity: chars.count / 2)
-        var i = chars.startIndex
-        while i < chars.endIndex {
-            let next = chars.index(i, offsetBy: 2)
-            guard let byte = UInt8(String(chars[i..<next]), radix: 16) else { return nil }
-            data.append(byte)
-            i = next
-        }
-        self = data
-    }
-}
-
 enum GRPCWebParser {
     struct Parsed {
-        var usedPercent: Double?
+        var usedPercent: Double
         var resetsAt: Date?
         var products: [ProductUsage]
-        /// Per-day rows if present in the protobuf (unused by known samples).
-        var dailySeries: [DailyUsageSnapshot] = []
     }
 
     /// Product-type enums in GetGrokCreditsConfig field-7 sub-messages.
@@ -446,7 +340,6 @@ enum GRPCWebParser {
             .map { Double($0.value) }
 
         let products = parseProductsFromPayloads(payloads)
-        let dailySeries = extractDailySeries(varints: varints, fixed32: fixed32, calendar: .current, now: now)
 
         let resetCandidates = varints.compactMap { field -> (path: [UInt64], date: Date)? in
             guard field.value >= 1_700_000_000, field.value <= 2_100_000_000 else { return nil }
@@ -465,7 +358,7 @@ enum GRPCWebParser {
         }
         let used = percent ?? ((reset != nil && hasPeriod && fixed32.isEmpty) ? 0 : nil)
         guard let used else { throw ProviderError.grokDecoding("gRPC usage percent missing") }
-        return Parsed(usedPercent: used, resetsAt: reset, products: products, dailySeries: dailySeries)
+        return Parsed(usedPercent: used, resetsAt: reset, products: products)
     }
 
     /// Debug dump of all scanned protobuf fields (for discovering daily series paths).
@@ -495,17 +388,6 @@ enum GRPCWebParser {
             }
         }
         return lines.joined(separator: "\n")
-    }
-
-    /// Reserved for a confirmed server daily series path. Returns empty until a
-    /// stable daily field path is available.
-    private static func extractDailySeries(
-        varints _: [(path: [UInt64], value: UInt64)],
-        fixed32 _: [(path: [UInt64], value: Float, order: Int)],
-        calendar _: Calendar,
-        now _: Date
-    ) -> [DailyUsageSnapshot] {
-        []
     }
 
     /// Scans raw protobuf bytes recursively for field‑7 sub‑messages (products),

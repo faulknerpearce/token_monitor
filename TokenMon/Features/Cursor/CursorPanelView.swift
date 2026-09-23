@@ -35,13 +35,13 @@ struct CursorPanelView: View {
                     SlimUsageTrack(
                         label: "Cursor Models",
                         percent: cursorModelsPercent,
-                        color: ConcentricUsageRingView.cursorColor,
+                        color: ProviderColors.cursorColor,
                         caption: cursorModelsResetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: "Other Models",
                         percent: otherModelsPercent,
-                        color: ConcentricUsageRingView.cursorColor,
+                        color: ProviderColors.cursorColor,
                         caption: otherModelsResetsAt.map { Format.resetCaption($0) }
                     )
                 }
@@ -50,7 +50,7 @@ struct CursorPanelView: View {
                     PanelCard {
                         MonthlyDailyBudgetBarsView(
                             days: days,
-                            accent: ConcentricUsageRingView.cursorColor,
+                            accent: ProviderColors.cursorColor,
                             infoText: "Share of billing-cycle quota per day. Last 7 days shown.",
                             periodUsedPercent: cursorModelsPercent,
                             periodStart: snapshot.billingCycleStart,

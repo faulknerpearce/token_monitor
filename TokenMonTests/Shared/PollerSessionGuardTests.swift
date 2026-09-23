@@ -110,13 +110,7 @@ final class PollerSessionGuardTests: XCTestCase {
     private func openCodeSnapshot() -> OpenCodeSnapshot {
         OpenCodeSnapshot(
             windows: [],
-            models: [],
-            modelsWindowLabel: "",
-            inputTokens: 0,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            totalSessions: 0
+            models: []
         )
     }
 

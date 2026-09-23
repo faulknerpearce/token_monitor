@@ -230,7 +230,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.grokColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.grokColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -333,7 +333,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.cursorColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.cursorColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -384,7 +384,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.claudeColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.claudeColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -435,7 +435,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.chatgptColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.chatgptColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -486,7 +486,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.grokbotColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.grokbotColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -539,7 +539,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ConcentricUsageRingView.openRouterColor).frame(width: fillWidth)
+                    Capsule().fill(ProviderColors.openRouterColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)

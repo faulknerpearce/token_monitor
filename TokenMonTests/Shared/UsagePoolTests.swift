@@ -94,13 +94,7 @@ final class UsagePoolTests: XCTestCase {
     private func openCodeSnapshot(_ windows: [OpenCodeWindowUsage]) -> OpenCodeSnapshot {
         OpenCodeSnapshot(
             windows: windows,
-            models: [],
-            modelsWindowLabel: "",
-            inputTokens: 0,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            totalSessions: 0
+            models: []
         )
     }
 

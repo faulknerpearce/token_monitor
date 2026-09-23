@@ -200,7 +200,6 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(goModel.cacheReadTokens, 3_000_000)
         XCTAssertEqual(goModel.costUSD, 6, accuracy: 0.001)
 
-        XCTAssertEqual(snap.modelsWindowLabel, "All models this week")
         XCTAssertNil(snap.models.first { $0.providerID == "anthropic" })
         let topModel = try XCTUnwrap(snap.models.first)
         XCTAssertEqual(topModel.providerID, "opencode-go")
@@ -245,7 +244,6 @@ final class OpenCodeStatsTests: XCTestCase {
         insert(timeCreated: now.addingTimeInterval(-3 * 24 * 3600), cost: 2, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
 
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
-        XCTAssertEqual(snap.modelsWindowLabel, "All models this week")
         XCTAssertEqual(snap.models.count, 1)
         XCTAssertEqual(snap.primaryUsedPercent, 2.0 / 60.0 * 100, accuracy: 0.01)
     }
@@ -280,13 +278,7 @@ final class OpenCodeStatsTests: XCTestCase {
                     costUSD: 0,
                     percentOfWindow: 0
                 )
-            ],
-            modelsWindowLabel: "",
-            inputTokens: 0,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            totalSessions: 0
+            ]
         )
         XCTAssertTrue(withModels.hasLocalStats)
     }
@@ -500,7 +492,7 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertFalse(OpenCodeLocalStats.grokViaOpenCode(providerID: "opencode-go", modelID: "minimax-m3"))
     }
 
-    func testBYOKProvidersExcludedFromModelsAndHeatmap() throws {
+    func testBYOKProvidersExcludedFromModels() throws {
         let now = Date(timeIntervalSince1970: 1_785_592_600)
         insert(timeCreated: now.addingTimeInterval(-3600), cost: 2, input: 1, model: modelJSON(provider: "opencode-go", id: "minimax-m3"))
         insert(timeCreated: now.addingTimeInterval(-1800), cost: 5, input: 1, model: modelJSON(provider: "deepseek", id: "deepseek-v4-pro"))
@@ -515,10 +507,6 @@ final class OpenCodeStatsTests: XCTestCase {
         // Go limits still ignore Zen and BYOK.
         let rolling = try XCTUnwrap(snap.windows.first { $0.kind == .rolling5h })
         XCTAssertEqual(rolling.usedUSD, 2, accuracy: 0.001)
-
-        let heat = try OpenCodeLocalStats.fetchWeekHeatmap(dbURL: dbURL, now: now)
-        XCTAssertEqual(Set(heat.rows.map(\.providerID)), Set(["opencode-go", "opencode"]))
-        XCTAssertFalse(heat.rows.contains { $0.providerID == "deepseek" || $0.providerID == "xai" })
     }
 
     func testOverviewSplitsGrokViaOpenCodeFromPlanUsage() throws {
@@ -709,32 +697,6 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(snap.models.first?.modelID, "used")
     }
 
-    func testWeekHeatmapAggregatesByDayAndModel() throws {
-        // Wednesday 2026-07-15 13:00 UTC → week Mon 2026-07-13 … Mon 2026-07-20
-        let now = Date(timeIntervalSince1970: 1_784_120_400)
-        let monday = Date(timeIntervalSince1970: 1_783_900_800) // 2026-07-13 00:00 UTC
-        let tuesday = monday.addingTimeInterval(24 * 3600)
-        let wednesday = monday.addingTimeInterval(2 * 24 * 3600)
-
-        insert(timeCreated: monday.addingTimeInterval(3600), cost: 3, input: 1, model: modelJSON(provider: "opencode-go", id: "minimax-m3"))
-        insert(timeCreated: tuesday.addingTimeInterval(3600), cost: 1, input: 1, model: modelJSON(provider: "opencode-go", id: "minimax-m3"))
-        insert(timeCreated: wednesday.addingTimeInterval(3600), cost: 5, input: 1, model: modelJSON(provider: "opencode", id: "zen-free"))
-        insert(timeCreated: now.addingTimeInterval(-40 * 24 * 3600), cost: 9, input: 1, model: modelJSON(provider: "opencode-go", id: "old"))
-
-        let heat = try OpenCodeLocalStats.fetchWeekHeatmap(dbURL: dbURL, now: now)
-        XCTAssertEqual(heat.dayLabels.count, 7)
-        XCTAssertEqual(heat.rows.count, 2)
-
-        let go = try XCTUnwrap(heat.rows.first { $0.modelID == "minimax-m3" })
-        XCTAssertEqual(go.dayValues[0], 3, accuracy: 0.001) // Monday
-        XCTAssertEqual(go.dayValues[1], 1, accuracy: 0.001) // Tuesday
-        XCTAssertEqual(go.weekTotal, 4, accuracy: 0.001)
-
-        let zen = try XCTUnwrap(heat.rows.first { $0.modelID == "zen-free" })
-        XCTAssertEqual(zen.dayValues[2], 5, accuracy: 0.001) // Wednesday
-        XCTAssertFalse(heat.rows.contains { $0.modelID == "old" })
-    }
-
     func testZenZeroCostUsesPublishedTokenValue() throws {
         let now = Date(timeIntervalSince1970: 1_785_592_600)
         insert(
@@ -874,9 +836,7 @@ final class OpenCodeStatsTests: XCTestCase {
         let preview = OpenCodeSnapshot.preview
         XCTAssertEqual(preview.windows.count, 3)
         XCTAssertEqual(preview.windows.first?.kind, .rolling5h)
-        XCTAssertEqual(preview.modelsWindowLabel, "All models this week")
         XCTAssertEqual(preview.primaryUsedPercent, 16.9 / 60 * 100, accuracy: 0.01)
-        XCTAssertGreaterThan(preview.inputTokens, 0)
     }
 
     /// The OpenCode Daily Budget is the subscription month (100% / ~30 days,

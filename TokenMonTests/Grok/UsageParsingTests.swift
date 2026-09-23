@@ -48,20 +48,6 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertFalse(AuthSessionService.isGrokDomain("x.ai.evil.example"))
     }
 
-    func testCLIBillingParse() throws {
-        let json = Data("""
-        {
-          "monthlyLimit": { "val": 1000 },
-          "usage": { "totalUsed": { "val": 350 } },
-          "billingCycle": { "billingPeriodEnd": "2026-07-16T20:25:00Z" }
-        }
-        """.utf8)
-        let snap = try XCTUnwrap(UsageResponseParser.parseCLIBilling(json, accountEmail: "a@b.com"))
-        XCTAssertEqual(snap.usedPercent, 35, accuracy: 0.01)
-        XCTAssertEqual(snap.accountEmail, "a@b.com")
-        XCTAssertNotNil(snap.resetsAt)
-    }
-
     func testProductColorMapping() {
         XCTAssertEqual(ProductColor.from(productID: "build"), .build)
         XCTAssertEqual(ProductColor.from(productID: "API"), .api)
@@ -748,5 +734,23 @@ final class SharedHelpersTests: XCTestCase {
     func testUsdCurrencyFormatter() {
         XCTAssertEqual(Format.usdCurrency.string(from: 410), "$410.00")
         XCTAssertEqual(Format.usdCurrency.string(from: 4.1), "$4.10")
+    }
+}
+
+extension Data {
+    /// Decodes a raw hex protobuf sample for the gRPC parser tests. Test-only —
+    /// it does not ship in the app target.
+    init?(hexString: String) {
+        let chars = Array(hexString)
+        guard chars.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: chars.count / 2)
+        var index = chars.startIndex
+        while index < chars.endIndex {
+            let next = chars.index(index, offsetBy: 2)
+            guard let byte = UInt8(String(chars[index..<next]), radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        self = data
     }
 }

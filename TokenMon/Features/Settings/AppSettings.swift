@@ -281,23 +281,6 @@ final class AppSettings: ObservableObject {
         static let visibleProducts = "visibleProductIDs"
     }
 
-    /// Drag-reorder of the currently visible (enabled) providers.
-    func moveVisibleProviders(from source: IndexSet, to destination: Int) {
-        providerOrder = MonitorProvider.movingVisible(
-            order: providerOrder,
-            visible: visibleUsageProviders,
-            from: source,
-            to: destination
-        )
-    }
-
-    /// Drag-reorder of the full usage-provider list (Preferences).
-    func moveOrderedProviders(from source: IndexSet, to destination: Int) {
-        var order = orderedUsageProviders
-        order.move(fromOffsets: source, toOffset: destination)
-        providerOrder = order
-    }
-
     /// Live drag: move `moving` to the slot currently occupied by `target`.
     func moveProvider(_ moving: MonitorProvider, to target: MonitorProvider) {
         var order = orderedUsageProviders

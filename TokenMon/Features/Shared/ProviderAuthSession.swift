@@ -9,8 +9,6 @@ struct ProviderAuthConfig {
     var storeFilenamePrefix: String
     /// Log category (subsystem: `com.modelmonitor.app`).
     var logCategory: String
-    /// Whether this provider also persists a bearer token (Grok only).
-    var usesBearerToken: Bool
     /// Extra store keys to clear on sign-out / invalid (e.g. `workspace`).
     var extraStoreKeys: [String]
     /// HTTP hosts whose `HTTPCookieStorage` cookies are cleared on sign-out.
@@ -67,9 +65,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
 
     func refreshFromDisk() {
         let cookies = loadCookieHeader()
-        let hasTokenOrCookie = !(cookies?.isEmpty ?? true)
-            || (config.usesBearerToken && loadBearerToken() != nil)
-        isSignedIn = hasTokenOrCookie
+        isSignedIn = !(cookies?.isEmpty ?? true)
         accountEmail = loadEmail()
         needsSignIn = !isSignedIn
         sessionGeneration += 1
@@ -141,10 +137,6 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         sessionGeneration += 1
     }
 
-    func loadBearerToken() -> String? {
-        readStore(key: "token")
-    }
-
     func captureCookiesFromWebKit() async -> Bool {
         // Finish any pending sign-out purge first so it cannot delete cookies
         // being captured from a fresh sign-in.
@@ -187,7 +179,6 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         sessionGeneration += 1
         removeStore(key: "session")
         removeStore(key: "email")
-        if config.usesBearerToken { removeStore(key: "token") }
         for key in config.extraStoreKeys { removeStore(key: key) }
         WebKitCookieCapture.clearHTTPCookieStorage(hosts: config.signOutHosts)
         let dataStore = signInDataStore

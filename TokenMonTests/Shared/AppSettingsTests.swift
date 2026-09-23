@@ -180,18 +180,6 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(settings.orderedUsageProviders.count, MonitorProvider.usageProviders.count)
     }
 
-    func testMoveVisibleProvidersLeavesDisabledInPlace() {
-        let settings = makeSettings()
-        settings.providerOrder = [.grok, .cursor, .opencode, .claude]
-        settings.enabledProviderIDs = [.grok, .opencode, .claude]
-        settings.moveVisibleProviders(from: IndexSet(integer: 2), to: 0)
-        XCTAssertEqual(settings.visibleUsageProviders, [.claude, .grok, .opencode])
-        XCTAssertEqual(
-            Array(settings.orderedUsageProviders.prefix(4)),
-            [.claude, .cursor, .grok, .opencode]
-        )
-    }
-
     func testMoveProviderInsertsAtTargetSlot() {
         let settings = makeSettings()
         settings.moveProvider(.claude, to: .grok)

@@ -32,7 +32,6 @@ final class ClaudeAuthSession: ProviderAuthSession {
         ProviderAuthConfig(
             storeFilenamePrefix: "claude_auth_",
             logCategory: "ClaudeAuth",
-            usesBearerToken: false,
             extraStoreKeys: [],
             signOutHosts: claudeHosts,
             capturePolicy: claudePolicy(),

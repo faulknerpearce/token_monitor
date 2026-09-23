@@ -20,7 +20,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
         isGrokSignedIn: Bool = false,
         providerOrder: [MonitorProvider] = MonitorProvider.usageProviders
     ) -> NSImage {
-        MenuBarStatusRenderer.image(
+        MenuBarStatusRenderer.render(
             selectedProvider: provider,
             showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
@@ -39,7 +39,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
             showGrokbotBar: showGrokbotBar,
             providerOrder: providerOrder,
             visibleProductIDs: Set(ProductCatalog.knownIDs)
-        )
+        ).image
     }
 
     func testSelectedProviderLabelHasFixedWidthAcrossProviders() {

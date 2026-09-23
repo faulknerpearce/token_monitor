@@ -43,51 +43,6 @@ enum MenuBarStatusRenderer {
 
     private static var appearanceObserver: NSObjectProtocol?
 
-    // swiftlint:disable:next function_parameter_count
-    static func image(
-        selectedProvider: MonitorProvider,
-        showSelectedProvider: Bool,
-        snapshot: WeeklyUsageSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        cursorSnapshot: CursorSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        chatGPTSnapshot: ChatGPTSnapshot?,
-        openRouterSnapshot: OpenRouterSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        isGrokSignedIn: Bool,
-        showGrokBar: Bool,
-        showGrokCategories: Bool,
-        showOpenCodeBar: Bool,
-        showCursorBar: Bool,
-        showClaudeBar: Bool,
-        showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>,
-        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
-    ) -> NSImage {
-        render(
-            selectedProvider: selectedProvider,
-            showSelectedProvider: showSelectedProvider,
-            snapshot: snapshot,
-            openCodeSnapshot: openCodeSnapshot,
-            cursorSnapshot: cursorSnapshot,
-            claudeSnapshot: claudeSnapshot,
-            chatGPTSnapshot: chatGPTSnapshot,
-            openRouterSnapshot: openRouterSnapshot,
-            grokbotSnapshot: grokbotSnapshot,
-            isGrokSignedIn: isGrokSignedIn,
-            showGrokBar: showGrokBar,
-            showGrokCategories: showGrokCategories,
-            showOpenCodeBar: showOpenCodeBar,
-            showCursorBar: showCursorBar,
-            showClaudeBar: showClaudeBar,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder,
-            visibleProductIDs: visibleProductIDs,
-            enabledProviders: enabledProviders
-        ).image
-    }
-
     // Renders the status item plus the provider hit regions for the same layout,
     // so a status-item click maps back to the provider whose bar it landed on.
     // swiftlint:disable:next function_parameter_count
@@ -286,7 +241,7 @@ enum MenuBarStatusRenderer {
                 guard showCursorBar else { continue }
                 pieces.append(.solid(provider: .cursor, segment: solid(
                     used: cursorSnapshot?.usedPercent,
-                    color: ConcentricUsageRingView.cursorSRGB.nsColor,
+                    color: ProviderColors.cursorSRGB.nsColor,
                     icon: ProviderLogo.cursor
                 )))
             case .opencode:
@@ -304,14 +259,14 @@ enum MenuBarStatusRenderer {
                 guard showClaudeBar else { continue }
                 pieces.append(.solid(provider: .claude, segment: solid(
                     used: claudeSnapshot?.headlineUsedPercent,
-                    color: ConcentricUsageRingView.claudeSRGB.nsColor,
+                    color: ProviderColors.claudeSRGB.nsColor,
                     icon: ProviderLogo.claude
                 )))
             case .grokbot:
                 guard showGrokbotBar else { continue }
                 pieces.append(.solid(provider: .grokbot, segment: solid(
                     used: grokbotSnapshot?.usedPercent,
-                    color: ConcentricUsageRingView.grokbotSRGB.nsColor,
+                    color: ProviderColors.grokbotSRGB.nsColor,
                     icon: ProviderLogo.grokbot
                 )))
             case .overview, .chatgpt, .openrouter:
