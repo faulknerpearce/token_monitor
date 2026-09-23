@@ -49,15 +49,13 @@ struct GrokPanelView: View {
 
     @ViewBuilder
     private func usageHeader(_ snapshot: WeeklyUsageSnapshot) -> some View {
-        // Show Chat, Build, Imagine, Voice; unused products default to 0%.
-        let productsByID = Dictionary(
-            snapshot.products.map { ($0.id.lowercased(), $0) },
-            uniquingKeysWith: { _, last in last }
+        // Render the products the snapshot actually carries (including a
+        // synthesized "other" slice when the server omits the breakdown), limited
+        // to the user's visible set, so the bar always matches the headline used%.
+        let products = ProductCatalog.panelProducts(
+            snapshot.products,
+            visible: settings.visibleProductIDs
         )
-        let products: [ProductUsage] = ["chat", "build", "imagine", "voice"].compactMap { id in
-            if let existing = productsByID[id] { return existing }
-            return ProductUsage(id: id, displayName: ProductCatalog.displayName(for: id), percentOfPool: 0)
-        }
         let week = DailyUsageBuilder.week(
             history: history.recent.reversed(),
             current: snapshot,

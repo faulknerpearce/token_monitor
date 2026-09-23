@@ -17,6 +17,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let auth: ClaudeAuthSession
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchUsage: (String) async throws -> (ClaudeUsageResponse, Date)
     private let logger = Logger(category: "Claude")
     private var cancellables = Set<AnyCancellable>()
 
@@ -29,11 +31,20 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: ClaudeAuthSession, hourly: HourlyDeltaActivityStore, daily: DailyQuotaDeltaStore) {
+    init(
+        settings: AppSettings,
+        auth: ClaudeAuthSession,
+        hourly: HourlyDeltaActivityStore,
+        daily: DailyQuotaDeltaStore,
+        fetchUsage: ((String) async throws -> (ClaudeUsageResponse, Date))? = nil
+    ) {
         self.settings = settings
         self.auth = auth
         self.hourly = hourly
         self.daily = daily
+        self.fetchUsage = fetchUsage ?? { cookieHeader in
+            try await ClaudeUsageClient(cookieHeader: cookieHeader).fetchUsage()
+        }
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()
@@ -76,9 +87,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        let client = ClaudeUsageClient(cookieHeader: cookieHeader)
         do {
-            let (response, fetchedAt) = try await client.fetchUsage()
+            let (response, fetchedAt) = try await fetchUsage(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
@@ -103,6 +113,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 now: fetchedAt
             )
         } catch let error as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session.
+            guard auth.isCurrent(generation) else { return }
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

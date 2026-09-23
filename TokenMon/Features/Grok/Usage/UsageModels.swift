@@ -78,6 +78,16 @@ enum ProductCatalog {
         }
     }
 
+    /// Products for a panel's bar and category rows: the snapshot's own products
+    /// in canonical display order, limited to the user's visible set, keeping any
+    /// non-zero contribution (the menu bar applies a 0.05 floor instead). A
+    /// breakdown-less snapshot carries a synthesized `"other"` slice, which this
+    /// returns so the bar reflects the headline used% instead of painting an
+    /// empty track.
+    static func panelProducts(_ products: [ProductUsage], visible: Set<String>) -> [ProductUsage] {
+        filtered(products, visible: visible, threshold: 0)
+    }
+
     /// Products that are both user-visible and contribute at least `threshold` to
     /// the pool, in canonical display order. Used by the menu bar renderer and panels.
     static func filtered(

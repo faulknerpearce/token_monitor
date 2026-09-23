@@ -43,17 +43,24 @@ final class ChatGPTAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(
-            config: ProviderAuthConfig(
-                storeFilenamePrefix: "chatgpt_auth_",
-                logCategory: "ChatGPTAuth",
-                usesBearerToken: false,
-                extraStoreKeys: [],
-                signOutHosts: Self.chatgptHosts,
-                capturePolicy: Self.chatgptPolicy(),
-                isDomain: { domain in Domain.matches(domain, hosts: Self.chatgptHosts) }
-            )
+    static func chatgptConfig() -> ProviderAuthConfig {
+        ProviderAuthConfig(
+            storeFilenamePrefix: "chatgpt_auth_",
+            logCategory: "ChatGPTAuth",
+            usesBearerToken: false,
+            extraStoreKeys: [],
+            signOutHosts: chatgptHosts,
+            capturePolicy: chatgptPolicy(),
+            isDomain: { domain in Domain.matches(domain, hosts: chatgptHosts) }
         )
+    }
+
+    init() {
+        super.init(config: Self.chatgptConfig())
+    }
+
+    /// Test seam: isolates the session's file store to `directory`.
+    init(directory: URL?) {
+        super.init(config: Self.chatgptConfig(), directory: directory)
     }
 }

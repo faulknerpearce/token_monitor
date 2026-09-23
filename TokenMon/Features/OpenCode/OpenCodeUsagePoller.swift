@@ -17,6 +17,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private let settings: AppSettings
     private let auth: OpenCodeAuthSession
+    /// Injected console/local fetch seams (tests supply fakes); default to live.
+    private let fetchConsole: (String, String?) async throws -> (OpenCodeSnapshot, String)
+    private let fetchLocal: () async throws -> (OpenCodeSnapshot, OpenCodeDayHourlyUsage?)
     private let logger = Logger(category: "OpenCode")
     private var cancellables = Set<AnyCancellable>()
 
@@ -25,9 +28,26 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: OpenCodeAuthSession) {
+    init(
+        settings: AppSettings,
+        auth: OpenCodeAuthSession,
+        fetchConsole: ((String, String?) async throws -> (OpenCodeSnapshot, String))? = nil,
+        fetchLocal: (() async throws -> (OpenCodeSnapshot, OpenCodeDayHourlyUsage?))? = nil
+    ) {
         self.settings = settings
         self.auth = auth
+        self.fetchConsole = fetchConsole ?? { cookieHeader, knownOrgID in
+            try await OpenCodeConsoleClient(cookieHeader: cookieHeader)
+                .fetchGoUsageSnapshot(knownOrgID: knownOrgID)
+        }
+        self.fetchLocal = fetchLocal ?? {
+            try await Task.detached(priority: .userInitiated) {
+                (
+                    try OpenCodeLocalStats.fetchSnapshot(),
+                    try? OpenCodeLocalStats.fetchDayHourlyUsage()
+                )
+            }.value
+        }
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()
@@ -62,27 +82,23 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         defer { isRefreshing = false }
 
         // Prefer official console Go usage (matches opencode.ai bars).
+        let generation = auth.sessionGeneration
         let cookieHeader = auth.cookieHeader()
         if let cookieHeader, !cookieHeader.isEmpty {
             do {
-                let generation = auth.sessionGeneration
-                let client = OpenCodeConsoleClient(cookieHeader: cookieHeader)
-                let (consoleSnap, orgID) = try await client.fetchGoUsageSnapshot(
-                    knownOrgID: auth.workspaceID
-                )
-                auth.saveWorkspaceID(orgID)
-
-                let localBundle = try? await Task.detached(priority: .userInitiated) {
-                    (
-                        try OpenCodeLocalStats.fetchSnapshot(),
-                        try? OpenCodeLocalStats.fetchDayHourlyUsage()
-                    )
-                }.value
+                let (consoleSnap, orgID) = try await fetchConsole(cookieHeader, auth.workspaceID)
+                let localBundle = try? await fetchLocal()
                 var snap = consoleSnap
                 if let local = localBundle?.0 {
                     snap = Self.mergeLocalModels(into: snap, local: local)
                 }
                 guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+                // Persist the workspace id only for the live session, and only
+                // when it changed, so a late success cannot rewrite the previous
+                // account's id after sign-out cleared it.
+                if auth.workspaceID != orgID {
+                    auth.saveWorkspaceID(orgID)
+                }
                 snapshot = snap
                 if let hourly = localBundle?.1 { dayHourlyUsage = hourly }
                 let budget = await Self.buildDailyBudgetDays(for: snap)
@@ -98,6 +114,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 )
                 return
             } catch let error as ProviderError {
+                // A request that began under a previous credential state must
+                // not tear down the current session.
+                guard auth.isCurrent(generation) else { return }
                 switch error.usageError {
                 case .unauthorized, .notSignedIn:
                     auth.markSessionInvalid(reason: error.localizedDescription)
@@ -112,12 +131,11 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
 
         // Local estimate fallback (labeled).
         do {
-            let (snap, hourly) = try await Task.detached(priority: .userInitiated) {
-                let snap = try OpenCodeLocalStats.fetchSnapshot()
-                let hourly = try? OpenCodeLocalStats.fetchDayHourlyUsage()
-                return (snap, hourly)
-            }.value
-            guard !Task.isCancelled else { return }
+            let (snap, hourly) = try await fetchLocal()
+            // Do not republish after a sign-out / account switch cleared the
+            // snapshot while this poll was in flight (generation moved). A poll
+            // that *started* signed-out keeps working: its generation is stable.
+            guard !Task.isCancelled, auth.sessionGeneration == generation else { return }
             snapshot = snap
             if let hourly { dayHourlyUsage = hourly }
             let budget = await Self.buildDailyBudgetDays(for: snap)

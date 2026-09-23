@@ -16,6 +16,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let auth: CursorAuthSession
     private let daily: DailyQuotaDeltaStore
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchSnapshot:
+        (String) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double])
     private let logger = Logger(category: "Cursor")
     private var cancellables = Set<AnyCancellable>()
 
@@ -32,10 +35,18 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: CursorAuthSession, daily: DailyQuotaDeltaStore) {
+    init(
+        settings: AppSettings,
+        auth: CursorAuthSession,
+        daily: DailyQuotaDeltaStore,
+        fetchSnapshot: ((String) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double]))? = nil
+    ) {
         self.settings = settings
         self.auth = auth
         self.daily = daily
+        self.fetchSnapshot = fetchSnapshot ?? { cookieHeader in
+            try await CursorUsageClient(cookieHeader: cookieHeader).fetchSnapshot()
+        }
         // Drop the Cursor snapshot as soon as this shared session signs out.
         auth.$isSignedIn
             .dropFirst()
@@ -89,9 +100,8 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        let client = CursorUsageClient(cookieHeader: cookieHeader)
         do {
-            let (snap, hourly, estimatedWeightByDay) = try await client.fetchSnapshot()
+            let (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = snap
             dayHourlyUsage = hourly
@@ -121,6 +131,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
                 "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
             )
         } catch let cursorError as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session (sign-out → sign in as another
+            // account while this fetch was in flight).
+            guard auth.isCurrent(generation) else { return }
             let usageError = cursorError.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

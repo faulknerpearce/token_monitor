@@ -12,6 +12,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private let settings: AppSettings
     private let auth: ChatGPTAuthSession
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchUsage: (String) async throws -> (ChatGPTUsageResponse, Date)
     private let logger = Logger(category: "ChatGPT")
     private var cancellables = Set<AnyCancellable>()
 
@@ -20,9 +22,16 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: ChatGPTAuthSession) {
+    init(
+        settings: AppSettings,
+        auth: ChatGPTAuthSession,
+        fetchUsage: ((String) async throws -> (ChatGPTUsageResponse, Date))? = nil
+    ) {
         self.settings = settings
         self.auth = auth
+        self.fetchUsage = fetchUsage ?? { cookieHeader in
+            try await ChatGPTUsageClient(cookieHeader: cookieHeader).fetchUsage()
+        }
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()
@@ -61,9 +70,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        let client = ChatGPTUsageClient(cookieHeader: cookieHeader)
         do {
-            let (response, fetchedAt) = try await client.fetchUsage()
+            let (response, fetchedAt) = try await fetchUsage(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = ChatGPTSnapshot(
                 fetchedAt: fetchedAt,
@@ -79,6 +87,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
             logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
         } catch let error as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session.
+            guard auth.isCurrent(generation) else { return }
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:

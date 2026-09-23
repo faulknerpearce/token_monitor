@@ -12,6 +12,8 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private let settings: AppSettings
     private let auth: OpenRouterAuthSession
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchSnapshot: (String) async throws -> OpenRouterSnapshot
     private let logger = Logger(category: "OpenRouter")
     private var cancellables = Set<AnyCancellable>()
 
@@ -20,9 +22,16 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         refresh: { [weak self] in await self?.refreshNow() }
     )
 
-    init(settings: AppSettings, auth: OpenRouterAuthSession) {
+    init(
+        settings: AppSettings,
+        auth: OpenRouterAuthSession,
+        fetchSnapshot: ((String) async throws -> OpenRouterSnapshot)? = nil
+    ) {
         self.settings = settings
         self.auth = auth
+        self.fetchSnapshot = fetchSnapshot ?? { apiKey in
+            try await OpenRouterUsageClient(apiKey: apiKey).fetchSnapshot()
+        }
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()
@@ -65,9 +74,8 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         guard auth.isSignedIn, !auth.needsSignIn else { return }
 
         let generation = auth.sessionGeneration
-        let client = OpenRouterUsageClient(apiKey: apiKey)
         do {
-            let snap = try await client.fetchSnapshot()
+            let snap = try await fetchSnapshot(apiKey)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = snap
             lastError = nil
@@ -79,6 +87,9 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
                 logger.info("OpenRouter refresh: \(Format.usd(snap.usedUSD), privacy: .public) spent (no credit limit)")
             }
         } catch let error as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session.
+            guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)

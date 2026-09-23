@@ -19,6 +19,8 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     private let auth: CursorAuthSession
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchSnapshot: (String, String?) async throws -> GrokbotSnapshot
     private let logger = Logger(category: "Grokbot")
     private var cancellables = Set<AnyCancellable>()
 
@@ -35,12 +37,16 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         settings: AppSettings,
         auth: CursorAuthSession,
         hourly: HourlyDeltaActivityStore,
-        daily: DailyQuotaDeltaStore
+        daily: DailyQuotaDeltaStore,
+        fetchSnapshot: ((String, String?) async throws -> GrokbotSnapshot)? = nil
     ) {
         self.settings = settings
         self.auth = auth
         self.hourly = hourly
         self.daily = daily
+        self.fetchSnapshot = fetchSnapshot ?? { cookieHeader, accountEmail in
+            try await GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchSnapshot()
+        }
         // The session is shared with Cursor. Signing out (or a 401) from either
         // surface must drop this snapshot immediately, not on the next poll.
         auth.$isSignedIn
@@ -83,9 +89,8 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        let client = GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: auth.accountEmail)
         do {
-            let fresh = try await client.fetchSnapshot()
+            let fresh = try await fetchSnapshot(cookieHeader, auth.accountEmail)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             snapshot = fresh
             lastError = nil
@@ -115,6 +120,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
                 now: fresh.fetchedAt
             )
         } catch let error as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session.
+            guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)

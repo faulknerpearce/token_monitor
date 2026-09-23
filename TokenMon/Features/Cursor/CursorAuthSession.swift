@@ -32,18 +32,25 @@ final class CursorAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(
-            config: ProviderAuthConfig(
-                storeFilenamePrefix: "cursor_auth_",
-                logCategory: "CursorAuth",
-                usesBearerToken: false,
-                extraStoreKeys: [],
-                signOutHosts: Self.cursorHosts,
-                capturePolicy: Self.cursorPolicy(),
-                isDomain: { domain in Domain.matches(domain, hosts: Self.cursorHosts) }
-            )
+    static func cursorConfig() -> ProviderAuthConfig {
+        ProviderAuthConfig(
+            storeFilenamePrefix: "cursor_auth_",
+            logCategory: "CursorAuth",
+            usesBearerToken: false,
+            extraStoreKeys: [],
+            signOutHosts: cursorHosts,
+            capturePolicy: cursorPolicy(),
+            isDomain: { domain in Domain.matches(domain, hosts: cursorHosts) }
         )
+    }
+
+    init() {
+        super.init(config: Self.cursorConfig())
+    }
+
+    /// Test seam: isolates the session's file store to `directory`.
+    init(directory: URL?) {
+        super.init(config: Self.cursorConfig(), directory: directory)
     }
 
     nonisolated static func isCursorDomain(_ domain: String) -> Bool {

@@ -28,17 +28,24 @@ final class ClaudeAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(
-            config: ProviderAuthConfig(
-                storeFilenamePrefix: "claude_auth_",
-                logCategory: "ClaudeAuth",
-                usesBearerToken: false,
-                extraStoreKeys: [],
-                signOutHosts: Self.claudeHosts,
-                capturePolicy: Self.claudePolicy(),
-                isDomain: { domain in Domain.matches(domain, hosts: Self.claudeHosts) }
-            )
+    static func claudeConfig() -> ProviderAuthConfig {
+        ProviderAuthConfig(
+            storeFilenamePrefix: "claude_auth_",
+            logCategory: "ClaudeAuth",
+            usesBearerToken: false,
+            extraStoreKeys: [],
+            signOutHosts: claudeHosts,
+            capturePolicy: claudePolicy(),
+            isDomain: { domain in Domain.matches(domain, hosts: claudeHosts) }
         )
+    }
+
+    init() {
+        super.init(config: Self.claudeConfig())
+    }
+
+    /// Test seam: isolates the session's file store to `directory`.
+    init(directory: URL?) {
+        super.init(config: Self.claudeConfig(), directory: directory)
     }
 }

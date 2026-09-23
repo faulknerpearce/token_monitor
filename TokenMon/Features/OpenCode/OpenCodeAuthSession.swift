@@ -41,18 +41,25 @@ final class OpenCodeAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(
-            config: ProviderAuthConfig(
-                storeFilenamePrefix: "opencode_auth_",
-                logCategory: "OpenCodeAuth",
-                usesBearerToken: false,
-                extraStoreKeys: ["workspace"],
-                signOutHosts: Self.openCodeHosts,
-                capturePolicy: Self.openCodePolicy(),
-                isDomain: { domain in Domain.matches(domain, hosts: Self.openCodeHosts) }
-            )
+    static func openCodeConfig() -> ProviderAuthConfig {
+        ProviderAuthConfig(
+            storeFilenamePrefix: "opencode_auth_",
+            logCategory: "OpenCodeAuth",
+            usesBearerToken: false,
+            extraStoreKeys: ["workspace"],
+            signOutHosts: openCodeHosts,
+            capturePolicy: openCodePolicy(),
+            isDomain: { domain in Domain.matches(domain, hosts: openCodeHosts) }
         )
+    }
+
+    init() {
+        super.init(config: Self.openCodeConfig())
+    }
+
+    /// Test seam: isolates the session's file store to `directory`.
+    init(directory: URL?) {
+        super.init(config: Self.openCodeConfig(), directory: directory)
     }
 
     override func refreshFromDisk() {
@@ -63,5 +70,12 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     func saveWorkspaceID(_ id: String) {
         writeStore(key: "workspace", value: id)
         workspaceID = id
+    }
+
+    /// Clear the in-memory workspace id alongside the persisted key, so a
+    /// signed-out session cannot hand the previous account's org to the next poll.
+    override func clearBrowserState() {
+        super.clearBrowserState()
+        workspaceID = nil
     }
 }
