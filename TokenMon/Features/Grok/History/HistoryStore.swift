@@ -12,6 +12,9 @@ final class UsageSnapshotRecord {
     var resetsAt: Date?
     var productsJSON: Data
     /// Stored as Double for SwiftData schema stability; domain model uses Decimal.
+    /// This is intentionally lossy (a display-only balance), so `4.10` may read
+    /// back as `4.0999…`. Persisting it as a string would require a SwiftData
+    /// schema migration for no user-visible benefit.
     var extraCredits: Double?
     var accountEmail: String?
 
@@ -49,6 +52,10 @@ final class UsageSnapshotRecord {
         accountEmail = snapshot.accountEmail
     }
 
+    /// `dailySeries` is deliberately not persisted: it is only ever non-empty
+    /// when the server supplies a per-day series, which the local-delta path
+    /// already supersedes, so round-tripping it would add schema weight for no
+    /// visible effect.
     func toSnapshot() -> WeeklyUsageSnapshot {
         let products: [ProductUsage]
         if let decoded = try? Self.decoder.decode([ProductUsage].self, from: productsJSON) {
@@ -81,21 +88,40 @@ final class HistoryStore: ObservableObject {
 
     @Published private(set) var recent: [WeeklyUsageSnapshot] = []
 
+    /// True when the persistent store could not be opened. History then runs
+    /// session-only (in-memory) instead of silently no-oping forever; Settings
+    /// surfaces this so the user knows the data will not survive a relaunch.
+    @Published private(set) var storeFailed = false
+
     init(inMemory: Bool = false) {
+        if let container = Self.makeContainer(inMemory: inMemory) {
+            self.container = container
+            self.context = ModelContext(container)
+            reload()
+            return
+        }
+        // Persistent store unavailable: fall back to an in-memory store so
+        // append/allSnapshots still work this session, and flag it for the UI.
+        storeFailed = true
+        if !inMemory, let fallback = Self.makeContainer(inMemory: true) {
+            self.container = fallback
+            self.context = ModelContext(fallback)
+            Self.logger.error("Persistent history store unavailable; using in-memory history.")
+        }
+    }
+
+    private static func makeContainer(inMemory: Bool) -> ModelContainer? {
         do {
             let config: ModelConfiguration
             if inMemory {
                 config = ModelConfiguration(isStoredInMemoryOnly: true)
             } else {
-                let storeURL = Self.persistentStoreURL()
-                config = ModelConfiguration(url: storeURL)
+                config = ModelConfiguration(url: persistentStoreURL())
             }
-            let container = try ModelContainer(for: UsageSnapshotRecord.self, configurations: config)
-            self.container = container
-            self.context = ModelContext(container)
-            reload()
+            return try ModelContainer(for: UsageSnapshotRecord.self, configurations: config)
         } catch {
             Self.logger.error("SwiftData init failed: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

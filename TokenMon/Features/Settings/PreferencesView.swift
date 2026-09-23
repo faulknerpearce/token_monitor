@@ -277,6 +277,12 @@ struct PreferencesView: View {
                 Text("Clearing history does not reset your SuperGrok weekly pool.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if history.storeFailed {
+                    Text("History storage is unavailable — usage is kept for this session only "
+                        + "and will not survive a relaunch.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             if let exportError {

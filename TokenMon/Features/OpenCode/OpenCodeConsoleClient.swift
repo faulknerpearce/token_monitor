@@ -18,6 +18,13 @@ struct OpenCodeGoMeters: Equatable {
     var hasAny: Bool { fiveHour != nil || week != nil || month != nil }
 }
 
+/// A 403 on an org-scoped console request: the workspace id was rejected
+/// (membership change, or a stale id from a previous account). Distinct from an
+/// expired session so the caller can re-resolve the org instead of signing out.
+enum OpenCodeConsoleError: Error {
+    case orgForbidden
+}
+
 /// Fetches OpenCode Go usage from the console API.
 ///
 /// The console moved off the legacy `_server` (`lite.subscription`) server
@@ -48,8 +55,23 @@ struct OpenCodeConsoleClient: Sendable {
     /// caller can persist the id.
     func fetchGoUsageSnapshot(knownOrgID: String? = nil) async throws -> (OpenCodeSnapshot, String) {
         let orgID = try await resolveOrgID(preferred: knownOrgID)
-        let meters = try await fetchGoMeters(orgID: orgID)
-        return (Self.snapshot(from: meters, now: Date()), orgID)
+        do {
+            let meters = try await fetchGoMeters(orgID: orgID)
+            return (Self.snapshot(from: meters, now: Date()), orgID)
+        } catch OpenCodeConsoleError.orgForbidden {
+            // The stored org id was rejected. Re-resolve from the account's own
+            // workspace list and retry once; only 401 / a login redirect (raised
+            // by the unscoped requests) means the session itself is expired.
+            let freshOrg = try await resolveOrgID(preferred: nil)
+            guard freshOrg != orgID else {
+                throw ProviderError.badResponse(
+                    .openCode,
+                    "The OpenCode console denied access to this workspace."
+                )
+            }
+            let meters = try await fetchGoMeters(orgID: freshOrg)
+            return (Self.snapshot(from: meters, now: Date()), freshOrg)
+        }
     }
 
     /// The console org id. Prefers the stored id; otherwise lists `/console/api/orgs`.
@@ -102,6 +124,12 @@ struct OpenCodeConsoleClient: Sendable {
         // follows it) rather than returning 401.
         if let final = http.url, Self.isLoginRedirect(final) {
             throw ProviderError.unauthorized(.openCode)
+        }
+        // A 403 on an org-scoped request is a rejected workspace, not an expired
+        // session — let the caller re-resolve and retry. A 403 without an org id
+        // is the session being refused outright.
+        if http.statusCode == 403, orgID != nil {
+            throw OpenCodeConsoleError.orgForbidden
         }
         if http.statusCode == 401 || http.statusCode == 403 {
             throw ProviderError.unauthorized(.openCode)

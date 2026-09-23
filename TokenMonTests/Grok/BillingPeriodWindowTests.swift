@@ -75,6 +75,32 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: previous.end), 8)
     }
 
+    /// A payload whose reset instant lagged more than one period must roll
+    /// forward by whole periods until the window contains today, instead of
+    /// returning a window entirely in the past.
+    func testStaleResetRollsForwardToContainToday() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        cal.firstWeekday = 2
+        // Reset Thu Jul 16, but the API never advanced it; now is Mon Jul 27.
+        let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
+        let now = ISO8601DateFormatter().date(from: "2026-07-27T12:00:00Z")!
+        let bounds = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+            resetsAt: resetsAt,
+            weekOffset: 0,
+            calendar: cal,
+            now: now
+        ))
+        // Window rolled to Thu Jul 23 – Wed Jul 29.
+        XCTAssertEqual(cal.component(.day, from: bounds.start), 23)
+        XCTAssertEqual(cal.component(.day, from: bounds.end), 29)
+        XCTAssertEqual(cal.dateComponents([.day], from: bounds.start, to: bounds.end).day, 6)
+        // Today falls inside the window.
+        let today = cal.startOfDay(for: now)
+        XCTAssertLessThanOrEqual(bounds.start, today)
+        XCTAssertGreaterThanOrEqual(bounds.end, today)
+    }
+
     /// A snapshot without a provider reset must yield no chart window at all —
     /// never a calendar Mon–Sun week invented from `now`.
     func testWeeklyChartRefusedWithoutResetsAt() throws {

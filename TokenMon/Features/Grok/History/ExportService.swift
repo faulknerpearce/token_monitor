@@ -39,10 +39,18 @@ enum ExportService {
     }
 
     private static func csvEscape(_ value: String) -> String {
-        if value.contains(",") || value.contains("\"") || value.contains("\n") {
-            return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        // Spreadsheet formula-injection guard: a cell starting with =, +, -, or
+        // @ is executed as a formula when the export is opened in Excel/Sheets.
+        let sanitized: String
+        if let first = value.first, "=+-@".contains(first) {
+            sanitized = "'" + value
+        } else {
+            sanitized = value
         }
-        return value
+        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") {
+            return "\"\(sanitized.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }
+        return sanitized
     }
 
     private struct ExportRow: Encodable {

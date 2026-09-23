@@ -580,7 +580,8 @@ enum OpenCodeLocalStats {
         defer { sqlite3_finalize(stmt) }
 
         var rows: [SessionRow] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var step = sqlite3_step(stmt)
+        while step == SQLITE_ROW {
             let (providerID, modelID) = modelParts(sqlite3_column_text(stmt, 6))
             rows.append(SessionRow(
                 timeCreatedMS: sqlite3_column_int64(stmt, 0),
@@ -592,15 +593,22 @@ enum OpenCodeLocalStats {
                 providerID: providerID,
                 modelID: modelID
             ))
+            step = sqlite3_step(stmt)
+        }
+        // A terminal error (e.g. SQLITE_BUSY past the timeout, or a corrupt page)
+        // must not be reported as a successful partial read that undercounts.
+        guard step == SQLITE_DONE else {
+            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
         return rows
     }
 
-    /// Opens a readonly connection (URI so concurrent OpenCode WAL writers stay readable).
+    /// Opens a readonly connection. The plain path (no URI parsing) avoids a
+    /// home directory containing `#`, `?`, or `%` truncating a `file:` URI;
+    /// `SQLITE_OPEN_READONLY` already implies the `mode=ro` behavior.
     private static func openConnection(at dbURL: URL) throws -> OpaquePointer {
         var db: OpaquePointer?
-        let uri = "file:\(dbURL.path)?mode=ro"
-        guard sqlite3_open_v2(uri, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK else {
+        guard sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown error"
             sqlite3_close(db)
             throw OpenCodeLocalStatsError.openFailed(message)
@@ -632,7 +640,11 @@ enum OpenCodeLocalStats {
         sqlite3_bind_int64(stmt, 2, endMS)
 
         var rows: [SessionRow] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var step = sqlite3_step(stmt)
+        while step == SQLITE_ROW {
+            // `defer` advances the cursor even on the `continue` paths below, so
+            // a skipped row cannot leave the loop stepping forever.
+            defer { step = sqlite3_step(stmt) }
             guard let dataText = sqlite3_column_text(stmt, 2),
                   let data = String(cString: dataText).data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -657,6 +669,9 @@ enum OpenCodeLocalStats {
                 modelID: modelID,
                 sessionID: sessionID
             ))
+        }
+        guard step == SQLITE_DONE else {
+            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
         return rows
     }

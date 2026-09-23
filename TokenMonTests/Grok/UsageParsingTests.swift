@@ -75,6 +75,16 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertTrue(text.contains("build:25"))
     }
 
+    func testExportCSVNeutralizesFormulaInjection() throws {
+        let snap = WeeklyUsageSnapshot(usedPercent: 10, accountEmail: "=cmd|'/C calc'!A1")
+        let data = try ExportService.export([snap], format: .csv)
+        let text = String(data: data, encoding: .utf8)!
+        // A leading =, +, -, or @ is prefixed with a quote so spreadsheets treat
+        // the cell as text rather than executing it as a formula.
+        XCTAssertTrue(text.contains("'=cmd|"))
+        XCTAssertFalse(text.contains(",=cmd|"))
+    }
+
     func testExportJSONRoundTrip() throws {
         let data = try ExportService.export([.preview], format: .json)
         let obj = try JSONSerialization.jsonObject(with: data)

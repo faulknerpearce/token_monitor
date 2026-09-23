@@ -399,9 +399,23 @@ enum DailyUsageBuilder {
         let resetDay = cal.startOfDay(for: resetsAt)
         // Active period start: 7 days before the reset day while still in period, or
         // the reset day itself once `resetsAt` has passed and the API has not advanced it.
-        let baseStart: Date
+        var baseStart: Date
         if now >= resetsAt {
             baseStart = resetDay
+            // The API may not have advanced `resetsAt` for more than one period,
+            // which would leave the window entirely in the past. Roll forward by
+            // whole periods until the window contains today. (Before the reset
+            // fires we deliberately keep the prior period, so this roll is only
+            // applied on the post-reset branch.)
+            let today = cal.startOfDay(for: now)
+            var guardIter = 0
+            while guardIter < 520 {
+                let windowEnd = cal.date(byAdding: .day, value: 6, to: baseStart) ?? baseStart
+                if today <= windowEnd { break }
+                guard let advanced = cal.date(byAdding: .day, value: 7, to: baseStart) else { break }
+                baseStart = advanced
+                guardIter += 1
+            }
         } else {
             baseStart = cal.date(byAdding: .day, value: -7, to: resetDay) ?? resetDay
         }

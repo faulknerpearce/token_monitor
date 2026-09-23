@@ -105,7 +105,11 @@ struct UsageClient: Sendable {
 
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { continue }
-            if http.statusCode == 401 || http.statusCode == 403 {
+            // These paths are speculative, so a 403 is usually a WAF/CSRF refusal
+            // of a guessed path rather than an expired session. Only 401
+            // invalidates here; the canonical gRPC endpoint decides 403 for the
+            // real session, so a spurious REST 403 no longer forces re-sign-in.
+            if http.statusCode == 401 {
                 throw ProviderError.unauthorized(.grok)
             }
             guard http.statusCode == 200, !data.isEmpty else { continue }
