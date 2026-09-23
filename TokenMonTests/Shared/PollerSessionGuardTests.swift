@@ -114,6 +114,64 @@ final class PollerSessionGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Grok
+
+    func testGrokStaleUnauthorizedDoesNotInvalidateNewSession() async {
+        let auth = AuthSessionService(directory: dir)
+        auth.save(cookieHeader: "sso=old")
+        let poller = UsagePoller(
+            auth: auth,
+            history: HistoryStore(inMemory: true),
+            settings: settings(.grok),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            grokHourly: hourlyStore("grok"),
+            fetchUsage: { _, _ in
+                auth.signOut()
+                auth.save(cookieHeader: "sso=new")
+                throw ProviderError.unauthorized(.grok)
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertTrue(auth.isSignedIn)
+        XCTAssertFalse(auth.needsSignIn)
+    }
+
+    func testGrokCurrentUnauthorizedInvalidatesSession() async {
+        let auth = AuthSessionService(directory: dir)
+        auth.save(cookieHeader: "sso=live")
+        let poller = UsagePoller(
+            auth: auth,
+            history: HistoryStore(inMemory: true),
+            settings: settings(.grok),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            grokHourly: hourlyStore("grok"),
+            fetchUsage: { _, _ in throw ProviderError.unauthorized(.grok) }
+        )
+        await poller.refreshNow()
+        XCTAssertTrue(auth.needsSignIn)
+        XCTAssertFalse(auth.isSignedIn)
+    }
+
+    func testGrokStaleTransportErrorDoesNotClobberNewSession() async {
+        let auth = AuthSessionService(directory: dir)
+        auth.save(cookieHeader: "sso=old")
+        let poller = UsagePoller(
+            auth: auth,
+            history: HistoryStore(inMemory: true),
+            settings: settings(.grok),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            grokHourly: hourlyStore("grok"),
+            fetchUsage: { _, _ in
+                auth.signOut()
+                auth.save(cookieHeader: "sso=new")
+                throw URLError(.timedOut)
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertTrue(auth.isSignedIn)
+        XCTAssertNil(poller.lastError)
+    }
+
     // MARK: - Cursor
 
     func testCursorStaleSuccessIsDropped() async {

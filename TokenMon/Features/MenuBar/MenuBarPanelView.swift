@@ -299,10 +299,15 @@ struct MenuBarPanelView: View {
 
             Divider().padding(.vertical, 4)
 
-            if let release = updateChecker.availableRelease {
-                panelButton("Update to \(release.version.description)…", shortcut: nil) {
-                    NSWorkspace.shared.open(release.pageURL)
-                }
+            panelButton(updateChecker.actionTitle, shortcut: nil, disabled: !updateChecker.canAct) {
+                Task { await updateChecker.performPrimaryAction() }
+            }
+            if let statusMessage = updateChecker.statusMessage {
+                Text(statusMessage)
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 4)
             }
 
             panelButton("Settings", shortcut: "⌘O", action: openPreferences)
@@ -335,7 +340,12 @@ struct MenuBarPanelView: View {
         }
     }
 
-    private func panelButton(_ title: String, shortcut: String?, action: @escaping () -> Void) -> some View {
+    private func panelButton(
+        _ title: String,
+        shortcut: String?,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack {
                 Text(title)
@@ -352,6 +362,8 @@ struct MenuBarPanelView: View {
         }
         .buttonStyle(.plain)
         .font(PanelTypography.body)
+        .disabled(disabled)
+        .foregroundStyle(disabled ? Color.secondary : Color.primary)
     }
 
     private func toggleLabel(_ title: String, isOn: Bool) -> some View {

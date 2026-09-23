@@ -147,6 +147,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             logger.error("Cursor refresh failed: \(cursorError.localizedDescription, privacy: .public)")
         } catch {
+            guard auth.isCurrent(generation) else { return }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }
@@ -221,7 +222,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             }
         }
 
-        return DailyBudget.buildLast7Days(
+        return DailyBudget.buildMondayWeekDays(
             periodStart: bounds.start,
             periodEnd: bounds.end,
             limitUSD: 100,

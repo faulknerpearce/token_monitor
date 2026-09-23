@@ -17,6 +17,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let notifier: ThresholdNotifier
     private let grokHourly: HourlyDeltaActivityStore
+    /// Injected fetch seam (tests supply a fake); defaults to the live client.
+    private let fetchUsage: (String?, String?) async throws -> WeeklyUsageSnapshot
     private let logger = Logger(category: "Poller")
 
     private lazy var loop = PollingLoop(
@@ -40,13 +42,17 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         history: HistoryStore,
         settings: AppSettings,
         notifier: ThresholdNotifier,
-        grokHourly: HourlyDeltaActivityStore
+        grokHourly: HourlyDeltaActivityStore,
+        fetchUsage: ((String?, String?) async throws -> WeeklyUsageSnapshot)? = nil
     ) {
         self.auth = auth
         self.history = history
         self.settings = settings
         self.notifier = notifier
         self.grokHourly = grokHourly
+        self.fetchUsage = fetchUsage ?? { cookieHeader, accountEmail in
+            try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
+        }
         observeSleep()
         // Signing out (or a 401) must drop the snapshot and the account-scoped
         // hourly deltas immediately, not on the next poll.
@@ -95,14 +101,12 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        let client = UsageClient(
-            cookieHeader: auth.loadCookieHeader(),
-            accountEmail: auth.accountEmail
-        )
+        let cookieHeader = auth.loadCookieHeader()
+        let accountEmail = auth.accountEmail
 
         do {
-            var snap = try await client.fetchUsage()
-            guard auth.isCurrent(generation) else { return }
+            var snap = try await fetchUsage(cookieHeader, accountEmail)
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
             if snap.accountEmail == nil {
                 snap.accountEmail = auth.accountEmail
             }
@@ -115,6 +119,9 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             notifier.evaluate(usedPercent: snap.usedPercent, settings: settings, account: auth.accountEmail)
             logger.info("Usage refreshed: \(snap.usedPercent, format: .fixed(precision: 1))% used")
         } catch let error as ProviderError {
+            // A request that began under a previous credential state must not
+            // tear down the current session.
+            guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.markSessionInvalid(reason: error.localizedDescription)
@@ -127,6 +134,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             applyBackoff()
             logger.error("Refresh failed: \(error.localizedDescription, privacy: .public)")
         } catch {
+            guard auth.isCurrent(generation) else { return }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }

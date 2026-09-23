@@ -107,6 +107,7 @@
 		AAE0FC9316DF293EE7C14714 /* ProviderSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B84CFAAB0D7972BDC20C4DB /* ProviderSwitcherView.swift */; };
 		ABC92522313BCD71A9704805 /* GrokbotUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1DD6709DC2A399301F10E8 /* GrokbotUsageClientTests.swift */; };
 		ADB850A7E47FC2D07DA2E270 /* ProviderCookieAllowlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FECDCB7D2B094D9CF9ABB6C /* ProviderCookieAllowlistTests.swift */; };
+		AE99E42791B76C883445B33B /* AppInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2831F536A3D09C69497FEF69 /* AppInstaller.swift */; };
 		AEBCDAB3A1B0E33D416D3668 /* ClaudeUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53FF46E0F5F38D80A6419B84 /* ClaudeUsageClientTests.swift */; };
 		AF43B2BEC521C9AB15C1F8C5 /* MonitorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5008BEBDDA049505BF06BC7 /* MonitorProvider.swift */; };
 		AFA3A789322D30608EB77397 /* ProviderHourlyUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CC89E3DAFBD90C151C0074 /* ProviderHourlyUsageTests.swift */; };
@@ -196,6 +197,7 @@
 		20CC9D28BC66E69522E91B11 /* OpenCodeConsoleClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeConsoleClientTests.swift; sourceTree = "<group>"; };
 		22BC2A6135C0FD6EE4E07B4D /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		24166148544CA5C059FC8F1F /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		2831F536A3D09C69497FEF69 /* AppInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstaller.swift; sourceTree = "<group>"; };
 		28EC6D5B67D08C3107DCBD35 /* DailyBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudget.swift; sourceTree = "<group>"; };
 		3048C8A62D66B3ED0E61C3E0 /* ClaudeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeModels.swift; sourceTree = "<group>"; };
 		30CAD82843E69523E7D33840 /* ProviderColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColors.swift; sourceTree = "<group>"; };
@@ -521,6 +523,7 @@
 		86769CAAC839ED065D7984FE /* Update */ = {
 			isa = PBXGroup;
 			children = (
+				2831F536A3D09C69497FEF69 /* AppInstaller.swift */,
 				900E667C6972741C36D32F47 /* AppVersion.swift */,
 				9720EBF79E217B63CE39BE16 /* ReleaseFeed.swift */,
 				CEBEC9D064C56FD2ADDD4ED5 /* UpdateChecker.swift */,
@@ -878,6 +881,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8BB76C62F022DC30E7C84C5C /* AppDelegate.swift in Sources */,
+				AE99E42791B76C883445B33B /* AppInstaller.swift in Sources */,
 				D380AAE7608BA66462E03D34 /* AppLog.swift in Sources */,
 				7C298DAD89E195A701911BFA /* AppSettings.swift in Sources */,
 				D46146C0A265B0CDD68F84AC /* AppSupport.swift in Sources */,
@@ -1124,12 +1128,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.6.2;
+				MARKETING_VERSION = 1.6.3;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
@@ -1144,11 +1148,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TokenMon/Resources/TokenMon.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.6.2;
+				MARKETING_VERSION = 1.6.3;
 				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;

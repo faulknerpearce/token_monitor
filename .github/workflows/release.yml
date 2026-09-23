@@ -1,0 +1,79 @@
+name: Release
+
+# Pushing a tag vX.Y.Z (matching MARKETING_VERSION in project.yml) builds the
+# app zip and pkg and attaches them to that GitHub Release. The in-app updater
+# downloads TokenMon-*.zip from releases/latest.
+#
+# The runner has no Developer ID certificate, so these files are ad-hoc signed.
+# Gatekeeper will warn on a first download. An already-installed copy can still
+# replace itself from the zip.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish zip and pkg
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      XCODEGEN_VERSION: "2.46.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen (pinned)
+        run: |
+          set -euo pipefail
+          curl -sSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o /tmp/xcodegen.zip
+          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
+          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
+          sudo ln -sf /tmp/xcodegen/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
+
+      - name: Regenerate Xcode project
+        run: make project
+
+      - name: Require the tag to match MARKETING_VERSION
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(sed -n 's/.*MARKETING_VERSION: *"\([^"]*\)".*/\1/p' project.yml | head -1)
+          test -n "$version"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag v${tag} does not match MARKETING_VERSION ${version}."
+            echo "Bump project.yml, or tag v${version}."
+            exit 1
+          fi
+
+      - name: Build release zip and pkg
+        run: make release
+
+      - name: Attach the files to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          zip="dist/TokenMon-${version}.zip"
+          pkg="dist/TokenMon-${version}.pkg"
+          test -f "$zip"
+          test -f "$pkg"
+          # A tag push does not create a release. Keep notes that were written
+          # by hand; only create the release when the tag has none yet.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip" "$pkg" --clobber
+          else
+            gh release create "$tag" "$zip" "$pkg" \
+              --title "$tag" \
+              --generate-notes \
+              --verify-tag
+          fi

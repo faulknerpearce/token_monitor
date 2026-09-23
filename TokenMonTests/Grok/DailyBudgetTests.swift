@@ -111,26 +111,25 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(days[0].budgetUSD, 10, accuracy: 1e-9)
     }
 
-    func testWeeklyWindowBeforeResetInstantKeepsRunningPeriod() {
-        // Reset lands at 11:00 on Aug 27; at 09:00 the old period is still
-        // running, so the window must not roll yet — but it must include today
-        // so calendar-keyed same-day usage is not hidden until the instant.
+    func testWeeklyWindowBeforeResetInstantKeepsPeriodStartAsFirstBar() {
+        // Reset lands at 11:00 on Thursday Aug 27. At 09:00 the running period
+        // still opened last Thursday, so the first bar stays Thursday and the
+        // window does not slide forward to include reset morning.
         let beforeReset = date(2026, 8, 27, hour: 9)
         let reset = date(2026, 8, 27, hour: 11)
-        let todayKey = calendar.startOfDay(for: beforeReset)
-        let spent: [Date: Double] = [todayKey: 12]
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 70,
             daysInPeriod: 7,
             resetsAt: reset,
-            spentByDay: spent,
+            spentByDay: [calendar.startOfDay(for: beforeReset): 12],
             now: beforeReset,
             calendar: calendar
         )
         XCTAssertEqual(days.count, 7)
-        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 21)))
-        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 27)))
-        XCTAssertEqual(days[6].spentUSD, 12)
+        XCTAssertEqual(calendar.component(.weekday, from: days[0].date), 5) // Thursday
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 20)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 26)))
+        XCTAssertFalse(days.contains { calendar.isDate($0.date, inSameDayAs: beforeReset) })
     }
 
     func testWeeklyWindowRollsForwardAtResetInstant() {
@@ -462,6 +461,10 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(built.days.count, 7)
         XCTAssertTrue(calendar.isDate(built.periodStart, inSameDayAs: date(2026, 8, 16)))
         XCTAssertEqual(built.days.first?.budgetUSD ?? 0, 100.0 / 31.0, accuracy: 1e-9)
+        // Aug 25 2026 is a Tuesday; the painted week still opens on Monday.
+        XCTAssertEqual(calendar.component(.weekday, from: built.days[0].date), 2)
+        XCTAssertTrue(calendar.isDate(built.days[0].date, inSameDayAs: date(2026, 8, 24)))
+        XCTAssertEqual(calendar.component(.weekday, from: built.days[6].date), 1)
     }
 
     /// On the reset calendar day *before* the instant the running period still

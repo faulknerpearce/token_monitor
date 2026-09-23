@@ -18,6 +18,7 @@ struct PreferencesView: View {
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var grokbotPoller: GrokbotUsagePoller
+    @ObservedObject var updateChecker: UpdateChecker
     let openSignIn: () -> Void
     let openOpenCodeSignIn: () -> Void
     let openCursorSignIn: () -> Void
@@ -263,8 +264,17 @@ struct PreferencesView: View {
                     .toggleStyle(.switch)
                 Toggle("Check for Updates", isOn: $settings.checksForUpdates)
                     .toggleStyle(.switch)
-                Text("Checks GitHub for a newer release and shows a link in the menu. "
-                    + "Nothing is downloaded or installed automatically.")
+                Button(updateChecker.actionTitle) {
+                    Task { await updateChecker.performPrimaryAction() }
+                }
+                .disabled(!updateChecker.canAct)
+                if let statusMessage = updateChecker.statusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Checks GitHub for a newer release. Update downloads the release "
+                    + "and replaces this copy of TokenMon.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

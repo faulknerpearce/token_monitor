@@ -288,6 +288,7 @@ private struct PreferencesRoot: View {
             chatGPTPoller: model.chatGPTPoller,
             openRouterPoller: model.openRouterPoller,
             grokbotPoller: model.grokbotPoller,
+            updateChecker: model.updateChecker,
             openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
             openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
             openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },

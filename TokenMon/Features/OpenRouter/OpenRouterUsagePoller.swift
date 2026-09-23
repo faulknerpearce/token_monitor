@@ -101,6 +101,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             logger.error("OpenRouter refresh failed: \(error.localizedDescription, privacy: .public)")
         } catch {
+            guard auth.isCurrent(generation) else { return }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }

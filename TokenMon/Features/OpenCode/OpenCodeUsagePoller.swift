@@ -91,7 +91,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 let (consoleSnap, orgID) = try await fetchConsole(cookieHeader, auth.workspaceID)
                 let localBundle = try? await fetchLocal()
                 var snap = consoleSnap
-                if let local = localBundle?.0 ?? nil {
+                if let local = localBundle?.0 {
                     snap = Self.mergeLocalModels(into: snap, local: local)
                 }
                 guard !Task.isCancelled, auth.isCurrent(generation) else { return }
@@ -127,6 +127,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 }
                 logger.error("OpenCode console fetch failed: \(error.localizedDescription, privacy: .public)")
             } catch {
+                // Same generation rule as the unauthorized path: a failure from
+                // the previous account must not continue into the local publish.
+                guard auth.sessionGeneration == generation else { return }
                 logger.error("OpenCode console fetch failed: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -164,6 +167,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 "OpenCode local refresh: monthly \(snap.primaryUsedPercent, format: .fixed(precision: 1))%"
             )
         } catch {
+            // Compare the generation only. A poll that started signed out is
+            // not `isCurrent`, and it still needs to surface a local-read error.
+            guard auth.sessionGeneration == generation else { return }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }

@@ -134,6 +134,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             logger.error("Grokbot refresh failed: \(error.localizedDescription, privacy: .public)")
         } catch {
+            guard auth.isCurrent(generation) else { return }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }

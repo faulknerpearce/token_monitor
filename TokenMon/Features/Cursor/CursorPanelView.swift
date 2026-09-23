@@ -51,7 +51,7 @@ struct CursorPanelView: View {
                         MonthlyDailyBudgetBarsView(
                             days: days,
                             accent: ProviderColors.cursorColor,
-                            infoText: "Share of billing-cycle quota per day. Last 7 days shown.",
+                            infoText: "Share of billing-cycle quota per day. This week, Monday through Sunday.",
                             periodUsedPercent: cursorModelsPercent,
                             periodStart: snapshot.billingCycleStart,
                             resetsAt: snapshot.billingCycleEnd

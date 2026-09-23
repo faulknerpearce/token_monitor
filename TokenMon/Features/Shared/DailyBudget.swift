@@ -105,9 +105,10 @@ enum DailyBudget {
         return Array(all.suffix(7))
     }
 
-    /// Bars for the full weekly window anchored at the pool's actual reset
-    /// instant rather than a fixed weekday. Advances a stale `resetsAt` by whole
-    /// periods so the window contains today; days after today are 0 and dimmed.
+    /// Bars for the full weekly window. The first bar is the day the pool
+    /// opened (a Thursday reset → Thursday first) and stays there until the
+    /// reset instant, when the window rolls to the new period. A stale
+    /// `resetsAt` advances by whole periods so the window still contains today.
     static func buildWeeklyWindowDays(
         limitUSD: Double,
         daysInPeriod: Int,
@@ -116,40 +117,90 @@ enum DailyBudget {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
-        let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: daysInPeriod)
-        let today = calendar.startOfDay(for: now)
-        // Advance a stale `resetsAt` to the next future reset so the window
-        // still contains today.
-        var nextReset = resetsAt
-        var guardIter = 0
-        while nextReset <= now, guardIter < 520 {
-            guard let advanced = calendar.date(
-                byAdding: .day, value: daysInPeriod, to: nextReset
-            ) else { break }
-            nextReset = advanced
-            guardIter += 1
-        }
-        let resetDay = calendar.startOfDay(for: nextReset)
-        // Normally the running period ends the calendar day before reset. On
-        // reset day itself (before the instant) end on today so same-day
-        // usage recorded under today's key is still painted.
-        let weekEnd: Date
-        if calendar.isDate(today, inSameDayAs: resetDay) {
-            weekEnd = today
-        } else {
-            weekEnd = calendar.date(byAdding: .day, value: -1, to: resetDay) ?? today
-        }
-        let weekStart = calendar.date(
-            byAdding: .day, value: -(max(1, daysInPeriod) - 1),
-            to: weekEnd
-        ) ?? today
+        let count = max(1, daysInPeriod)
+        let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: count)
+        let weekStart = weeklyPeriodStart(
+            resetsAt: resetsAt,
+            daysInPeriod: count,
+            now: now,
+            calendar: calendar
+        )
         var days: [DailyBudgetDay] = []
-        for offset in 0..<max(1, daysInPeriod) {
+        for offset in 0..<count {
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
             days.append(DailyBudgetDay(date: key, spentUSD: spentByDay[key] ?? 0, budgetUSD: perDay))
         }
         return days
+    }
+
+    /// Start of the running weekly pool. Before `resetsAt`, that is one period
+    /// before the reset day, so the first bar's weekday matches the reset.
+    static func weeklyPeriodStart(
+        resetsAt: Date,
+        daysInPeriod: Int,
+        now: Date,
+        calendar: Calendar
+    ) -> Date {
+        let count = max(1, daysInPeriod)
+        let resetDay = calendar.startOfDay(for: resetsAt)
+        var baseStart: Date
+        if now >= resetsAt {
+            baseStart = resetDay
+            let today = calendar.startOfDay(for: now)
+            var guardIter = 0
+            while guardIter < 520 {
+                let windowEnd = calendar.date(byAdding: .day, value: count - 1, to: baseStart) ?? baseStart
+                if calendar.startOfDay(for: windowEnd) >= today { break }
+                guard let advanced = calendar.date(byAdding: .day, value: count, to: baseStart) else { break }
+                baseStart = advanced
+                guardIter += 1
+            }
+        } else {
+            baseStart = calendar.date(byAdding: .day, value: -count, to: resetDay) ?? resetDay
+        }
+        return calendar.startOfDay(for: baseStart)
+    }
+
+    /// Monday of the calendar week that contains `now`. Monthly charts always
+    /// start here, independent of the billing-cycle anniversary.
+    static func mondayOfWeek(containing now: Date, calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: today)
+        let daysFromMonday = (weekday + 5) % 7
+        return calendar.date(byAdding: .day, value: -daysFromMonday, to: today) ?? today
+    }
+
+    /// Monday–Sunday bars for a subscription month. Days outside the billing
+    /// period are present so the week still starts on Monday, with 0 spend.
+    static func buildMondayWeekDays(
+        periodStart: Date,
+        periodEnd: Date,
+        limitUSD: Double,
+        spentByDay: [Date: Double],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay] {
+        let periodDays = buildDays(
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            limitUSD: limitUSD,
+            spentByDay: spentByDay,
+            now: now,
+            calendar: calendar
+        )
+        let perDay = periodDays.first?.budgetUSD
+            ?? budgetPerDay(limitUSD: limitUSD, daysInPeriod: max(1, periodDays.count))
+        let spentInPeriod = Dictionary(
+            periodDays.map { (calendar.startOfDay(for: $0.date), $0.spentUSD) },
+            uniquingKeysWith: { _, last in last }
+        )
+        let weekStart = mondayOfWeek(containing: now, calendar: calendar)
+        return (0..<7).map { offset in
+            let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
+            let key = calendar.startOfDay(for: day)
+            return DailyBudgetDay(date: key, spentUSD: spentInPeriod[key] ?? 0, budgetUSD: perDay)
+        }
     }
 
     /// Even-pace headroom vs live period consumption.
@@ -233,9 +284,9 @@ enum DailyBudget {
         return (start, end)
     }
 
-    /// Last-7 bars for a subscription/billing month. Returns nil when neither
-    /// cycle start nor reset is known — refuses calendar-month guesses. A stale
-    /// (already-ended) cycle advances to the running one before painting.
+    /// Monday–Sunday bars for a subscription/billing month. Returns nil when
+    /// neither cycle start nor reset is known — refuses calendar-month guesses.
+    /// A stale (already-ended) cycle advances to the running one before painting.
     static func buildSubscriptionMonthLast7Days(
         limitUSD: Double,
         spentByDay: [Date: Double],
@@ -250,7 +301,7 @@ enum DailyBudget {
             now: now,
             calendar: calendar
         ) else { return nil }
-        let days = buildLast7Days(
+        let days = buildMondayWeekDays(
             periodStart: bounds.start,
             periodEnd: bounds.end,
             limitUSD: limitUSD,

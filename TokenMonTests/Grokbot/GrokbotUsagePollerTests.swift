@@ -41,16 +41,18 @@ final class GrokbotUsagePollerTests: XCTestCase {
         ).isEmpty)
     }
 
-    /// On reset day, before the instant, today stays the last bar so the day's
-    /// calendar-keyed deltas remain visible instead of rolling out of the window.
-    func testResetDayBeforeInstantKeepsTodayAsLastBar() {
+    /// On reset morning the first bar stays the day the pool opened (Thursday),
+    /// rather than sliding so today becomes the last bar.
+    func testResetMorningKeepsPeriodStartAsFirstBar() {
         let days = GrokbotUsagePoller.buildDailyBudgetDays(
             spentByDay: [:],
             resetsAt: date(2026, 8, 27, hour: 11),
             now: date(2026, 8, 27, hour: 9),
             calendar: calendar
         )
-        XCTAssertTrue(calendar.isDate(days.last!.date, inSameDayAs: date(2026, 8, 27)))
+        XCTAssertEqual(calendar.component(.weekday, from: days[0].date), 5) // Thursday
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 20)))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 26)))
     }
 
     /// The period length comes from the payload's own start → reset span rather
@@ -128,9 +130,9 @@ final class GrokbotUsagePollerTests: XCTestCase {
     func testGrokbotIsARegisteredUsageProvider() {
         XCTAssertTrue(MonitorProvider.usageProviders.contains(.grokbot))
         XCTAssertEqual(MonitorProvider.grokbot.displayName, "Grokbot")
-        XCTAssertTrue(MonitorProvider.grokbot.pollsGrokbot)
-        XCTAssertTrue(MonitorProvider.overview.pollsGrokbot)
-        XCTAssertFalse(MonitorProvider.cursor.pollsGrokbot)
+        XCTAssertTrue(MonitorProvider.grokbot.polls(.grokbot))
+        XCTAssertTrue(MonitorProvider.overview.polls(.grokbot))
+        XCTAssertFalse(MonitorProvider.cursor.polls(.grokbot))
     }
 
     /// A reset instant that jumps forward by ~a whole period is a new window;

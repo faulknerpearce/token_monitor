@@ -160,39 +160,39 @@ final class AppSettings: ObservableObject {
 
     /// Whether Grok should be polled (panel tab or menu-bar graph).
     var needsGrokPolling: Bool {
-        isEnabled(.grok) && (selectedProvider.pollsGrok || showGrokBarInMenuBar)
+        isEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar)
     }
 
     /// Whether OpenCode should be polled (panel tab or menu-bar graph).
     var needsOpenCodePolling: Bool {
-        isEnabled(.opencode) && (selectedProvider.pollsOpenCode || showOpenCodeBarInMenuBar)
+        isEnabled(.opencode) && (selectedProvider.polls(.opencode) || showOpenCodeBarInMenuBar)
     }
 
     /// Whether Cursor should be polled (panel tab or menu-bar graph).
     var needsCursorPolling: Bool {
-        isEnabled(.cursor) && (selectedProvider.pollsCursor || showCursorBarInMenuBar)
+        isEnabled(.cursor) && (selectedProvider.polls(.cursor) || showCursorBarInMenuBar)
     }
 
     /// Whether Claude should be polled (panel tab or menu-bar graph).
     var needsClaudePolling: Bool {
-        isEnabled(.claude) && (selectedProvider.pollsClaude || showClaudeBarInMenuBar)
+        isEnabled(.claude) && (selectedProvider.polls(.claude) || showClaudeBarInMenuBar)
     }
 
     /// Whether ChatGPT/Codex should be polled (panel tab).
     var needsChatGPTPolling: Bool {
-        isEnabled(.chatgpt) && selectedProvider.pollsChatGPT
+        isEnabled(.chatgpt) && selectedProvider.polls(.chatgpt)
     }
 
     /// Whether OpenRouter should be polled (panel tab).
     var needsOpenRouterPolling: Bool {
-        isEnabled(.openrouter) && selectedProvider.pollsOpenRouter
+        isEnabled(.openrouter) && selectedProvider.polls(.openrouter)
     }
 
     /// Whether Grokbot should be polled (panel tab or menu-bar graph). Gated on
     /// Grokbot being enabled so a disabled Grokbot cannot invalidate the shared
     /// Cursor session.
     var needsGrokbotPolling: Bool {
-        isEnabled(.grokbot) && (selectedProvider.pollsGrokbot || showGrokbotBarInMenuBar)
+        isEnabled(.grokbot) && (selectedProvider.polls(.grokbot) || showGrokbotBarInMenuBar)
     }
 
     /// Guards against recursive `didSet` when registration fails and the value is reverted.

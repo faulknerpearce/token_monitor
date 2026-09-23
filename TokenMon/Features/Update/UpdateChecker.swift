@@ -1,19 +1,29 @@
+import AppKit
 import Combine
 import Foundation
 import os
 
-/// Checks GitHub for a newer TokenMon release and publishes the result.
-///
-/// Notify-only: downloads and installs nothing. `availableRelease` drives a
-/// menu row that opens the release page.
+/// Checks GitHub for a newer TokenMon release and can install its zip in place.
 @MainActor
 final class UpdateChecker: ObservableObject {
     @Published private(set) var availableRelease: AvailableRelease?
-    /// Re-entrancy guard for overlapping checks; not surfaced in the UI.
-    private var isChecking = false
-    /// Last check failure, kept for diagnostics/tests. The checker is notify-only
-    /// and only `availableRelease` drives the menu, so this is not published.
+    @Published private(set) var isChecking = false
+    @Published private(set) var isInstalling = false
+    /// Result of a manual check ("You're up to date.") or the last failure.
+    @Published private(set) var statusMessage: String?
+    /// Last check failure, kept for tests. `statusMessage` is what the UI shows.
     private(set) var lastError: String?
+
+    var actionTitle: String {
+        if isInstalling { return "Installing update…" }
+        if isChecking { return "Checking for updates…" }
+        if let availableRelease {
+            return "Update to \(availableRelease.version.description)…"
+        }
+        return "Check for Updates"
+    }
+
+    var canAct: Bool { !isChecking && !isInstalling }
 
     /// Poll interval: releases are rare and the API is rate-limited for
     /// unauthenticated callers.
@@ -57,30 +67,88 @@ final class UpdateChecker: ObservableObject {
             loop.stop()
             availableRelease = nil
             lastError = nil
+            statusMessage = nil
         }
     }
 
+    /// Background poll. Skipped when automatic checks are off.
     func checkNow() async {
-        guard settings.checksForUpdates, !isChecking else { return }
+        await performCheck(userInitiated: false)
+    }
+
+    /// Menu or Settings button. Runs even when automatic checks are off.
+    func checkManually() async {
+        await performCheck(userInitiated: true)
+    }
+
+    /// Installs the published zip, or opens the release page when there is no zip.
+    func performPrimaryAction() async {
+        if availableRelease != nil {
+            await installAvailableUpdate()
+        } else {
+            await checkManually()
+        }
+    }
+
+    func installAvailableUpdate() async {
+        guard let release = availableRelease, !isInstalling else { return }
+        guard let archiveURL = release.archiveURL else {
+            statusMessage = "No installer was published — opening the release page."
+            NSWorkspace.shared.open(release.pageURL)
+            return
+        }
+        guard AppInstaller.canReplaceRunningApp() else {
+            statusMessage = AppInstaller.isRunningTranslocated
+                ? "Move TokenMon into Applications, then update."
+                : AppInstaller.Failure.notWritable.localizedDescription
+            NSWorkspace.shared.open(release.pageURL)
+            return
+        }
+        isInstalling = true
+        defer { isInstalling = false }
+        do {
+            let app = try await AppInstaller.downloadApp(from: archiveURL, session: downloadSession)
+            try AppInstaller.replaceAndRelaunch(newApp: app)
+        } catch {
+            statusMessage = error.localizedDescription
+            logger.error("Update install failed: \(error.localizedDescription, privacy: .public)")
+            NSWorkspace.shared.open(release.pageURL)
+        }
+    }
+
+    private lazy var downloadSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        return URLSession(configuration: configuration, delegate: TrustedReleaseRedirect(), delegateQueue: nil)
+    }()
+
+    private func performCheck(userInitiated: Bool) async {
+        guard userInitiated || settings.checksForUpdates, !isChecking else { return }
         guard let currentVersion else {
-            // Skip: no readable bundle version to compare against.
             logger.warning("Skipping update check: bundle has no CFBundleShortVersionString")
+            if userInitiated {
+                statusMessage = "This build has no version number to compare."
+            }
             return
         }
         isChecking = true
+        if userInitiated { statusMessage = nil }
         defer { isChecking = false }
 
         do {
             let data = try await fetchLatest()
-            guard settings.checksForUpdates else { return }
+            guard userInitiated || settings.checksForUpdates else { return }
             availableRelease = try ReleaseFeed.newerRelease(in: data, than: currentVersion)
             lastError = nil
             if let availableRelease {
+                statusMessage = nil
                 logger.info("Update available: \(availableRelease.version.description, privacy: .public)")
+            } else if userInitiated {
+                statusMessage = "You're up to date."
             }
         } catch {
-            guard settings.checksForUpdates else { return }
+            guard userInitiated || settings.checksForUpdates else { return }
             lastError = error.localizedDescription
+            if userInitiated { statusMessage = error.localizedDescription }
             logger.warning("Update check failed: \(error.localizedDescription, privacy: .public)")
         }
     }

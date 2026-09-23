@@ -122,6 +122,32 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 0)
     }
 
+    func testManualCheckRunsWhenAutomaticChecksAreOff() async {
+        defaults.set(false, forKey: "checksForUpdates")
+        respond(status: 200, body: #"{"tag_name":"v1.5.0","draft":false,"prerelease":false}"#)
+        let checker = makeChecker()
+        await checker.checkManually()
+        XCTAssertEqual(StubURLProtocol.requestCount, 1)
+        XCTAssertEqual(checker.statusMessage, "You're up to date.")
+    }
+
+    func testManualCheckSurfacesANewerRelease() async {
+        respond(status: 200, body: """
+        {"tag_name":"v1.5.1","draft":false,"prerelease":false,
+         "html_url":"https://github.com/faulknerpearce/token_monitor/releases/tag/v1.5.1",
+         "assets":[{"name":"TokenMon-1.5.1.zip",
+           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.5.1/TokenMon-1.5.1.zip"}]}
+        """)
+        let checker = makeChecker()
+        await checker.checkManually()
+        XCTAssertEqual(checker.actionTitle, "Update to 1.5.1…")
+        XCTAssertEqual(
+            checker.availableRelease?.archiveURL?.lastPathComponent,
+            "TokenMon-1.5.1.zip"
+        )
+        XCTAssertNil(checker.statusMessage)
+    }
+
     func testChecksDisabledSkipsRequest() async {
         defaults.set(false, forKey: "checksForUpdates")
         respond(status: 200, body: #"{"tag_name":"v9.9.9"}"#)

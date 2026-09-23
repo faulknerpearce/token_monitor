@@ -18,7 +18,12 @@ final class AuthSessionService: ProviderAuthSession {
     /// the full domain jar so sign-in still works.
     static let essentialCookieNames: Set<String> = ["sso", "sso-rw"]
 
-    init() {
+    convenience init() {
+        self.init(directory: nil)
+    }
+
+    /// Test seam: isolates the session's file store to `directory`.
+    init(directory: URL?) {
         super.init(
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "auth_",
@@ -27,7 +32,8 @@ final class AuthSessionService: ProviderAuthSession {
                 signOutHosts: Self.grokHosts,
                 capturePolicy: Self.grokPolicy(),
                 isDomain: { domain in Domain.matches(domain, hosts: Self.grokHosts) }
-            )
+            ),
+            directory: directory
         )
     }
 

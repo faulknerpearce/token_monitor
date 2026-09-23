@@ -47,6 +47,40 @@ final class ReleaseFeedTests: XCTestCase {
         )
     }
 
+    func testArchiveURLPrefersTokenMonZipOnGitHub() throws {
+        let release = try parse("""
+        {
+          "tag_name": "2.0.0",
+          "assets": [
+            {"name": "notes.txt", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/notes.txt"},
+            {"name": "Other.zip", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/Other.zip"},
+            {"name": "TokenMon-2.0.0.pkg", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"},
+            {"name": "TokenMon-2.0.0.zip", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
+            {"name": "Evil.zip", "browser_download_url": "https://example.com/Evil.zip"}
+          ]
+        }
+        """)
+        XCTAssertEqual(
+            release?.archiveURL?.absoluteString,
+            "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
+        )
+    }
+
+    func testUntrustedArchiveIsIgnored() throws {
+        let release = try parse("""
+        {"tag_name":"2.0.0","assets":[
+          {"name":"TokenMon-2.0.0.zip","browser_download_url":"http://github.com/faulknerpearce/token_monitor/TokenMon.zip"}
+        ]}
+        """)
+        XCTAssertNil(release?.archiveURL)
+        XCTAssertFalse(ReleaseFeed.isTrustedDownload(URL(string: "https://example.com/TokenMon.zip")!))
+    }
+
+    func testShellQuoteEscapesEmbeddedQuotes() {
+        XCTAssertEqual(AppInstaller.shellQuote("/tmp/TokenMon.app"), "'/tmp/TokenMon.app'")
+        XCTAssertEqual(AppInstaller.shellQuote("/tmp/it's.app"), "'/tmp/it'\\''s.app'")
+    }
+
     /// An unusable tag is an error, not a silent "no update" — the check should
     /// surface that something changed upstream.
     func testUnparseableTagThrows() {

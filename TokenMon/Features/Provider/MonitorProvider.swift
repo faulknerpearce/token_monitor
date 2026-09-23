@@ -52,45 +52,12 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
 
     /// Short label in the dropdown provider switcher.
     var switcherLabel: String {
-        switch self {
-        case .overview: return "All"
-        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot: return displayName
-        }
+        self == .overview ? "All" : displayName
     }
 
-    /// Whether this mode should refresh Grok usage.
-    var pollsGrok: Bool {
-        self == .grok || self == .overview
-    }
-
-    /// Whether this mode should refresh OpenCode usage.
-    var pollsOpenCode: Bool {
-        self == .opencode || self == .overview
-    }
-
-    /// Whether this mode should refresh Cursor usage.
-    var pollsCursor: Bool {
-        self == .cursor || self == .overview
-    }
-
-    /// Whether this mode should refresh Claude usage.
-    var pollsClaude: Bool {
-        self == .claude || self == .overview
-    }
-
-    /// Whether this mode should refresh ChatGPT/Codex usage.
-    var pollsChatGPT: Bool {
-        self == .chatgpt || self == .overview
-    }
-
-    /// Whether this mode should refresh OpenRouter usage.
-    var pollsOpenRouter: Bool {
-        self == .openrouter || self == .overview
-    }
-
-    /// Whether this mode should refresh Grokbot usage.
-    var pollsGrokbot: Bool {
-        self == .grokbot || self == .overview
+    /// Whether this mode should refresh `provider` (its own tab, or Overview).
+    func polls(_ provider: MonitorProvider) -> Bool {
+        self == provider || self == .overview
     }
 
     /// Public dashboard / console URL for “Visit website”.

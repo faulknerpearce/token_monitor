@@ -40,7 +40,7 @@ struct OpenCodePanelView: View {
                             days: days,
                             accent: ModelPalette.purple.color,
                             infoText: "Go-only share of subscription-month quota per day. "
-                                + "Last 7 days shown.",
+                                + "This week, Monday through Sunday.",
                             periodUsedPercent: snapshot.monthlyUsedPercent,
                             periodStart: poller.dailyBudgetPeriodStart,
                             resetsAt: monthly?.resetsAt

@@ -25,8 +25,8 @@ struct WeeklyDailyBudgetBarsView: View {
 }
 
 /// Daily-budget bar chart for providers whose quota is a **subscription /
-/// billing month** (Cursor, OpenCode Go). Shows the last 7 days; pace earns
-/// across the full subscription month — never the calendar month of today.
+/// billing month** (Cursor, OpenCode Go). Bars are the Monday–Sunday week
+/// containing today; pace still earns across the full subscription month.
 struct MonthlyDailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
@@ -192,7 +192,7 @@ struct DailyBudgetBarsView: View {
             .help(dayHelp(day))
 
             VStack(spacing: 1) {
-                Text(day.spentUSD > 0.5 ? "\(Int(day.spentUSD.rounded()))%" : " ")
+                Text("\(max(0, Int(day.spentUSD.rounded())))%")
                     .font(PanelTypography.micro)
                     .fontWeight(.semibold)
                     .monospacedDigit()

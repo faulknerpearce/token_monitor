@@ -114,7 +114,7 @@ struct DailyUsageChartView: View {
             )
 
             VStack(spacing: 1) {
-                Text(day.totalPercent > 0.5 ? "\(Int(day.totalPercent.rounded()))%" : " ")
+                Text("\(max(0, Int(day.totalPercent.rounded())))%")
                     .font(PanelTypography.micro)
                     .fontWeight(.semibold)
                     .monospacedDigit()

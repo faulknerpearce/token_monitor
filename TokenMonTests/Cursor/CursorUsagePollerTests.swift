@@ -49,6 +49,9 @@ final class CursorUsagePollerTests: XCTestCase {
 
         XCTAssertEqual(days.count, 7)
         XCTAssertEqual(days[0].budgetUSD, 100.0 / 31, accuracy: 1e-9)
+        // Aug 28 2026 is a Friday; monthly bars open on that week's Monday.
+        XCTAssertEqual(calendar.component(.weekday, from: days[0].date), 2)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 24)))
 
         let aug25 = try XCTUnwrap(days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 8, 25)) })
         XCTAssertEqual(aug25.spentUSD, 3.0, accuracy: 0.001)

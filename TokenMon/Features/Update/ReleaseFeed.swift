@@ -4,6 +4,8 @@ import Foundation
 struct AvailableRelease: Equatable, Sendable {
     var version: AppVersion
     var pageURL: URL
+    /// Zip of `TokenMon.app` attached to the release, when one was published.
+    var archiveURL: URL?
     var publishedAt: Date?
 
     static func == (lhs: AvailableRelease, rhs: AvailableRelease) -> Bool {
@@ -14,8 +16,8 @@ struct AvailableRelease: Equatable, Sendable {
 /// Reads the project's latest GitHub release and decides whether it is newer
 /// than the running app.
 ///
-/// Fetches only public release metadata; nothing is downloaded or installed.
-/// The user is pointed at the release page and updates by hand.
+/// Fetches public release metadata. A newer release's `TokenMon-*.zip` can be
+/// installed in place; without that asset the user is sent to the release page.
 enum ReleaseFeed {
     static let owner = "faulknerpearce"
     static let repository = "token_monitor"
@@ -52,9 +54,35 @@ enum ReleaseFeed {
         return AvailableRelease(
             version: version,
             pageURL: page,
+            archiveURL: archiveURL(in: root),
             publishedAt: JSON.firstString(root, keys: ["published_at"])
                 .flatMap(ISO8601DateFormatter.parseFlexible)
         )
+    }
+
+    /// Zip asset to install. Prefers `TokenMon-*.zip`. Ignores other hosts so a
+    /// release payload cannot point the download at an unrelated site.
+    static func archiveURL(in root: [String: Any]) -> URL? {
+        guard let assets = root["assets"] as? [[String: Any]] else { return nil }
+        let zips: [(name: String, url: URL)] = assets.compactMap { asset in
+            guard let name = JSON.firstString(asset, keys: ["name"]),
+                  name.lowercased().hasSuffix(".zip"),
+                  let raw = JSON.firstString(asset, keys: ["browser_download_url"]),
+                  let url = URL(string: raw),
+                  isTrustedDownload(url)
+            else { return nil }
+            return (name, url)
+        }
+        let preferred = zips.first { $0.name.lowercased().hasPrefix("tokenmon") }
+        return (preferred ?? zips.first)?.url
+    }
+
+    static func isTrustedDownload(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
+        if host == "github.com" { return true }
+        return host == "objects.githubusercontent.com"
+            || host == "release-assets.githubusercontent.com"
+            || host.hasSuffix(".githubusercontent.com")
     }
 }
 
