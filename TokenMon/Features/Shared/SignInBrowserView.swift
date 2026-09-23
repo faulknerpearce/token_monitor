@@ -83,6 +83,11 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     private var observations: [NSKeyValueObservation] = []
     private var returnGate: SignInReturnGate
     private var didFireReturn = false
+    /// Set once the *main* page reaches the provider return state after the user
+    /// passed through an auth host. Guards the popup-close auto-capture so a
+    /// popup that was merely opened and cancelled (which sets `didSeeAuth`) does
+    /// not fire capture against the still-start-page main view.
+    private var didNavigateMainAfterAuth = false
 
     init(
         startURL: URL,
@@ -233,6 +238,9 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         case .authHost:
             onAuthHostSeen()
         case .returnPage:
+            // The main page itself returned to the provider page after the auth
+            // host — evidence of a real sign-in, unlike a cancelled popup.
+            if !isPopup { didNavigateMainAfterAuth = true }
             // Wait until the OAuth popup is gone so cookies are committed and
             // window.opener can finish. Manual Capture Session still works.
             guard !isPopup, popups.isEmpty else { return }
@@ -244,7 +252,13 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
 
     /// Fire the return callback once the popup is gone and the main page is the return page.
     private func fireReturnIfOnReturnPage() {
-        guard popups.isEmpty, let url = mainWebView.url, returnGate.matchesReturnPage(url) else {
+        // Require the main page to have reached the return state *after* auth, so
+        // closing an opened-then-cancelled popup cannot auto-capture.
+        guard didNavigateMainAfterAuth,
+              popups.isEmpty,
+              let url = mainWebView.url,
+              returnGate.matchesReturnPage(url)
+        else {
             return
         }
         fireReturn(url)

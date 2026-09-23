@@ -33,7 +33,11 @@ jobs:
           curl -sSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" -o /tmp/swiftlint.zip
           unzip -q -o /tmp/swiftlint.zip -d /tmp/swiftlint
           sudo install "$(find /tmp/swiftlint -type f -name swiftlint | head -1)" /usr/local/bin/swiftlint
-          test "$(swiftlint version)" = "$SWIFTLINT_VERSION"
+          # The macos-15 image ships a SwiftLint in /opt/homebrew/bin that
+          # precedes /usr/local/bin on PATH. Prepend the pinned copy so both the
+          # version check and `make lint` use SWIFTLINT_VERSION.
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          test "$(/usr/local/bin/swiftlint version)" = "$SWIFTLINT_VERSION"
 
       - name: Lint
         run: make lint
@@ -107,8 +111,16 @@ jobs:
 
       - name: Regenerate project and fail on drift
         run: |
+          set -euo pipefail
           /tmp/xcodegen/xcodegen/bin/xcodegen generate
-          git diff --exit-code TokenMon.xcodeproj
+          # `git status --porcelain` also sees untracked generated files (e.g. a
+          # new .xcscheme), which `git diff --exit-code` would miss.
+          if [ -n "$(git status --porcelain TokenMon.xcodeproj)" ]; then
+            echo "XcodeGen drift detected in TokenMon.xcodeproj:"
+            git status --porcelain TokenMon.xcodeproj
+            git diff -- TokenMon.xcodeproj
+            exit 1
+          fi
 
   core-tests:
     name: Core parser tests
@@ -164,6 +176,9 @@ jobs:
   build-release:
     name: Release build
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # Do not build/upload release artifacts from a red master: every gate must
+    # pass first.
+    needs: [lint, format, secrets, xcodegen-drift, core-tests, unit-tests]
     runs-on: macos-26
     timeout-minutes: 30
     env:

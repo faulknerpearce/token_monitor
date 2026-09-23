@@ -274,6 +274,22 @@ final class SignInBrowserNavigationTests: XCTestCase {
         controller.rearmReturn()
         XCTAssertEqual(changes, 0)
     }
+
+    func testGrokAuthHostUsesExactOrSuffixMatch() {
+        XCTAssertTrue(SignInView.isAuthHost("accounts.x.ai"))
+        XCTAssertTrue(SignInView.isAuthHost("x.com"))
+        XCTAssertTrue(SignInView.isAuthHost("api.x.com"))
+        // A naive `contains` would wrongly accept these.
+        XCTAssertFalse(SignInView.isAuthHost("netflix.com"))
+        XCTAssertFalse(SignInView.isAuthHost("x.com.evil.example"))
+    }
+
+    func testGrokReturnPageRejectsLookalikeHost() {
+        XCTAssertTrue(SignInView.isReturnPage(URL(string: "https://grok.com/?_s=usage")!))
+        XCTAssertTrue(SignInView.isReturnPage(URL(string: "https://www.grok.com/")!))
+        XCTAssertFalse(SignInView.isReturnPage(URL(string: "https://grok.com.evil.example/")!))
+        XCTAssertFalse(SignInView.isReturnPage(URL(string: "https://notgrok.com/")!))
+    }
 }
 
 /// Fulfils once a probe navigation finishes.

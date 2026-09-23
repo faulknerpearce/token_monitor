@@ -12,3 +12,19 @@ paths = [
     '''(^|/)dist/''',
     '''(^|/)DerivedData/''',
 ]
+
+# Provider session cookies are not matched by the default ruleset. Require a
+# plausible value length so short test fixtures (e.g. `sessionKey=sk-ant-sid01-xyz`)
+# do not trip the scan while a real committed jar would.
+
+[[rules]]
+id = "provider-session-cookie-header"
+description = "Raw Cookie: header carrying a provider session cookie"
+regex = '''(?i)\bCookie:\s*(?:[^"'\r\n]*;\s*)?(?:__Host-console_session|__Secure-next-auth\.session-token|WorkosCursorSessionToken|sessionKey|sso-rw|sso)=[A-Za-z0-9._%+/=-]{20,}'''
+tags = ["cookie", "session"]
+
+[[rules]]
+id = "provider-session-cookie-value"
+description = "Raw provider session cookie assignment"
+regex = '''(?i)\b(__Host-console_session|__Secure-next-auth\.session-token|WorkosCursorSessionToken|sessionKey)=[A-Za-z0-9._%+/-]{20,}'''
+tags = ["cookie", "session"]

@@ -2,8 +2,16 @@ import Foundation
 import os
 
 extension ProviderError {
+    private static let logger = Logger(category: "UsageClient")
+
+    /// Body-free error: the raw response body is logged privately (truncated) for
+    /// diagnostics but never placed in the user-facing message, which is logged at
+    /// `privacy: .public` and rendered in the panel.
     static func grokHTTPStatus(_ code: Int, body: String) -> ProviderError {
-        let message = "Usage request failed (HTTP \(code)): \(body)"
+        if !body.isEmpty {
+            logger.debug("Grok HTTP \(code) body: \(String(body.prefix(400)), privacy: .private)")
+        }
+        let message = "Usage request failed (HTTP \(code))."
         return .custom(message: message, usage: .badResponse(message))
     }
 
