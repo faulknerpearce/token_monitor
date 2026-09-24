@@ -16,13 +16,12 @@ struct SlimUsageTrack: View {
             if showsLabel {
                 HStack(spacing: 8) {
                     Text(label)
-                        .font(PanelTypography.caption)
-                        .foregroundStyle(.secondary)
+                        .font(PanelTypography.bodyDigit)
+                        .foregroundStyle(.primary)
                     Spacer()
-                    Text("\(Int(Percent.clamp(percent).rounded()))% used")
-                        .font(PanelTypography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                    Text("\(Int(Percent.clamp(percent).rounded()))% Used")
+                        .font(PanelTypography.bodyDigit)
+                        .foregroundStyle(.primary)
                 }
             }
 
@@ -39,8 +38,7 @@ struct SlimUsageTrack: View {
 
             if let caption, !caption.isEmpty {
                 Text(caption)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             }
         }
     }

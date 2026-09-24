@@ -11,22 +11,12 @@ struct GrokbotPanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .grokbot, title: "Grokbot")
-                    Spacer()
-                    if let email = snapshot.accountEmail {
-                        Text(email)
-                            .font(PanelTypography.captionMedium)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
+                ProviderHeaderLabel(provider: .grokbot, title: "Grokbot")
 
                 PanelCard {
                     PanelSectionHeaderRow(
                         title: snapshot.usagePool.sectionTitle,
-                        trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
+                        trailing: "\(Int(snapshot.usedPercent.rounded()))% Used"
                     )
                     if snapshot.hasIncludedAllowance {
                         SlimUsageTrack(
@@ -41,21 +31,13 @@ struct GrokbotPanelView: View {
                             .font(PanelTypography.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Text(snapshot.entitlement.captionText)
-                        .font(PanelTypography.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 if snapshot.hasIncludedAllowance, let days = poller.dailyBudgetDays, !days.isEmpty {
-                    let share = 100.0 / Double(max(1, snapshot.daysInPeriod()))
                     PanelCard {
                         WeeklyDailyBudgetBarsView(
                             days: days,
                             accent: ProviderColors.grokbotColor,
-                            infoText: String(
-                                format: "Share of the Bot allowance per day (budget %.1f%%/day).",
-                                share
-                            ),
                             periodUsedPercent: snapshot.usedPercent,
                             resetsAt: snapshot.resetsAt
                         )

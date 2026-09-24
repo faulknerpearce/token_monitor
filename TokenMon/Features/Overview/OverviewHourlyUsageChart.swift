@@ -98,7 +98,7 @@ struct OverviewHourlyUsageChart: View {
         VStack(alignment: .leading, spacing: 8) {
             if let usage, visibleHours(usage).contains(where: \.hasActivity) {
                 hourBars(usage)
-                legend
+                legend(for: usage)
             } else {
                 Text("No Grok, Grokbot, OpenCode, Cursor, or Claude activity yet today.")
                     .font(PanelTypography.caption)
@@ -108,9 +108,13 @@ struct OverviewHourlyUsageChart: View {
         }
     }
 
-    private var legend: some View {
-        HStack(spacing: 10) {
-            ForEach(Self.stackOrderBottomToTop) { provider in
+    private func legend(for usage: ProviderDayHourlyUsage) -> some View {
+        let hours = visibleHours(usage)
+        let used = Self.stackOrderBottomToTop.filter { provider in
+            hours.contains { provider.activity(for: $0) > 0 }
+        }
+        return HStack(spacing: 10) {
+            ForEach(used) { provider in
                 legendItem(title: provider.legendTitle, color: provider.color)
             }
         }
@@ -122,8 +126,8 @@ struct OverviewHourlyUsageChart: View {
                 .fill(color)
                 .frame(width: 8, height: 10)
             Text(title)
-                .font(PanelTypography.caption)
-                .foregroundStyle(.tertiary)
+                .font(PanelTypography.bodySemibold)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -148,7 +152,7 @@ struct OverviewHourlyUsageChart: View {
                 hourColumn(hour, providerMax: providerMax, maxStack: maxStack)
             }
         }
-        .frame(height: trackHeight + 14)
+        .frame(height: trackHeight + 19)
     }
 
     private func hourColumn(
@@ -195,12 +199,12 @@ struct OverviewHourlyUsageChart: View {
             .help(hourHelp(hour, segments: segments))
 
             Text(showAxis ? Self.axisLabel(for: hour.hour) : " ")
-                .font(PanelTypography.micro)
-                .foregroundStyle(.tertiary)
+                .font(PanelTypography.bodyDigit)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .frame(height: 10)
+                .frame(height: 14)
         }
         .frame(maxWidth: .infinity)
     }

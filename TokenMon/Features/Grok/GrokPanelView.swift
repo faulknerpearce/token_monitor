@@ -69,15 +69,14 @@ struct GrokPanelView: View {
             PanelCard {
                 PanelSectionHeaderRow(
                     title: snapshot.usagePool.sectionTitle,
-                    trailing: "\(Int(snapshot.usedPercent.rounded()))% used"
+                    trailing: "\(Int(snapshot.usedPercent.rounded()))% Used"
                 )
 
                 SegmentedUsageBar(products: products, height: 8)
 
                 if let resetsAt = snapshot.resetsAt {
                     Text(Format.resetCaption(resetsAt))
-                        .font(PanelTypography.caption)
-                        .foregroundStyle(.tertiary)
+                        .resetCaption()
                 }
             }
 
@@ -99,7 +98,7 @@ struct GrokPanelView: View {
                         Text(credits as NSDecimalNumber, formatter: Format.usdCurrency)
                     }
                     .font(PanelTypography.body)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary)
                 }
             }
 

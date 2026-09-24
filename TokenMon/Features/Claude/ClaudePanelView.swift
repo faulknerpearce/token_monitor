@@ -3,7 +3,6 @@ import SwiftUI
 struct ClaudePanelView: View {
     @ObservedObject var poller: ClaudeUsagePoller
     @ObservedObject var auth: ClaudeAuthSession
-    @ObservedObject var hourly: HourlyDeltaActivityStore
     let openSignIn: () -> Void
 
     var body: some View {
@@ -11,17 +10,7 @@ struct ClaudePanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .claude, title: "Claude")
-                    Spacer()
-                    if let email = snapshot.accountEmail {
-                        Text(email)
-                            .font(PanelTypography.captionMedium)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
+                ProviderHeaderLabel(provider: .claude, title: "Claude")
 
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
@@ -40,15 +29,10 @@ struct ClaudePanelView: View {
                 }
 
                 if let days = poller.dailyBudgetDays, !days.isEmpty {
-                    let share = days.first?.budgetUSD ?? 0
                     PanelCard {
                         WeeklyDailyBudgetBarsView(
                             days: days,
                             accent: ProviderColors.claudeColor,
-                            infoText: String(
-                                format: "Share of weekly allowance per day (budget %.1f%%/day).",
-                                share
-                            ),
                             periodUsedPercent: snapshot.sevenDay?.usedPercent,
                             resetsAt: snapshot.sevenDay?.resetsAt
                         )

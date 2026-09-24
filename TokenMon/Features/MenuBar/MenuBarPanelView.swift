@@ -179,7 +179,6 @@ struct MenuBarPanelView: View {
         ClaudePanelView(
             poller: claudePoller,
             auth: claudeAuth,
-            hourly: claudeHourly,
             openSignIn: openClaudeSignIn
         )
     }

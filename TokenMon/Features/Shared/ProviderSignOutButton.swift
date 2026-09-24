@@ -8,12 +8,10 @@ import SwiftUI
 ///
 /// - Parameters:
 ///   - provider: Provider whose session this button ends; names the confirm prompt.
-///   - font: Icon/prompt font; defaults to the panel caption size.
 ///   - action: Invoked after the user confirms; typically `auth.signOut()` plus
 ///     `poller.clearSnapshot()`.
 struct ProviderSignOutButton: View {
     let provider: MonitorProvider
-    var font: Font = PanelTypography.caption
     let action: () -> Void
 
     @State private var isConfirming = false
@@ -34,7 +32,7 @@ struct ProviderSignOutButton: View {
             isConfirming = true
         } label: {
             Image(systemName: "person.crop.circle.badge.minus")
-                .font(font)
+                .font(PanelTypography.caption)
                 .foregroundStyle(.tertiary)
                 .contentShape(Rectangle())
         }
@@ -46,7 +44,7 @@ struct ProviderSignOutButton: View {
     @ViewBuilder
     private var confirmControls: some View {
         Text("Sign out of \(provider.displayName)?")
-            .font(font)
+            .font(PanelTypography.caption)
             .foregroundStyle(.secondary)
 
         Button {
@@ -54,7 +52,7 @@ struct ProviderSignOutButton: View {
             action()
         } label: {
             Image(systemName: "checkmark.circle.fill")
-                .font(font)
+                .font(PanelTypography.caption)
                 .foregroundStyle(.red)
                 .contentShape(Rectangle())
         }
@@ -66,7 +64,7 @@ struct ProviderSignOutButton: View {
             isConfirming = false
         } label: {
             Image(systemName: "xmark.circle")
-                .font(font)
+                .font(PanelTypography.caption)
                 .foregroundStyle(.secondary)
                 .contentShape(Rectangle())
         }

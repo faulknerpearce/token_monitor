@@ -11,15 +11,7 @@ struct OpenCodePanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .opencode, title: "OpenCode Go")
-                    Spacer()
-                    if let source = poller.dataSourceLabel {
-                        Text(source)
-                            .font(PanelTypography.captionMedium)
-                            .foregroundStyle(snapshot.isEstimated ? Color.orange : Color.secondary)
-                    }
-                }
+                ProviderHeaderLabel(provider: .opencode, title: "OpenCode Go")
 
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
@@ -39,8 +31,6 @@ struct OpenCodePanelView: View {
                         MonthlyDailyBudgetBarsView(
                             days: days,
                             accent: ModelPalette.purple.color,
-                            infoText: "Go-only share of subscription-month quota per day. "
-                                + "This week, Monday through Sunday.",
                             periodUsedPercent: snapshot.monthlyUsedPercent,
                             periodStart: poller.dailyBudgetPeriodStart,
                             resetsAt: monthly?.resetsAt
@@ -204,22 +194,6 @@ private enum ModelCompany {
         return .other
     }
 
-    var displayName: String {
-        switch self {
-        case .kimi: return "moonshotai"
-        case .qwen: return "qwen"
-        case .glm: return "z-ai"
-        case .minimax: return "minimax"
-        case .deepseek: return "deepseek"
-        case .nvidia: return "nvidia"
-        case .muse: return "muse"
-        case .anthropic: return "anthropic"
-        case .openai: return "openai"
-        case .meta: return "meta"
-        case .other: return "other"
-        }
-    }
-
     var assetName: String? {
         switch self {
         case .kimi: return "KimiLogo"
@@ -321,8 +295,6 @@ struct OpenCodeModelWeekRow: View {
         return formatted
     }
 
-    private var company: ModelCompany { ModelCompany.forModelID(model.modelID) }
-
     private var displayModelName: String {
         // Use catalog display but prefer short "Kimi K2.6" style; fall back to raw id.
         let lower = model.modelID.lowercased()
@@ -336,16 +308,10 @@ struct OpenCodeModelWeekRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 ModelCompanyLogo(modelID: model.modelID)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(displayModelName)
-                        .font(PanelTypography.bodySemibold)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(company.displayName)
-                        .font(PanelTypography.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
+                Text(displayModelName)
+                    .font(PanelTypography.bodySemibold)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(costLabel)
                     .font(PanelTypography.bodyDigit)

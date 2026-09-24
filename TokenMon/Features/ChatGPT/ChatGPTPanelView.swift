@@ -14,8 +14,7 @@ struct ChatGPTPanelView: View {
                     ProviderHeaderLabel(provider: .chatgpt, title: "ChatGPT")
                     Spacer()
                     Text(snapshot.displayPlanName)
-                        .font(PanelTypography.captionMedium)
-                        .foregroundStyle(.secondary)
+                        .panelMetaLabel()
                 }
 
                 PanelCard {

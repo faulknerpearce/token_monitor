@@ -313,7 +313,6 @@ enum MenuBarStatusRenderer {
         }
         let height: CGFloat = 22
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
-        let smallFont = NSFont.systemFont(ofSize: 12.5, weight: .medium)
         let textColor = chromeColor
         let iconSize: CGFloat = 16
         let barWidth: CGFloat = 48
@@ -327,7 +326,7 @@ enum MenuBarStatusRenderer {
             .foregroundColor: textColor
         ]
         let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: smallFont,
+            .font: font,
             .foregroundColor: textColor
         ]
 

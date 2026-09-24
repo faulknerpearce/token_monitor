@@ -52,16 +52,14 @@ struct DailyUsageChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: "Daily Budget \(String(format: "%.1f%%", DailyUsageBuilder.dailyCapPercent))")
-                Image(systemName: "info.circle")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.tertiary)
-                    .help(String(
-                        format: "Share of weekly allowance per day (budget %.1f%%/day).",
-                        DailyUsageBuilder.dailyCapPercent
-                    ))
+                PanelSectionHeader(title: "Daily Budget")
+                Text(String(format: "%.1f%%", DailyUsageBuilder.dailyCapPercent))
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
                 Spacer(minLength: 8)
-                PanelPill(text: week.rangeLabel)
+                Text(week.rangeLabel)
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
 
             HStack(spacing: 8) {
@@ -84,12 +82,12 @@ struct DailyUsageChartView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: trackHeight + 36)
+            .frame(height: trackHeight + 42)
 
             if let footerCaption {
                 Text(footerCaption)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -97,12 +95,13 @@ struct DailyUsageChartView: View {
     private func dayColumn(_ day: DailyUsageDay) -> some View {
         let fraction = Self.fillFraction(forDayUsage: day.totalPercent)
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
+        let isFuture = day.dayStart > Calendar.current.startOfDay(for: Date())
 
         return VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
                 Color.primary.opacity(0.12)
 
-                if fraction > 0 {
+                if fraction > 0 && !isFuture {
                     ProviderColors.grokColor
                         .frame(height: min(trackHeight, fillHeight))
                 }
@@ -112,23 +111,22 @@ struct DailyUsageChartView: View {
             .frame(maxWidth: .infinity)
             .help(
                 day.totalPercent > 0.05
-                    ? String(format: "%.0f%% of weekly pool", day.totalPercent)
+                    ? String(format: "%.0f%% of weekly allowance", day.totalPercent)
                     : ""
             )
 
             VStack(spacing: 1) {
                 Text("\(max(0, Int(day.totalPercent.rounded())))%")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .font(PanelTypography.microDigit)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 Text(String(day.weekdaySymbol.prefix(2)))
-                    .font(PanelTypography.micro)
-                    .foregroundStyle(.tertiary)
+                    .font(PanelTypography.microDigit)
+                    .foregroundStyle(.secondary)
             }
-            .frame(height: 26)
+            .frame(height: 32)
+            .opacity(isFuture ? 0.5 : 1)
         }
         .frame(maxWidth: .infinity)
     }

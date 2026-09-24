@@ -7,7 +7,6 @@ struct WeeklyDailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
     var title: String = "Daily Budget"
-    var infoText: String?
     var periodUsedPercent: Double?
     /// Pool reset instant — paces the remainder against time left until reset.
     var resetsAt: Date?
@@ -19,7 +18,6 @@ struct WeeklyDailyBudgetBarsView: View {
             title: title,
             allowancePeriod: .weekly,
             allowanceNoun: "weekly",
-            infoText: infoText,
             periodUsedPercent: periodUsedPercent,
             resetsAt: resetsAt,
             periodStart: DailyBudget.weeklyPacePeriodStart(days: days)
@@ -34,7 +32,6 @@ struct MonthlyDailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
     var title: String = "Daily Budget"
-    var infoText: String?
     var periodUsedPercent: Double?
     /// Billing-cycle / Go-subscription start when known.
     var periodStart: Date?
@@ -53,7 +50,6 @@ struct MonthlyDailyBudgetBarsView: View {
             title: title,
             allowancePeriod: .monthly,
             allowanceNoun: "monthly",
-            infoText: infoText,
             periodUsedPercent: periodUsedPercent,
             periodStart: start
         )
@@ -69,8 +65,6 @@ struct DailyBudgetBarsView: View {
     var allowancePeriod: DailyBudget.AllowancePeriod = .monthly
     /// What the equal daily share is drawn from, e.g. "monthly" or "weekly".
     var allowanceNoun: String = "monthly"
-    /// Optional longer explanation shown as an info tooltip next to the header.
-    var infoText: String?
     /// Live used % for the same pool the bars pace against (API source of truth).
     var periodUsedPercent: Double?
     /// Next reset — paces the remainder against time left until reset.
@@ -146,16 +140,16 @@ struct DailyBudgetBarsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                PanelSectionHeader(title: dailyBudget > 0 ? "\(title) \(String(format: "%.1f%%", dailyBudget))" : title)
-                if let infoText {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.tertiary)
-                        .help(infoText)
-                        .accessibilityLabel(infoText)
+                PanelSectionHeader(title: title)
+                if dailyBudget > 0 {
+                    Text(String(format: "%.1f%%", dailyBudget))
+                        .font(PanelTypography.bodyDigit)
+                        .foregroundStyle(.primary)
                 }
                 Spacer(minLength: 8)
-                PanelPill(text: rangeLabel)
+                Text(rangeLabel)
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
 
             HStack(alignment: .bottom, spacing: 0) {
@@ -164,12 +158,12 @@ struct DailyBudgetBarsView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: trackHeight + 36)
+            .frame(height: trackHeight + 42)
 
             if let footerCaption {
                 Text(footerCaption)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -199,17 +193,15 @@ struct DailyBudgetBarsView: View {
 
             VStack(spacing: 1) {
                 Text("\(max(0, Int(day.spentUSD.rounded())))%")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .font(PanelTypography.microDigit)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 Text(String(weekday.string(from: day.date).prefix(2)))
-                    .font(PanelTypography.micro)
-                    .foregroundStyle(.tertiary)
+                    .font(PanelTypography.microDigit)
+                    .foregroundStyle(.secondary)
             }
-            .frame(height: 26)
+            .frame(height: 32)
             .opacity(isFuture ? 0.5 : 1)
         }
         .frame(maxWidth: .infinity)

@@ -46,9 +46,8 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.primary)
                 Spacer()
                 Text(appVersion)
-                    .font(PanelTypography.caption)
+                    .font(PanelTypography.bodyDigit)
                     .foregroundStyle(.tertiary)
-                    .monospacedDigit()
             }
 
             ForEach(settings.visibleUsageProviders) { provider in
@@ -56,7 +55,7 @@ struct OverviewPanelView: View {
             }
 
             PanelCard {
-                PanelSectionHeader(title: "Today")
+                PanelSectionHeader(title: "Usage Today")
                 OverviewHourlyUsageChart(usage: providerHourlyUsage)
             }
         }
@@ -217,14 +216,11 @@ struct OverviewPanelView: View {
                 Text("Grok")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Weekly")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Weekly").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -236,15 +232,14 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if grokPoller.snapshot == nil {
                 Text("No Grok data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
             if !grokAuth.isSignedIn || grokAuth.needsSignIn {
-                ProviderSignInButton(provider: .grok, font: PanelTypography.caption, action: openGrokSignIn)
+                ProviderSignInButton(provider: .grok, action: openGrokSignIn)
             }
             if grokAuth.isSignedIn && !grokAuth.needsSignIn {
                 ProviderSignOutButton(provider: .grok) {
@@ -269,14 +264,11 @@ struct OverviewPanelView: View {
                 Text("OpenCode")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Monthly")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Monthly").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -288,15 +280,14 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if openCodePoller.snapshot == nil {
                 Text("No OpenCode data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
             if openCodeAuth.needsSignIn && openCodePoller.snapshot == nil {
-                ProviderSignInButton(provider: .opencode, font: PanelTypography.caption, action: openOpenCodeSignIn)
+                ProviderSignInButton(provider: .opencode, action: openOpenCodeSignIn)
             }
             if !openCodeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .opencode) {
@@ -320,14 +311,11 @@ struct OverviewPanelView: View {
                 Text("Cursor")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Monthly")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Monthly").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -339,15 +327,14 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if cursorPoller.snapshot == nil {
                 Text("No Cursor data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
             if cursorAuth.needsSignIn && cursorPoller.snapshot == nil {
-                ProviderSignInButton(provider: .cursor, font: PanelTypography.caption, action: openCursorSignIn)
+                ProviderSignInButton(provider: .cursor, action: openCursorSignIn)
             }
             if !cursorAuth.needsSignIn {
                 ProviderSignOutButton(provider: .cursor) {
@@ -371,14 +358,11 @@ struct OverviewPanelView: View {
                 Text("Claude")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Weekly")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Weekly").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -390,15 +374,14 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if claudePoller.snapshot == nil {
                 Text("No Claude data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
             if claudeAuth.needsSignIn && claudePoller.snapshot == nil {
-                ProviderSignInButton(provider: .claude, font: PanelTypography.caption, action: openClaudeSignIn)
+                ProviderSignInButton(provider: .claude, action: openClaudeSignIn)
             }
             if !claudeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .claude) {
@@ -422,14 +405,11 @@ struct OverviewPanelView: View {
                 Text("ChatGPT")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Codex")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Codex").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -441,15 +421,14 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if chatGPTPoller.snapshot == nil {
                 Text("No ChatGPT data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             }
             if chatGPTAuth.needsSignIn && chatGPTPoller.snapshot == nil {
-                ProviderSignInButton(provider: .chatgpt, font: PanelTypography.caption, action: openChatGPTSignIn)
+                ProviderSignInButton(provider: .chatgpt, action: openChatGPTSignIn)
             }
             if !chatGPTAuth.needsSignIn {
                 ProviderSignOutButton(provider: .chatgpt) {
@@ -473,14 +452,11 @@ struct OverviewPanelView: View {
                 Text("Grokbot")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Weekly")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Weekly").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: "\(Int(percent.rounded()))% used")
+                Text("\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -492,8 +468,7 @@ struct OverviewPanelView: View {
             .frame(height: 8)
             if let resetsAt {
                 Text(Format.resetCaption(resetsAt))
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                    .resetCaption()
             } else if grokbotPoller.snapshot == nil {
                 Text("No Grokbot data yet")
                     .font(PanelTypography.caption)
@@ -504,7 +479,6 @@ struct OverviewPanelView: View {
                 ProviderSignInButton(
                     provider: .grokbot,
                     title: "Sign In to Cursor…",
-                    font: PanelTypography.caption,
                     action: openCursorSignIn
                 )
             }
@@ -524,16 +498,13 @@ struct OverviewPanelView: View {
                 Text("OpenRouter")
                     .font(PanelTypography.title)
                     .foregroundStyle(.primary)
-                Text("— Credits")
-                    .font(PanelTypography.micro)
-                    .fontWeight(.semibold)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.tertiary)
+                Text("— Credits").panelMetaLabel(uppercased: true)
                 Spacer()
-                PanelPill(text: openRouterPoller.snapshot?.usedPercent == nil && openRouterPoller.snapshot != nil
+                Text(openRouterPoller.snapshot?.usedPercent == nil && openRouterPoller.snapshot != nil
                     ? Format.usd(openRouterPoller.snapshot?.keyUsageUSD ?? 0)
-                    : "\(Int(percent.rounded()))% used")
+                    : "\(Int(percent.rounded()))% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             GeometryReader { geo in
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
@@ -557,7 +528,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if openRouterAuth.needsSignIn && openRouterPoller.snapshot == nil {
-                ProviderSignInButton(provider: .openrouter, font: PanelTypography.caption, action: selectOpenRouter)
+                ProviderSignInButton(provider: .openrouter, action: selectOpenRouter)
             }
             if !openRouterAuth.needsSignIn {
                 ProviderSignOutButton(provider: .openrouter) {

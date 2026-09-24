@@ -460,7 +460,7 @@ enum DailyBudget {
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "usage %.1f%% over pace for today",
+                format: "Usage %.1f%% over today's allowance",
                 -pace.headroomToday
             )
         }

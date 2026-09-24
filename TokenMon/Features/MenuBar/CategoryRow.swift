@@ -10,12 +10,12 @@ struct CategoryRow: View {
                 .fill(Color.product(product.colorToken))
                 .frame(width: 7, height: 7)
             Text(ProductCatalog.shortName(for: product.id))
+                .font(PanelTypography.bodySemibold)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Text("\(Int(product.percentOfPool.rounded()))%")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .font(PanelTypography.bodyDigit)
+                .foregroundStyle(.primary)
         }
-        .font(PanelTypography.body)
     }
 }

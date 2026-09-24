@@ -27,28 +27,6 @@ struct PanelCard<Content: View>: View {
     }
 }
 
-/// Capsule pill used for trailing badges like "42% used" / "Aug 14 – 20".
-struct PanelPill: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(PanelTypography.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-            )
-    }
-}
-
 #if DEBUG
 #Preview {
     VStack(spacing: 10) {
@@ -56,7 +34,9 @@ struct PanelPill: View {
             HStack {
                 PanelSectionHeader(title: "Weekly Usage")
                 Spacer()
-                PanelPill(text: "42% used")
+                Text("42% Used")
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
             }
             RoundedRectangle(cornerRadius: 2).fill(.blue).frame(height: 8)
             Text("Resets Sun 24 August 12:00am")

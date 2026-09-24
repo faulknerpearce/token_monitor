@@ -26,8 +26,7 @@ struct CursorPanelView: View {
                     ProviderHeaderLabel(provider: .cursor, title: "Cursor")
                     Spacer()
                     Text(snapshot.displayPlanName)
-                        .font(PanelTypography.captionMedium)
-                        .foregroundStyle(.secondary)
+                        .panelMetaLabel()
                 }
 
                 PanelCard {
@@ -51,7 +50,6 @@ struct CursorPanelView: View {
                         MonthlyDailyBudgetBarsView(
                             days: days,
                             accent: ProviderColors.cursorColor,
-                            infoText: "Share of billing-cycle quota per day. This week, Monday through Sunday.",
                             periodUsedPercent: cursorModelsPercent,
                             periodStart: snapshot.billingCycleStart,
                             resetsAt: snapshot.billingCycleEnd

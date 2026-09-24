@@ -15,14 +15,13 @@ struct OpenRouterPanelView: View {
                     ProviderHeaderLabel(provider: .openrouter, title: "OpenRouter")
                     Spacer()
                     Text(snapshot.budgetSource?.label ?? "No credit limit")
-                        .font(PanelTypography.captionMedium)
-                        .foregroundStyle(.secondary)
+                        .panelMetaLabel()
                 }
 
                 PanelCard {
                     PanelSectionHeaderRow(
                         title: "Credit Budget",
-                        trailing: snapshot.usedPercent.map { "\(Int($0.rounded()))% used" }
+                        trailing: snapshot.usedPercent.map { "\(Int($0.rounded()))% Used" }
                     )
                     if let percent = snapshot.usedPercent {
                         SlimUsageTrack(
