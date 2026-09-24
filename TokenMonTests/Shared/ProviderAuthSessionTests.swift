@@ -5,7 +5,8 @@ import XCTest
 final class ProviderAuthSessionTests: XCTestCase {
     private func makeConfig(
         filenamePrefix: String = "auth_",
-        essential: Set<String> = []
+        essential: Set<String> = [],
+        essentialPrefixes: Set<String> = []
     ) -> ProviderAuthConfig {
         ProviderAuthConfig(
             storeFilenamePrefix: filenamePrefix,
@@ -16,6 +17,7 @@ final class ProviderAuthSessionTests: XCTestCase {
                 isDomain: { _ in false },
                 looksLikeAuthCookie: { _ in false },
                 essentialCookieNames: essential,
+                essentialCookiePrefixes: essentialPrefixes,
                 failureMessage: "no cookie"
             ),
             isDomain: { _ in false }
@@ -126,5 +128,44 @@ final class ProviderAuthSessionTests: XCTestCase {
         auth.save(cookieHeader: "auth_token=x; ct0=y")
 
         XCTAssertEqual(auth.cookieHeader(), "auth_token=x; ct0=y")
+    }
+
+    /// A prefixed essential family is kept whole: NextAuth chunks a large session
+    /// JWT into `…session-token.0`, `.1`, and an exact-name match would drop the
+    /// session while keeping an unrelated cookie that shares the allowlist.
+    func testLoadKeepsChunkedEssentialFamily() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let auth = ProviderAuthSession(
+            config: makeConfig(essentialPrefixes: ["__secure-next-auth.session-token"]),
+            directory: dir
+        )
+        auth.save(
+            cookieHeader: "__Host-next-auth.csrf-token=c; __Secure-next-auth.session-token.0=a; "
+                + "__Secure-next-auth.session-token.1=b; _ga=g"
+        )
+
+        XCTAssertEqual(
+            auth.cookieHeader(),
+            "__Secure-next-auth.session-token.0=a; __Secure-next-auth.session-token.1=b"
+        )
+    }
+
+    /// A jar with only a non-essential cookie (the CSRF cookie that shares
+    /// ChatGPT's sign-in page) is not narrowed to nothing.
+    func testLoadLeavesJarWhenOnlyNonEssentialPresent() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let auth = ProviderAuthSession(
+            config: makeConfig(essentialPrefixes: ["__secure-next-auth.session-token"]),
+            directory: dir
+        )
+        auth.save(cookieHeader: "__Host-next-auth.csrf-token=c; _ga=g")
+
+        XCTAssertEqual(auth.cookieHeader(), "__Host-next-auth.csrf-token=c; _ga=g")
     }
 }

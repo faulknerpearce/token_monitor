@@ -14,30 +14,35 @@ final class ChatGPTAuthSession: ProviderAuthSession {
         "api.openai.com"
     ]
 
-    /// The cookies the usage token exchange actually sends. Narrowing the
-    /// persisted jar to these keeps unrelated analytics and SSO cookies out of
-    /// `chatgpt_auth_session.dat`; when none is present the capture falls back to
-    /// the full domain jar so sign-in still works.
-    static let essentialCookieNames: Set<String> = [
-        "__secure-next-auth.session-token",
-        "__host-next-auth.csrf-token"
-    ]
+    /// NextAuth's ChatGPT session cookie family. A large session JWT is chunked
+    /// into `__Secure-next-auth.session-token.0`, `.1`, …, so the whole family is
+    /// the session credential.
+    static let sessionTokenPrefix = "__secure-next-auth.session-token"
+
+    /// The cookies the usage token exchange actually sends. Only the session
+    /// family: the CSRF cookie is always present on the sign-in page and is not
+    /// a credential, so treating it as one let capture report success with no
+    /// session at all (and, because the match was exact, discarded a chunked
+    /// session in favour of that CSRF cookie).
+    static let essentialCookiePrefixes: Set<String> = [sessionTokenPrefix]
 
     static func chatgptPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: chatgptHosts) },
-            isPreferredSessionCookie: {
-                $0.name == "__Secure-next-auth.session-token"
-                    || $0.name == "__Host-next-auth.csrf-token"
+            isPreferredSessionCookie: { cookie in
+                let name = cookie.name.lowercased()
+                return name == Self.sessionTokenPrefix || name.hasPrefix(Self.sessionTokenPrefix + ".")
             },
             looksLikeAuthCookie: { cookie in
+                // Only a session token counts. Analytics and the CSRF cookie must
+                // not let capture succeed without the real session (which would
+                // sign the user out on the first poll).
                 let name = cookie.name.lowercased()
-                if name.contains("next-auth.session-token") { return true }
-                let hints = ["session", "token", "auth"]
-                return hints.contains { name.contains($0) }
+                if name.contains("csrf") { return false }
+                return name.contains("session-token") || name.contains("session_token")
             },
             includeAllDomainCookiesWhenSessionFound: true,
-            essentialCookieNames: Self.essentialCookieNames,
+            essentialCookiePrefixes: Self.essentialCookiePrefixes,
             maxAttempts: 4,
             failureMessage: "No ChatGPT session cookie found. Finish signing in to chatgpt.com, then click Capture Session."
         )

@@ -99,6 +99,28 @@ enum ProviderHTTP {
         referer: String? = nil,
         headers: [String: String] = [:]
     ) async throws -> Data {
+        try await getWithResponse(
+            path,
+            baseURL: baseURL,
+            context: context,
+            cookieHeader: cookieHeader,
+            bearerToken: bearerToken,
+            referer: referer,
+            headers: headers
+        ).data
+    }
+
+    /// As `get`, but also returns the response so callers can read `Set-Cookie`
+    /// and persist a refreshed session cookie.
+    static func getWithResponse(
+        _ path: String,
+        baseURL: URL,
+        context: ProviderErrorContext,
+        cookieHeader: String? = nil,
+        bearerToken: String? = nil,
+        referer: String? = nil,
+        headers: [String: String] = [:]
+    ) async throws -> (data: Data, response: HTTPURLResponse) {
         try await send(
             path,
             baseURL: baseURL,
@@ -109,6 +131,13 @@ enum ProviderHTTP {
             referer: referer,
             headers: headers
         )
+    }
+
+    /// Every `Set-Cookie` value on `response`, in header order.
+    static func setCookieHeaders(from response: HTTPURLResponse) -> [String] {
+        response.allHeaderFields
+            .filter { ($0.key as? String)?.lowercased() == "set-cookie" }
+            .compactMap { $0.value as? String }
     }
 
     static func post(
@@ -133,7 +162,7 @@ enum ProviderHTTP {
             origin: origin,
             headers: headers,
             json: json
-        )
+        ).data
     }
 
     /// Decodes a 2xx body as a JSON object.
@@ -180,7 +209,7 @@ enum ProviderHTTP {
         origin: String? = nil,
         headers: [String: String] = [:],
         json: [String: Any]? = nil
-    ) async throws -> Data {
+    ) async throws -> (data: Data, response: HTTPURLResponse) {
         guard let resolved = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
             throw ProviderError.badResponse(context, "Invalid path \(path)")
         }
@@ -202,7 +231,7 @@ enum ProviderHTTP {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: json)
         }
-        return try await AuthenticatedRequest.perform(request) { usageError in
+        return try await AuthenticatedRequest.performWithResponse(request) { usageError in
             ProviderError(usageError, context: context)
         }
     }

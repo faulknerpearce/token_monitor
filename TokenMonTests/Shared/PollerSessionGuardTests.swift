@@ -262,12 +262,17 @@ final class PollerSessionGuardTests: XCTestCase {
 
     // MARK: - ChatGPT
 
+    private func chatGPTFetch() -> ChatGPTUsageClient.Fetch {
+        ChatGPTUsageClient.Fetch(response: chatGPTResponse(), fetchedAt: Date(), setCookieHeaders: [])
+    }
+
     func testChatGPTStaleUnauthorizedDoesNotInvalidateNewSession() async {
         let auth = ChatGPTAuthSession(directory: dir)
         auth.save(cookieHeader: "__Secure-next-auth.session-token=old")
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
+            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in
                 auth.signOut()
                 auth.save(cookieHeader: "__Secure-next-auth.session-token=new")
@@ -285,11 +290,56 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
+            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in throw ProviderError.unauthorized(.chatGPT) }
         )
         await poller.refreshNow()
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
+    }
+
+    /// A single 401 is retried before the stored session is deleted, so a
+    /// transient token-exchange failure does not force a manual sign-in.
+    func testChatGPTTransientUnauthorizedRecoversOnRetry() async {
+        let auth = ChatGPTAuthSession(directory: dir)
+        auth.save(cookieHeader: "__Secure-next-auth.session-token=live")
+        let attempts = AttemptCounter()
+        let poller = ChatGPTUsagePoller(
+            settings: settings(.chatgpt),
+            auth: auth,
+            unauthorizedRetryDelayNanoseconds: 0,
+            fetchUsage: { _ in
+                if attempts.next() == 1 { throw ProviderError.unauthorized(.chatGPT) }
+                return self.chatGPTFetch()
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertTrue(auth.isSignedIn)
+        XCTAssertFalse(auth.needsSignIn)
+        XCTAssertNotNil(poller.snapshot)
+    }
+
+    /// A renewed session cookie from `Set-Cookie` is folded into the stored jar.
+    func testChatGPTRefreshedCookieIsPersisted() async {
+        let auth = ChatGPTAuthSession(directory: dir)
+        auth.save(cookieHeader: "__Secure-next-auth.session-token=old")
+        let poller = ChatGPTUsagePoller(
+            settings: settings(.chatgpt),
+            auth: auth,
+            unauthorizedRetryDelayNanoseconds: 0,
+            fetchUsage: { _ in
+                ChatGPTUsageClient.Fetch(
+                    response: self.chatGPTResponse(),
+                    fetchedAt: Date(),
+                    setCookieHeaders: [
+                        "__Secure-next-auth.session-token=renewed; Path=/; Secure; HttpOnly",
+                        "_ga=tracker; Path=/"
+                    ]
+                )
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertEqual(auth.cookieHeader(), "__Secure-next-auth.session-token=renewed")
     }
 
     // MARK: - OpenRouter
@@ -461,5 +511,18 @@ final class PollerSessionGuardTests: XCTestCase {
         )
         await poller.refreshNow()
         XCTAssertNil(poller.snapshot)
+    }
+}
+
+/// Thread-safe call counter for the retry seam.
+private final class AttemptCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func next() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
     }
 }

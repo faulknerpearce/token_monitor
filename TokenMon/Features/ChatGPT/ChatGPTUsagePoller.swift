@@ -13,7 +13,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let auth: ChatGPTAuthSession
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
-    private let fetchUsage: (String) async throws -> (ChatGPTUsageResponse, Date)
+    private let fetchUsage: (String) async throws -> ChatGPTUsageClient.Fetch
+    /// Wait before the one retry that precedes tearing the stored session down.
+    private let unauthorizedRetryDelayNanoseconds: UInt64
     private let logger = Logger(category: "ChatGPT")
     private var cancellables = Set<AnyCancellable>()
 
@@ -25,13 +27,15 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     init(
         settings: AppSettings,
         auth: ChatGPTAuthSession,
-        fetchUsage: ((String) async throws -> (ChatGPTUsageResponse, Date))? = nil
+        unauthorizedRetryDelayNanoseconds: UInt64 = 1_500_000_000,
+        fetchUsage: ((String) async throws -> ChatGPTUsageClient.Fetch)? = nil
     ) {
         self.settings = settings
         self.auth = auth
         self.fetchUsage = fetchUsage ?? { cookieHeader in
             try await ChatGPTUsageClient(cookieHeader: cookieHeader).fetchUsage()
         }
+        self.unauthorizedRetryDelayNanoseconds = unauthorizedRetryDelayNanoseconds
         auth.$isSignedIn
             .dropFirst()
             .removeDuplicates()
@@ -71,43 +75,70 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
 
         let generation = auth.sessionGeneration
         do {
-            let (response, fetchedAt) = try await fetchUsage(cookieHeader)
+            let fetch = try await fetchUsage(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
-            snapshot = ChatGPTSnapshot(
-                fetchedAt: fetchedAt,
-                planName: response.planName,
-                allowed: response.allowed,
-                limitReached: response.limitReached,
-                primary: response.primary,
-                secondary: response.secondary
-            )
-            lastError = nil
-            lastRefreshedAt = Date()
-            auth.needsSignIn = false
-            let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
-            logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
+            publish(fetch)
         } catch let error as ProviderError {
             // A request that began under a previous credential state must not
             // tear down the current session.
             guard auth.isCurrent(generation) else { return }
-            let usageError = error.usageError
-            switch usageError {
+            switch error.usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                await invalidateUnlessRetrySucceeds(error, generation: generation, cookieHeader: cookieHeader)
             default:
-                break
+                reportFailure(error)
             }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
-            logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
         } catch {
             guard auth.isCurrent(generation) else { return }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
-            logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
+            reportFailure(error)
         }
+    }
+
+    /// One retry before invalidating. A 401 here can be a transient token-exchange
+    /// hiccup, and `markSessionInvalid` deletes the stored cookie, so invalidating
+    /// on the first failure forces a full manual sign-in for a blip.
+    private func invalidateUnlessRetrySucceeds(
+        _ error: ProviderError,
+        generation: Int,
+        cookieHeader: String
+    ) async {
+        if unauthorizedRetryDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: unauthorizedRetryDelayNanoseconds)
+        }
+        guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+        if let fetch = try? await fetchUsage(cookieHeader), auth.isCurrent(generation) {
+            publish(fetch)
+            return
+        }
+        guard auth.isCurrent(generation) else { return }
+        auth.markSessionInvalid(reason: error.localizedDescription)
+        reportFailure(error)
+    }
+
+    private func publish(_ fetch: ChatGPTUsageClient.Fetch) {
+        // Fold a renewed session cookie back into the store before it hard-expires.
+        auth.applyRefreshedCookies(fetch.setCookieHeaders)
+        let response = fetch.response
+        snapshot = ChatGPTSnapshot(
+            fetchedAt: fetch.fetchedAt,
+            planName: response.planName,
+            allowed: response.allowed,
+            limitReached: response.limitReached,
+            primary: response.primary,
+            secondary: response.secondary
+        )
+        lastError = nil
+        lastRefreshedAt = Date()
+        auth.needsSignIn = false
+        let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
+        logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
+    }
+
+    private func reportFailure(_ error: Error) {
+        if snapshot == nil {
+            lastError = error.localizedDescription
+        }
+        logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
     }
 
     private func currentInterval() -> TimeInterval {

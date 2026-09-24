@@ -95,7 +95,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// Persisted cookie header, narrowed to the provider's essential cookies.
     func loadCookieHeader() -> String? {
         guard let stored = readStore(key: "session") else { return nil }
-        let pruned = Self.pruneCookieHeader(stored, to: config.capturePolicy.essentialCookieNames)
+        let pruned = Self.pruneCookieHeader(stored, policy: config.capturePolicy)
         if pruned != stored {
             // A jar captured before the allowlist existed can still carry SSO
             // cookies from another account (e.g. an X session in the Grok jar).
@@ -104,25 +104,76 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         return pruned
     }
 
-    /// Narrows a stored `Cookie:` header to `names`, mirroring
-    /// `WebKitCookieCapture.select`: only narrow when one of the essential
-    /// cookies is present, so a provider without them keeps its stored jar.
-    static func pruneCookieHeader(_ header: String, to names: Set<String>) -> String {
-        guard !names.isEmpty else { return header }
+    /// Narrows a stored `Cookie:` header to the provider's essential cookies,
+    /// mirroring `WebKitCookieCapture.select`: only narrow when one of them is
+    /// present, so a provider without an allowlist keeps its stored jar. Prefixed
+    /// families (NextAuth's chunked session cookie) are matched as a whole.
+    static func pruneCookieHeader(
+        _ header: String,
+        policy: WebKitCookieCapture.Policy
+    ) -> String {
+        guard policy.hasEssentialCookieAllowlist else { return header }
         let pairs = header
             .split(separator: ";")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         func name(of pair: String) -> String? {
             guard let separator = pair.firstIndex(of: "=") else { return nil }
-            return pair[..<separator].lowercased()
+            return String(pair[..<separator])
         }
-        guard pairs.contains(where: { name(of: $0).map(names.contains) ?? false }) else {
+        guard pairs.contains(where: { name(of: $0).map(policy.isEssential) ?? false }) else {
             return header
         }
-        return pairs
-            .filter { name(of: $0).map(names.contains) ?? false }
-            .joined(separator: "; ")
+        let kept = pairs.filter { name(of: $0).map(policy.isEssential) ?? false }
+        return kept.joined(separator: "; ")
+    }
+
+    /// Folds refreshed `Set-Cookie` values for this provider's essential cookies
+    /// into the stored header. A rolling session cookie (NextAuth renews
+    /// `__Secure-next-auth.session-token` on every `/api/auth/session` call) is
+    /// otherwise only ever polled and never renewed, so it hard-expires while the
+    /// user is still signed in. Writes the store directly: it must not bump
+    /// `sessionGeneration`, or a poll in flight would invalidate its own session.
+    func applyRefreshedCookies(_ setCookieHeaders: [String]) {
+        guard !setCookieHeaders.isEmpty, let stored = readStore(key: "session") else { return }
+        var order: [String] = []
+        var values: [String: String] = [:]
+        for pair in Self.cookiePairs(stored) {
+            order.append(pair.name)
+            values[pair.name.lowercased()] = pair.value
+        }
+        var changed = false
+        for raw in setCookieHeaders {
+            guard let pair = Self.parseSetCookie(raw), config.capturePolicy.isEssential(pair.name) else {
+                continue
+            }
+            let key = pair.name.lowercased()
+            if values[key] != pair.value {
+                if values[key] == nil { order.append(pair.name) }
+                values[key] = pair.value
+                changed = true
+            }
+        }
+        guard changed else { return }
+        let header = order.compactMap { name -> String? in
+            values[name.lowercased()].map { "\(name)=\($0)" }
+        }.joined(separator: "; ")
+        writeStore(key: "session", value: header)
+    }
+
+    /// Splits a `Cookie:` header into ordered name/value pairs.
+    private static func cookiePairs(_ header: String) -> [(name: String, value: String)] {
+        header.split(separator: ";").compactMap { pair in
+            let trimmed = pair.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = trimmed.firstIndex(of: "=") else { return nil }
+            return (String(trimmed[..<separator]), String(trimmed[trimmed.index(after: separator)...]))
+        }
+    }
+
+    /// Extracts the name/value from a `Set-Cookie` header, ignoring attributes.
+    private static func parseSetCookie(_ raw: String) -> (name: String, value: String)? {
+        let first = raw.split(separator: ";").first.map(String.init) ?? raw
+        return cookiePairs(first).first
     }
 
     func saveAccountEmail(_ email: String) {

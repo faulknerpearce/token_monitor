@@ -45,6 +45,15 @@ enum AuthenticatedRequest {
         _ request: URLRequest,
         map: @escaping (UsageError) -> any Error
     ) async throws -> Data {
+        try await performWithResponse(request, map: map).data
+    }
+
+    /// As `perform`, but also returns the response so callers can persist
+    /// refreshed credentials (e.g. a rolling session cookie in `Set-Cookie`).
+    static func performWithResponse(
+        _ request: URLRequest,
+        map: @escaping (UsageError) -> any Error
+    ) async throws -> (data: Data, response: HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
@@ -58,6 +67,6 @@ enum AuthenticatedRequest {
         if let usageError = mapError(for: http, data: data) {
             throw map(usageError)
         }
-        return data
+        return (data, http)
     }
 }

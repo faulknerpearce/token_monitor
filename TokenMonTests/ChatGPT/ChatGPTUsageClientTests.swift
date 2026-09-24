@@ -71,6 +71,20 @@ final class ChatGPTUsageClientTests: XCTestCase {
         XCTAssertThrowsError(try ChatGPTUsageClient.parseSessionToken(Data("{}".utf8)))
     }
 
+    /// An HTML body is an edge challenge, not proof the stored session is dead;
+    /// mapping it to `.unauthorized` would delete the credential.
+    func testSessionTokenHTMLIsTransientNotUnauthorized() {
+        let html = Data("<!DOCTYPE html><html><body>Just a moment...</body></html>".utf8)
+        XCTAssertThrowsError(try ChatGPTUsageClient.parseSessionToken(html)) { error in
+            guard let providerError = error as? ProviderError else {
+                return XCTFail("expected ProviderError, got \(error)")
+            }
+            guard case .badResponse = providerError.usageError else {
+                return XCTFail("HTML must stay transient, got \(providerError.usageError)")
+            }
+        }
+    }
+
     func testAccountIDFromAccessToken() throws {
         // JWT header.payload.signature with the OpenAI auth claim.
         let payload = #"{"https://api.openai.com/auth": {"chatggpt_account_id": "acct_42"}, "sub": "user-1"}"#

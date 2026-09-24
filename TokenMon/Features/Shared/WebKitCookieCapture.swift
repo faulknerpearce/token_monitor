@@ -16,6 +16,11 @@ enum WebKitCookieCapture {
         /// these are persisted. Empty, or a set without the preferred cookie,
         /// falls back to the full domain jar.
         var essentialCookieNames: Set<String>
+        /// Lowercased name prefixes whose whole family is sent. NextAuth chunks a
+        /// large session JWT into `__Secure-next-auth.session-token.0`, `.1`, …,
+        /// so matching on the exact name would drop the session and keep only an
+        /// unrelated cookie that happens to share the allowlist.
+        var essentialCookiePrefixes: Set<String>
         var maxAttempts: Int
         var retryDelayNanoseconds: UInt64
         var failureMessage: String
@@ -26,6 +31,7 @@ enum WebKitCookieCapture {
             looksLikeAuthCookie: @escaping @Sendable (HTTPCookie) -> Bool,
             includeAllDomainCookiesWhenSessionFound: Bool = true,
             essentialCookieNames: Set<String> = [],
+            essentialCookiePrefixes: Set<String> = [],
             maxAttempts: Int = 1,
             retryDelayNanoseconds: UInt64 = 400_000_000,
             failureMessage: String
@@ -35,9 +41,23 @@ enum WebKitCookieCapture {
             self.looksLikeAuthCookie = looksLikeAuthCookie
             self.includeAllDomainCookiesWhenSessionFound = includeAllDomainCookiesWhenSessionFound
             self.essentialCookieNames = Set(essentialCookieNames.map { $0.lowercased() })
+            self.essentialCookiePrefixes = Set(essentialCookiePrefixes.map { $0.lowercased() })
             self.maxAttempts = maxAttempts
             self.retryDelayNanoseconds = retryDelayNanoseconds
             self.failureMessage = failureMessage
+        }
+
+        /// True when this provider narrows its persisted jar to an allowlist.
+        var hasEssentialCookieAllowlist: Bool {
+            !essentialCookieNames.isEmpty || !essentialCookiePrefixes.isEmpty
+        }
+
+        /// True when `cookieName` is one of the only cookies this provider sends,
+        /// including every chunk of a prefixed family.
+        func isEssential(_ cookieName: String) -> Bool {
+            let name = cookieName.lowercased()
+            if essentialCookieNames.contains(name) { return true }
+            return essentialCookiePrefixes.contains { name == $0 || name.hasPrefix($0 + ".") }
         }
     }
 
@@ -80,10 +100,8 @@ enum WebKitCookieCapture {
 
         // Store only what the requests actually send, when the provider says so
         // and the session cookie is really in there.
-        if !policy.essentialCookieNames.isEmpty {
-            let essential = relevant.filter {
-                policy.essentialCookieNames.contains($0.name.lowercased())
-            }
+        if policy.hasEssentialCookieAllowlist {
+            let essential = relevant.filter { policy.isEssential($0.name) }
             if essential.contains(where: policy.isPreferredSessionCookie) {
                 return essential
             }

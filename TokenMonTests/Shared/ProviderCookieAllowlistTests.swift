@@ -94,4 +94,30 @@ final class ProviderCookieAllowlistTests: XCTestCase {
             ["__Secure-next-auth.session-token"]
         )
     }
+
+    /// NextAuth chunks a large session JWT into `…session-token.0`, `.1`, …. The
+    /// whole family must be captured, and the CSRF cookie that shares the sign-in
+    /// page must not be mistaken for the session.
+    func testChatGPTPolicyKeepsChunkedSessionAndDropsCSRF() {
+        let cookies = [
+            cookie("__Host-next-auth.csrf-token", value: "csrf", domain: "chatgpt.com"),
+            cookie("__Secure-next-auth.session-token.0", value: "chunk-a", domain: "chatgpt.com"),
+            cookie("__Secure-next-auth.session-token.1", value: "chunk-b", domain: "chatgpt.com"),
+            cookie("_ga", value: "tracker", domain: "chatgpt.com")
+        ]
+        XCTAssertEqual(
+            selectedNames(cookies, policy: ChatGPTAuthSession.chatgptPolicy()),
+            ["__Secure-next-auth.session-token.0", "__Secure-next-auth.session-token.1"]
+        )
+    }
+
+    /// The CSRF-only jar present while the sign-in page renders must not capture
+    /// as a session — that signed the user out on the first poll.
+    func testChatGPTPolicyRejectsCSRFOnlyJar() {
+        let cookies = [
+            cookie("__Host-next-auth.csrf-token", value: "csrf", domain: "chatgpt.com"),
+            cookie("_ga", value: "tracker", domain: "chatgpt.com")
+        ]
+        XCTAssertNil(WebKitCookieCapture.select(from: cookies, policy: ChatGPTAuthSession.chatgptPolicy()))
+    }
 }
