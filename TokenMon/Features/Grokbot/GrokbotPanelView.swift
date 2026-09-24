@@ -56,7 +56,8 @@ struct GrokbotPanelView: View {
                                 format: "Share of the Bot allowance per day (budget %.1f%%/day).",
                                 share
                             ),
-                            periodUsedPercent: snapshot.usedPercent
+                            periodUsedPercent: snapshot.usedPercent,
+                            resetsAt: snapshot.resetsAt
                         )
                     }
                 }

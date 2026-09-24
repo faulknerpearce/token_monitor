@@ -111,7 +111,8 @@ struct GrokPanelView: View {
                         onPreviousWeek: { weekOffset -= 1 },
                         onNextWeek: { weekOffset = min(0, weekOffset + 1) },
                         canGoNext: weekOffset < 0,
-                        periodUsedPercent: weekOffset == 0 ? snapshot.usedPercent : nil
+                        periodUsedPercent: weekOffset == 0 ? snapshot.usedPercent : nil,
+                        resetsAt: weekOffset == 0 ? snapshot.resetsAt : nil
                     )
                 }
             }

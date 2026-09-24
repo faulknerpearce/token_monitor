@@ -571,10 +571,10 @@ final class DailyBudgetTests: XCTestCase {
         let caption = DailyBudget.paceCaption(
             pace(dailyBudget: 10, earned: 20, periodConsumed: 0, headroomToday: 20)
         )
-        XCTAssertEqual(caption, "Up to 20.0% available today from unused earlier days.")
+        XCTAssertEqual(caption, "20.0% usage left today from unused prior days")
     }
 
-    func testPaceCaptionNoUsageNotBanked() {
+    func testPaceCaptionNoUsage() {
         let caption = DailyBudget.paceCaption(
             pace(dailyBudget: 10, earned: 10, periodConsumed: 0, headroomToday: 10)
         )
@@ -591,14 +591,21 @@ final class DailyBudgetTests: XCTestCase {
         let caption = DailyBudget.paceCaption(
             pace(dailyBudget: 10, periodConsumed: 55, headroomToday: -5)
         )
-        XCTAssertEqual(caption, "55% used · 5.0% over pace")
+        XCTAssertEqual(caption, "usage 5.0% over pace for today")
     }
 
-    func testPaceCaptionBankedRemaining() {
+    func testPaceCaptionBankedSurplus() {
         let caption = DailyBudget.paceCaption(
             pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 25)
         )
-        XCTAssertEqual(caption, "25.0% still available today from unused earlier days.")
+        XCTAssertEqual(caption, "25.0% usage left today from unused prior days")
+    }
+
+    func testPaceCaptionSurplus() {
+        let caption = DailyBudget.paceCaption(
+            pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 4)
+        )
+        XCTAssertEqual(caption, "4.0% usage left today")
     }
 
     func testPaceCaptionOnPace() {
@@ -608,10 +615,150 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(caption, "On pace for today")
     }
 
-    func testPaceCaptionLeftToday() {
-        let caption = DailyBudget.paceCaption(
-            pace(dailyBudget: 10, periodConsumed: 30, headroomToday: 4)
-        )
-        XCTAssertEqual(caption, "4.0% left today")
+    // MARK: - day-based pacing (Wed before Thu reset)
+
+    private func weeklyDays(ending today: Date) -> [DailyBudgetDay] {
+        (0..<7).map { offset -> DailyBudgetDay in
+            let day = calendar.date(byAdding: .day, value: offset - 6, to: today)!
+            return DailyBudgetDay(
+                date: calendar.startOfDay(for: day),
+                spentUSD: 0,
+                budgetUSD: 100.0 / 7
+            )
+        }
+    }
+
+    /// Over pace is measured against the day-based allowance and the caption
+    /// reports only the overrun — never the raw used amount.
+    func testOverPaceCaptionOmitsUsedAmount() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 12))!
+        let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 18, minute: 57))!
+        let days = weeklyDays(ending: calendar.startOfDay(for: now))
+        // Day 3 of a 7-day pool → allowance 3 × 100/7 ≈ 42.9%; 50% used → over.
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 50,
+            elapsedDaysInPeriod: 3,
+            resetsAt: reset,
+            now: now,
+            calendar: calendar
+        ))
+        XCTAssertLessThan(pace.headroomToday, 0)
+        let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
+        XCTAssertFalse(caption.contains("used"), "must not report the used amount, got: \(caption)")
+        XCTAssertTrue(caption.hasPrefix("usage 7.1% over pace for today"), "got: \(caption)")
+    }
+
+    /// Regression (Grokbot, first day of a fresh period): the allowance is one
+    /// whole day's share, so 7% used on day 1 of a weekly pool leaves ~7.3% — not
+    /// the fractional-time value, and never a false over-pace.
+    func testFirstDayRemainingIsWholeDayShare() throws {
+        // Wed Sep 23 20:00, reset Wed Sep 30 19:00 → period started today.
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 20))!
+        let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 19))!
+        let days = weeklyDays(ending: calendar.startOfDay(for: now))
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 7,
+            elapsedDaysInPeriod: 1,
+            resetsAt: reset,
+            now: now,
+            calendar: calendar
+        ))
+        XCTAssertEqual(pace.earned, 100.0 / 7, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, 100.0 / 7 - 7, accuracy: 1e-9)
+        let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
+        XCTAssertEqual(caption, "7.3% usage left today")
+        XCTAssertFalse(caption.contains("over pace"), "got: \(caption)")
+    }
+
+    /// Final day of the window with the reset still to come (Grok: Wednesday's
+    /// last bar, Thursday-evening reset): the day-based allowance has credited the
+    /// whole pool, so the unspent pool is paced against the time actually left —
+    /// 91% used reads as over pace, not "9% left today".
+    func testFinalWindowDayAccountsForTimeUntilReset() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 20))!
+        let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 18, minute: 57))!
+        let days = weeklyDays(ending: calendar.startOfDay(for: now))
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 91,
+            elapsedDaysInPeriod: 7,
+            resetsAt: reset,
+            now: now,
+            calendar: calendar
+        ))
+        XCTAssertLessThan(pace.headroomToday, 0, "must read as over pace")
+        let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
+        XCTAssertTrue(caption.hasSuffix("over pace for today"), "got: \(caption)")
+        XCTAssertFalse(caption.contains("left today"), "got: \(caption)")
+    }
+
+    /// Without a reset instant the wording is the same; the caption still omits
+    /// the used amount for an overrun.
+    func testLegacyCaptionUnchangedWithoutReset() throws {
+        let wed = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 12))!
+        let days = weeklyDays(ending: calendar.startOfDay(for: wed))
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 91,
+            elapsedDaysInPeriod: 7,
+            now: wed,
+            calendar: calendar
+        ))
+        XCTAssertNil(pace.resetsAt)
+        XCTAssertEqual(DailyBudget.paceCaption(pace), "9.0% usage left today")
+    }
+
+    // MARK: - monthly providers (Cursor / OpenCode share the same core)
+
+    private func monthlyDays(ending today: Date, daily: Double) -> [DailyBudgetDay] {
+        (0..<7).map { offset -> DailyBudgetDay in
+            let day = calendar.date(byAdding: .day, value: offset - 6, to: today)!
+            return DailyBudgetDay(
+                date: calendar.startOfDay(for: day),
+                spentUSD: 0,
+                budgetUSD: daily
+            )
+        }
+    }
+
+    /// Mid-cycle monthly pool with room to spare: no false over-pace.
+    func testMonthlyMidCycleNoFalseOverPace() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 6, hour: 12))!
+        let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1))!
+        let daily = 100.0 / 31.0
+        let days = monthlyDays(ending: calendar.startOfDay(for: now), daily: daily)
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 10,
+            elapsedDaysInPeriod: 6,
+            resetsAt: reset,
+            now: now,
+            calendar: calendar
+        ))
+        XCTAssertGreaterThan(pace.headroomToday, 0)
+        let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
+        XCTAssertFalse(caption.contains("over pace"), "got: \(caption)")
+    }
+
+    /// Monthly pool burned early: flags over pace, not "usage left".
+    func testMonthlyBurnedEarlyFlagsOverPace() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 6, hour: 12))!
+        let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1))!
+        let daily = 100.0 / 31.0
+        let days = monthlyDays(ending: calendar.startOfDay(for: now), daily: daily)
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 95,
+            elapsedDaysInPeriod: 6,
+            resetsAt: reset,
+            now: now,
+            calendar: calendar
+        ))
+        XCTAssertLessThan(pace.headroomToday, 0)
+        let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
+        XCTAssertTrue(caption.hasSuffix("over pace for today"), "got: \(caption)")
+        XCTAssertFalse(caption.contains("used"), "must not report the used amount, got: \(caption)")
     }
 }

@@ -9,6 +9,8 @@ struct WeeklyDailyBudgetBarsView: View {
     var title: String = "Daily Budget"
     var infoText: String?
     var periodUsedPercent: Double?
+    /// Pool reset instant — paces the remainder against time left until reset.
+    var resetsAt: Date?
 
     var body: some View {
         DailyBudgetBarsView(
@@ -19,6 +21,7 @@ struct WeeklyDailyBudgetBarsView: View {
             allowanceNoun: "weekly",
             infoText: infoText,
             periodUsedPercent: periodUsedPercent,
+            resetsAt: resetsAt,
             periodStart: DailyBudget.weeklyPacePeriodStart(days: days)
         )
     }
@@ -70,6 +73,8 @@ struct DailyBudgetBarsView: View {
     var infoText: String?
     /// Live used % for the same pool the bars pace against (API source of truth).
     var periodUsedPercent: Double?
+    /// Next reset — paces the remainder against time left until reset.
+    var resetsAt: Date?
     /// Start of the full quota period (subscription month or weekly window).
     var periodStart: Date?
 
@@ -117,7 +122,8 @@ struct DailyBudgetBarsView: View {
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            elapsedDaysInPeriod: elapsedDays
+            elapsedDaysInPeriod: elapsedDays,
+            resetsAt: resetsAt
         )
     }
 

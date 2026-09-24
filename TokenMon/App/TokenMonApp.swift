@@ -18,8 +18,13 @@ struct TokenMonApp: App {
     }
 
     var body: some Scene {
-        Window("TokenMon", id: "preferences") {
+        // TokenMon lives in the menu bar, but SwiftUI presents the app's *first*
+        // scene at launch. `AppDelegate` dismisses that auto-presented window so
+        // launching shows only the menu bar item; Settings opens on request from
+        // the menu bar's Settings button.
+        Window("TokenMon", id: AppWindowID.preferences.rawValue) {
             PreferencesRoot(model: model)
+                .onDisappear { AppDelegate.hideDockIfNoWindows() }
         }
         .defaultSize(width: 480, height: 640)
 

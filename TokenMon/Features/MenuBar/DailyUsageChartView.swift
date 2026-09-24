@@ -12,6 +12,8 @@ struct DailyUsageChartView: View {
     var canGoNext: Bool = true
     /// Live weekly used % for the current period (omit for past weeks).
     var periodUsedPercent: Double?
+    /// Pool reset instant — paces the remainder against time left until reset.
+    var resetsAt: Date?
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -32,7 +34,8 @@ struct DailyUsageChartView: View {
         return DailyBudget.paceHeadroom(
             days: days,
             periodConsumed: periodUsedPercent,
-            elapsedDaysInPeriod: elapsed
+            elapsedDaysInPeriod: elapsed,
+            resetsAt: resetsAt
         )
     }
 

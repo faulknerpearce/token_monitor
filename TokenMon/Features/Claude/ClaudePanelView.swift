@@ -49,7 +49,8 @@ struct ClaudePanelView: View {
                                 format: "Share of weekly allowance per day (budget %.1f%%/day).",
                                 share
                             ),
-                            periodUsedPercent: snapshot.sevenDay?.usedPercent
+                            periodUsedPercent: snapshot.sevenDay?.usedPercent,
+                            resetsAt: snapshot.sevenDay?.resetsAt
                         )
                     }
                 }

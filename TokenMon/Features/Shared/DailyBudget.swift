@@ -206,16 +206,19 @@ enum DailyBudget {
     /// Even-pace headroom vs live period consumption.
     ///
     /// `periodConsumed` is the pulled used % for the pool, not the sum of bar
-    /// spends. `earned` credits **elapsed** days through today so cumulative
-    /// consumption is compared against the allowance accrued over the same span.
-    /// Pass `elapsedDaysInPeriod` so earned days match the full pool on monthly
-    /// charts.
+    /// spends. The allowance is credited in **whole calendar days** through today,
+    /// so it grows one day's share at a time and the caption's "left today" is
+    /// that allowance minus what has been used. `resetsAt`, when known, only names
+    /// the reset day in the caption; it does not change the day-based allowance.
     struct PaceHeadroom: Hashable, Sendable {
         var dailyBudget: Double
-        /// Pool percent earned through today (elapsed days × daily share).
+        /// Even-pace allowance accrued through today (elapsed days × daily share).
         var earned: Double
         var periodConsumed: Double
+        /// `earned − consumed`: positive = ahead of pace, negative = over pace.
         var headroomToday: Double
+        /// Reset instant the pool runs to, when known.
+        var resetsAt: Date?
     }
 
     /// Quota window the daily bars pace against.
@@ -381,17 +384,28 @@ enum DailyBudget {
         return max(1, Int((100.0 / daily).rounded()))
     }
 
-    /// Earned = dailyBudget × elapsed days through today. Today counts toward the
-    /// accrued allowance so cumulative consumption is measured against the same
-    /// span of time — otherwise normal early-period usage reads as over-pace.
-    /// Pass `elapsedDaysInPeriod` for a full-period window; otherwise the budgets
-    /// of visible bars **through** today are summed. Headroom = earned − consumed.
-    /// Elapsed days are capped at the period length implied by the daily share so
-    /// clock skew cannot push earned above ~100%.
+    /// Even-pace headroom for the pool, credited in whole calendar days.
+    ///
+    ///     earned = dailyBudget × elapsed days through today   (today counts)
+    ///
+    /// so the on-track allowance grows one day's share at a time: on day 1 of a
+    /// weekly pool the allowance is 100/7 ≈ 14.3%, and 7% used leaves 7.3%. The
+    /// count is capped at the period length implied by the daily share so clock
+    /// skew cannot push `earned` above ~100%. Pass `elapsedDaysInPeriod` to match
+    /// a full-period window; otherwise the budgets of the visible bars through
+    /// today are summed.
+    ///
+    /// On the **final day** of the window the day-based allowance has already
+    /// credited the whole pool, but the period may run past the last bar to a
+    /// reset instant (e.g. a Thursday-evening reset with a Wednesday last bar).
+    /// There the unspent pool is compared against the even share of the time
+    /// actually left until reset, so a pool that cannot cover it reads as over
+    /// pace instead of "left today".
     static func paceHeadroom(
         days: [DailyBudgetDay],
         periodConsumed: Double,
         elapsedDaysInPeriod: Int? = nil,
+        resetsAt: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> PaceHeadroom? {
@@ -401,55 +415,64 @@ enum DailyBudget {
             1,
             daysInPeriod(fromDailyBudget: first.budgetUSD, fallback: days.count)
         )
-        let earned: Double
+        let elapsedDays: Int
         if let elapsed = elapsedDaysInPeriod {
-            let capped = min(max(0, elapsed), periodLength)
-            earned = first.budgetUSD * Double(capped)
+            elapsedDays = min(max(0, elapsed), periodLength)
         } else {
-            earned = days
-                .filter { calendar.startOfDay(for: $0.date) <= today }
-                .reduce(0.0) { $0 + $1.budgetUSD }
+            elapsedDays = days.filter { calendar.startOfDay(for: $0.date) <= today }.count
         }
+        let earned = first.budgetUSD * Double(elapsedDays)
         let consumed = max(0, periodConsumed)
+        var headroomToday = earned - consumed
+        if let resetsAt, resetsAt > now, elapsedDays >= periodLength {
+            let daysUntilReset = resetsAt.timeIntervalSince(now) / 86_400
+            let remainingPool = first.budgetUSD * Double(periodLength) - consumed
+            headroomToday = remainingPool - first.budgetUSD * daysUntilReset
+        }
         return PaceHeadroom(
             dailyBudget: first.budgetUSD,
             earned: earned,
             periodConsumed: consumed,
-            headroomToday: earned - consumed
+            headroomToday: headroomToday,
+            resetsAt: resetsAt
         )
     }
 
     /// Footer caption for a pace headroom. Shared by the Grok daily-use chart and
     /// the weekly/monthly bars so the wording and thresholds cannot drift.
+    ///
+    /// A plain surplus reads "X% usage left today"; when the surplus exceeds one
+    /// day's share the caption notes the extra banked from unused prior days.
+    /// An overrun reads "usage X% over pace for today" — the used amount is never
+    /// reported.
     static func paceCaption(_ pace: PaceHeadroom) -> String? {
-        /// Headroom meaningfully above one daily share → show the banked caption.
+        /// Headroom meaningfully above zero → otherwise call it on pace.
         let bankEpsilon = 0.05
         if pace.periodConsumed <= 0.001 {
+            guard pace.dailyBudget > 0 else { return nil }
             if pace.earned > pace.dailyBudget + bankEpsilon {
                 return String(
-                    format: "Up to %.1f%% available today from unused earlier days.",
+                    format: "%.1f%% usage left today from unused prior days",
                     pace.headroomToday
                 )
             }
-            guard pace.dailyBudget > 0 else { return nil }
             return String(format: "No usage yet · %.1f%% today", pace.dailyBudget)
         }
         if pace.headroomToday < 0 {
             return String(
-                format: "%.0f%% used · %.1f%% over pace",
-                pace.periodConsumed,
+                format: "usage %.1f%% over pace for today",
                 -pace.headroomToday
             )
         }
         if pace.headroomToday > pace.dailyBudget + bankEpsilon {
             return String(
-                format: "%.1f%% still available today from unused earlier days.",
+                format: "%.1f%% usage left today from unused prior days",
                 pace.headroomToday
             )
         }
         if pace.headroomToday < bankEpsilon {
             return "On pace for today"
         }
-        return String(format: "%.1f%% left today", pace.headroomToday)
+        return String(format: "%.1f%% usage left today", pace.headroomToday)
     }
 }
