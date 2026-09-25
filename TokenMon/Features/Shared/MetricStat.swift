@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Quiet label-above-value cell for the 2×2 stats sheet.
@@ -8,9 +9,7 @@ struct MetricStat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(PanelTypography.metricLabel)
-                .foregroundStyle(.tertiary)
+            PanelSectionHeader(title: title)
             Group {
                 if monospaced {
                     Text(value).monospacedDigit()
@@ -18,8 +17,7 @@ struct MetricStat: View {
                     Text(value)
                 }
             }
-            .font(PanelTypography.metricValue)
-            .tracking(-0.4)
+            .font(PanelTypography.bodyDigit)
             .foregroundStyle(.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.55)
@@ -46,21 +44,21 @@ struct MetricStatGrid: View {
                 row(bottom)
             }
             Rectangle()
-                .fill(Color.primary.opacity(0.14))
+                .fill(Color(nsColor: .separatorColor))
                 .frame(width: 1)
             Rectangle()
-                .fill(Color.primary.opacity(0.14))
+                .fill(Color(nsColor: .separatorColor))
                 .frame(height: 1)
         }
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func row(_ cells: [MetricStat]) -> some View {

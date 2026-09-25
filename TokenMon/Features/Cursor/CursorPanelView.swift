@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct CursorPanelView: View {
@@ -56,22 +55,7 @@ struct CursorPanelView: View {
                 }
 
                 if let stats = snapshot.costStats {
-                    VStack(alignment: .leading, spacing: 0) {
-                        PanelSectionHeader(title: "Stats")
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
-                        CursorStatsGrid(stats: stats)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                    )
+                    CursorStatsGrid(stats: stats)
                 }
 
                 if auth.needsSignIn || poller.lastError != nil {
