@@ -139,6 +139,7 @@ enum OpenCodeZenCostEstimate {
         return (value, value > 0)
     }
 
+    /// Token-based USD value for `modelID` from per-1M rates; `0` when unknown.
     static func estimate(
         modelID: String,
         inputTokens: Int64,

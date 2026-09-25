@@ -32,6 +32,7 @@ struct GrokbotUsageClient: Sendable {
         self.accountEmail = accountEmail
     }
 
+    /// Posts to the usage-status endpoint and parses the allowance snapshot.
     func fetchSnapshot(now: Date = Date()) async throws -> GrokbotSnapshot {
         let data = try await post(path: Self.usageStatusPath, json: [:])
         return try Self.parseUsageStatus(data: data, accountEmail: accountEmail, fetchedAt: now)
@@ -39,6 +40,7 @@ struct GrokbotUsageClient: Sendable {
 
     // MARK: - Parsing
 
+    /// Parses the usage-status payload, reading missing `usage_percent` as 0% when allowance fields exist.
     static func parseUsageStatus(
         data: Data,
         accountEmail: String?,

@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Panel section showing the weekly Grokbot allowance and daily budget bars.
 struct GrokbotPanelView: View {
     @ObservedObject var poller: GrokbotUsagePoller
     /// Grok Bot rides on the Cursor account, so this is the shared Cursor session.

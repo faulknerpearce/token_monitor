@@ -6,6 +6,7 @@ enum AppLog {
     static let subsystem = "com.modelmonitor.app"
 }
 
+/// Bundle-derived identity (`TokenMon/<version>`) sent as the API `User-Agent`.
 enum AppIdentity {
     /// e.g. "TokenMon/1.2.1" — version tracks MARKETING_VERSION automatically.
     static var userAgent: String {

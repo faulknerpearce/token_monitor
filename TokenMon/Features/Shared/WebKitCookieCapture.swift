@@ -3,6 +3,7 @@ import WebKit
 
 /// Shared WebKit cookie capture with provider-specific domain/session policy.
 enum WebKitCookieCapture {
+    /// Domain, session-cookie, and retry rules selecting which WebKit cookies to keep.
     struct Policy: Sendable {
         var isDomain: @Sendable (String) -> Bool
         /// Preferred session cookie (e.g. `auth`, `WorkosCursorSessionToken`).
@@ -61,12 +62,14 @@ enum WebKitCookieCapture {
         }
     }
 
+    /// Cookies chosen from the sign-in store plus the derived header and email.
     struct CaptureResult: Sendable {
         var cookies: [HTTPCookie]
         var cookieHeader: String
         var email: String?
     }
 
+    /// Captures session cookies from `dataStore`, retrying until `policy` succeeds.
     @MainActor
     static func capture(policy: Policy, dataStore: WKWebsiteDataStore) async -> CaptureResult? {
         let attempts = max(1, policy.maxAttempts)
@@ -119,6 +122,7 @@ enum WebKitCookieCapture {
         return nil
     }
 
+    /// Best-effort account email from cookie names or `@`-shaped values.
     static func extractEmail(from cookies: [HTTPCookie]) -> String? {
         for cookie in cookies {
             let name = cookie.name.lowercased()

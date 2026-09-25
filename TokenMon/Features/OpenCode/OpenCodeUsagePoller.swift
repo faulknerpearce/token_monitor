@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Polls console Go usage with a local-estimate fallback.
 @MainActor
 final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: OpenCodeSnapshot?

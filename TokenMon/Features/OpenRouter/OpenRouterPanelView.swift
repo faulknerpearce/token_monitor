@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// OpenRouter panel with credit budget, stats, and model spend.
 struct OpenRouterPanelView: View {
     @ObservedObject var poller: OpenRouterUsagePoller
     @ObservedObject var auth: OpenRouterAuthSession

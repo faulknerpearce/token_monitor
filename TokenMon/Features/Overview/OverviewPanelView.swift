@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// Aggregate cards for every enabled provider plus the hourly chart.
 struct OverviewPanelView: View {
     @ObservedObject var grokPoller: UsagePoller
     @ObservedObject var openCodePoller: OpenCodeUsagePoller

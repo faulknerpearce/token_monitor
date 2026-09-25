@@ -34,6 +34,7 @@ struct ClaudeUsageResponse: Hashable, Sendable {
     }
 }
 
+/// Headline Claude rate-limit snapshot (5-hour and weekly windows).
 struct ClaudeSnapshot: Identifiable, Hashable, Sendable {
     var id: Date { fetchedAt }
     var fetchedAt: Date

@@ -1,11 +1,14 @@
 import Foundation
 
+/// Serializes usage snapshots to CSV or JSON for export.
 enum ExportService {
+    /// Supported export file format.
     enum Format {
         case csv
         case json
     }
 
+    /// Encodes `snapshots` as CSV or pretty-printed JSON.
     static func export(_ snapshots: [WeeklyUsageSnapshot], format: Format) throws -> Data {
         switch format {
         case .json:

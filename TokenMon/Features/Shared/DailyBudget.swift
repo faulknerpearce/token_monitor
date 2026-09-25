@@ -18,6 +18,7 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     var isOverBudget: Bool { spentUSD > budgetUSD && budgetUSD > 0 }
 }
 
+/// Calendar-day budget math shared by the daily-budget charts.
 enum DailyBudget {
     /// Daily allowance from monthly limit (same units as `limit`).
     static func budgetPerDay(limitUSD: Double, daysInPeriod: Int) -> Double {

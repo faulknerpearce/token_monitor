@@ -37,6 +37,7 @@ final class AuthSessionService: ProviderAuthSession {
         )
     }
 
+    /// Cookie-capture policy for the grok.com/xAI sign-in flow.
     static func grokPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: grokHosts) },

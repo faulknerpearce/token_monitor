@@ -77,6 +77,7 @@ enum ReleaseFeed {
         return (preferred ?? zips.first)?.url
     }
 
+    /// True for `https` GitHub release hosts; rejects unrelated download URLs.
     static func isTrustedDownload(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
         if host == "github.com" { return true }
@@ -86,6 +87,7 @@ enum ReleaseFeed {
     }
 }
 
+/// Network and malformed-payload failures from the release check.
 enum UpdateCheckError: LocalizedError, Equatable {
     case badResponse(String)
     case network(String)

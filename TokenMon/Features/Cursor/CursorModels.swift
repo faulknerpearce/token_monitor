@@ -1,5 +1,6 @@
 import Foundation
 
+/// Cursor quota pool (`total` / `auto` / `api`).
 enum CursorPoolKind: String, Codable, CaseIterable, Sendable {
     case total
     case auto
@@ -28,6 +29,7 @@ struct CursorPoolUsage: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Metered cost and token totals derived from usage events.
 struct CursorCostStats: Hashable, Sendable {
     /// Sum of Cursor `chargedCents` over the billing cycle (USD).
     var meteredCycleUSD: Double
@@ -45,6 +47,7 @@ struct CursorCostStats: Hashable, Sendable {
     var last20dTokens: Int64
 }
 
+/// Per-hour activity, quota, and token weights for one calendar day.
 struct CursorDayHourlyUsage: Hashable, Sendable {
     var dayStart: Date
     /// Raw event activity weights per hour (0…23), retained for diagnostics.
@@ -59,6 +62,7 @@ struct CursorDayHourlyUsage: Hashable, Sendable {
     }
 }
 
+/// Headline Cursor quota snapshot plus plan and cost details.
 struct CursorSnapshot: Identifiable, Hashable, Sendable {
     var id: Date { fetchedAt }
     var fetchedAt: Date

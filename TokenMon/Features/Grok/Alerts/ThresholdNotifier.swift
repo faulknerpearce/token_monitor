@@ -3,6 +3,7 @@ import Foundation
 import os
 import UserNotifications
 
+/// Fires one local notification per usage-threshold crossing.
 @MainActor
 final class ThresholdNotifier: ObservableObject {
     private let logger = Logger(category: "Alerts")
@@ -31,6 +32,7 @@ final class ThresholdNotifier: ObservableObject {
         }
     }
 
+    /// Records a threshold crossing for `account` and delivers once per threshold.
     func evaluate(usedPercent: Double, settings: AppSettings, account: String?) {
         guard settings.thresholdEnabled else { return }
         let threshold = settings.thresholdPercent

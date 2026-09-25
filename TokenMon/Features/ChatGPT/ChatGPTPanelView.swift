@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// ChatGPT usage panel (5-hour and weekly Codex windows).
 struct ChatGPTPanelView: View {
     @ObservedObject var poller: ChatGPTUsagePoller
     @ObservedObject var auth: ChatGPTAuthSession

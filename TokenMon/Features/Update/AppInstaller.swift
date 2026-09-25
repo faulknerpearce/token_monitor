@@ -5,6 +5,7 @@ import Foundation
 enum AppInstaller {
     static let maximumArchiveBytes = 80 * 1024 * 1024
 
+    /// Download, archive, and writability failures from installing an update.
     enum Failure: LocalizedError {
         case download(String)
         case archive(String)
@@ -25,6 +26,7 @@ enum AppInstaller {
         Bundle.main.bundleURL.path.contains("/AppTranslocation/")
     }
 
+    /// True when `bundleURL` is a writable `.app` outside App Translocation.
     static func canReplaceRunningApp(bundleURL: URL = Bundle.main.bundleURL) -> Bool {
         guard bundleURL.pathExtension == "app", !isRunningTranslocated else { return false }
         let parent = bundleURL.deletingLastPathComponent()

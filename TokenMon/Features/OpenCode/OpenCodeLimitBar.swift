@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Usage bar for one `OpenCodeWindowUsage` with its reset caption.
 struct OpenCodeLimitBar: View {
     let window: OpenCodeWindowUsage
 

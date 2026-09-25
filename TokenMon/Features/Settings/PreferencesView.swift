@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Settings window: providers, menu bar, accounts, refresh, alerts, and data.
 struct PreferencesView: View {
     @ObservedObject var auth: AuthSessionService
     @ObservedObject var openCodeAuth: OpenCodeAuthSession

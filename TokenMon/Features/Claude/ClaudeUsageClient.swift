@@ -10,6 +10,7 @@ struct ClaudeUsageClient: Sendable {
         self.cookieHeader = cookieHeader
     }
 
+    /// Fetches usage for the org in the cookie header; throws `.notSignedIn` without one.
     func fetchUsage(now: Date = Date()) async throws -> (ClaudeUsageResponse, Date) {
         guard let organizationID = Self.organizationID(fromCookieHeader: cookieHeader) else {
             throw ProviderError.custom(

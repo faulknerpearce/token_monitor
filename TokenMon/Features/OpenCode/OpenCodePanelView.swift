@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// OpenCode Go panel with limit bars, budget, models, and stats.
 struct OpenCodePanelView: View {
     @ObservedObject var poller: OpenCodeUsagePoller
     @ObservedObject var auth: OpenCodeAuthSession
@@ -264,6 +265,7 @@ private struct ModelCompanyLogo: View {
     }
 }
 
+/// One ranked model row with spend, share bar, and cost label.
 struct OpenCodeModelWeekRow: View {
     let model: OpenCodeModelUsage
 

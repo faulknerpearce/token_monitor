@@ -1,5 +1,6 @@
 import AppKit
 
+/// Menu-bar app delegate: dismisses auto-presented windows and manages dock visibility.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let dockHideGracePeriod: TimeInterval = 0.25
 
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    /// Switches to dock mode for a user-opened window and disables auto-dismiss.
     @MainActor
     static func revealWindow() {
         userOpenedWindow = true
@@ -46,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate()
     }
 
+    /// Hides the dock when no windows remain, deferred past the reopen grace period.
     @MainActor
     static func hideDockIfNoWindows() {
         let generation = revealGeneration

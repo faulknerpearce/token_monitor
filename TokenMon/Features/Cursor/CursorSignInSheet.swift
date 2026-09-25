@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Cursor sign-in sheet (captures the dashboard session cookie).
 struct CursorSignInView: View {
     @ObservedObject var auth: CursorAuthSession
     var onComplete: () -> Void

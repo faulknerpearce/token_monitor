@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Polls Claude rate limits and builds weekly-window daily bars.
 @MainActor
 final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: ClaudeSnapshot?

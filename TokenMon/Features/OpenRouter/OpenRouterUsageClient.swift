@@ -17,6 +17,7 @@ struct OpenRouterUsageClient: Sendable {
         self.apiKey = apiKey
     }
 
+    /// Fetches `/key` with best-effort `/credits` and `/activity` degradation.
     func fetchSnapshot(now: Date = Date()) async throws -> OpenRouterSnapshot {
         async let keyData = get("key")
         // Inference keys are refused on /credits (HTTP 403) — that is an

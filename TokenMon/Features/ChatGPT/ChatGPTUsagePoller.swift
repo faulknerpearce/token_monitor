@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Polls ChatGPT usage, retrying once before invalidating the session.
 @MainActor
 final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: ChatGPTSnapshot?

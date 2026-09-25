@@ -44,6 +44,7 @@ struct SignInReturnGate {
     var isReturnPage: (URL) -> Bool
     private(set) var didSeeAuth = false
 
+    /// Outcome of recording one finished sign-in navigation.
     enum Event: String, Codable, CaseIterable, Hashable, Sendable {
         case none
         case authHost

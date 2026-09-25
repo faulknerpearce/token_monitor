@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Panel section showing the SuperGrok weekly pool, categories, and daily chart.
 struct GrokPanelView: View {
     @ObservedObject var auth: AuthSessionService
     @ObservedObject var poller: UsagePoller

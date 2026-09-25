@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// OpenCode console sign-in sheet capturing the console session.
 struct OpenCodeSignInView: View {
     @ObservedObject var auth: OpenCodeAuthSession
     var onComplete: () -> Void

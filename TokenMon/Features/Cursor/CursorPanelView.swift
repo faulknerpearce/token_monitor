@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Cursor usage panel (pools, daily bars, and cost stats).
 struct CursorPanelView: View {
     @ObservedObject var poller: CursorUsagePoller
     @ObservedObject var auth: CursorAuthSession
@@ -104,6 +105,7 @@ struct CursorPanelView: View {
     }
 }
 
+/// Cycle and lifetime spend/token totals for `CursorSnapshot.costStats`.
 struct CursorStatsGrid: View {
     let stats: CursorCostStats
 

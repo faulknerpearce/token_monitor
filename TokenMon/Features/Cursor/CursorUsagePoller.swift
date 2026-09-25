@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Polls Cursor usage and builds billing-cycle daily bars.
 @MainActor
 final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: CursorSnapshot?

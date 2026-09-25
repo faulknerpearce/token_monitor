@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// ChatGPT sign-in sheet (captures the NextAuth session cookie).
 struct ChatGPTSignInView: View {
     @ObservedObject var auth: ChatGPTAuthSession
     var onComplete: () -> Void

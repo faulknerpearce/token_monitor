@@ -1,6 +1,7 @@
 import Foundation
 import SQLite3
 
+/// Local OpenCode SQLite failures (missing DB, open, or query).
 enum OpenCodeLocalStatsError: LocalizedError {
     case databaseMissing(URL)
     case openFailed(String)
@@ -18,6 +19,7 @@ enum OpenCodeLocalStatsError: LocalizedError {
     }
 }
 
+/// Local OpenCode SQLite usage (fallback when the console is unreachable).
 enum OpenCodeLocalStats {
     static let rolling5hSeconds: TimeInterval = 5 * 3600
 
@@ -116,6 +118,7 @@ enum OpenCodeLocalStats {
         return (start, end)
     }
 
+    /// One local usage row from `session` or assistant `message` records.
     struct SessionRow: Sendable {
         var timeCreatedMS: Int64
         var costUSD: Double
@@ -133,6 +136,7 @@ enum OpenCodeLocalStats {
         try fetchSnapshot(dbURL: databaseURL, now: now)
     }
 
+    /// Builds rolling, weekly, and monthly usage from `opencode.db`.
     static func fetchSnapshot(dbURL: URL, now: Date = Date()) throws -> OpenCodeSnapshot {
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw OpenCodeLocalStatsError.databaseMissing(dbURL)
@@ -212,6 +216,7 @@ enum OpenCodeLocalStats {
         try fetchDayHourlyUsage(dbURL: databaseURL, now: now)
     }
 
+    /// Builds today's 24 hourly model-cost stacks from `opencode.db`.
     static func fetchDayHourlyUsage(dbURL: URL, now: Date = Date()) throws -> OpenCodeDayHourlyUsage {
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw OpenCodeLocalStatsError.databaseMissing(dbURL)
@@ -256,6 +261,7 @@ enum OpenCodeLocalStats {
         }
     }
 
+    /// Groups message rows into 24 hourly stacks with quota costs and legend.
     static func buildDayHourlyUsage(
         rows: [SessionRow],
         now: Date = Date(),
@@ -615,6 +621,7 @@ enum OpenCodeLocalStats {
         try fetchMonthDailySpends(dbURL: databaseURL, now: now)
     }
 
+    /// Daily Go spend for the subscription-anchored month from `opencode.db`.
     static func fetchMonthDailySpends(dbURL: URL, now: Date) throws -> [Date: Double] {
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw OpenCodeLocalStatsError.databaseMissing(dbURL)
@@ -650,6 +657,7 @@ enum OpenCodeLocalStats {
         return dailySpendsByDay(rows: rows.filter { goEligibleProvider($0.providerID) })
     }
 
+    /// Sums billable Go spend per calendar day, skipping `$0` rows.
     static func dailySpendsByDay(rows: [SessionRow], calendar: Calendar = .current) -> [Date: Double] {
         var byDay: [Date: Double] = [:]
         for row in rows {

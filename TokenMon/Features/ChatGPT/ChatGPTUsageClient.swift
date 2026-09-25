@@ -24,6 +24,7 @@ struct ChatGPTUsageClient: Sendable {
         self.cookieHeader = cookieHeader
     }
 
+    /// Exchanges the session cookie for an access token, then fetches `wham/usage`.
     func fetchUsage(now: Date = Date()) async throws -> Fetch {
         let session = try await fetchSession()
         let accountID = ChatGPTAccountID.fromAccessToken(session.accessToken)

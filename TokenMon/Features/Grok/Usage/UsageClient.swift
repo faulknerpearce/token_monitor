@@ -15,6 +15,7 @@ extension ProviderError {
         return .custom(message: message, usage: .badResponse(message))
     }
 
+    /// Maps a usage-response decoding failure to a user-facing `ProviderError`.
     static func grokDecoding(_ detail: String) -> ProviderError {
         let message = "Could not parse usage response: \(detail)"
         return .custom(message: message, usage: .badResponse(message))
@@ -47,6 +48,7 @@ struct UsageClient: Sendable {
     var accountEmail: String?
     var session: URLSession = .shared
 
+    /// Fetches usage, preferring REST breakdown JSON and falling back to gRPC-web billing.
     func fetchUsage() async throws -> WeeklyUsageSnapshot {
         if cookieHeader == nil {
             throw ProviderError.notSignedIn(.grok)
@@ -184,7 +186,9 @@ struct UsageClient: Sendable {
 
 // MARK: - JSON parsing
 
+/// Parses REST usage JSON with tolerant key and wrapper handling.
 enum UsageResponseParser {
+    /// Parses `data` as usage JSON, returning nil when no usable pool is present.
     static func parseJSON(_ data: Data, accountEmail: String?) -> WeeklyUsageSnapshot? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) else { return nil }
         return parseAny(obj, accountEmail: accountEmail)
@@ -291,7 +295,9 @@ enum UsageResponseParser {
 
 // MARK: - gRPC-web protobuf scan
 
+/// Scans gRPC-web frames for the usage percent, reset instant, and product slices.
 enum GRPCWebParser {
+    /// Decoded usage percent, reset instant, and product slices from one payload.
     struct Parsed {
         var usedPercent: Double
         var resetsAt: Date?
@@ -311,6 +317,7 @@ enum GRPCWebParser {
         6: ("voice", "Voice")
     ]
 
+    /// Scans gRPC-web `data` for the `[1, 1]` usage percent and reset candidates.
     static func parseUsage(_ data: Data, now: Date = Date()) throws -> Parsed {
         var payloads = dataFrames(from: data)
         if payloads.isEmpty, looksLikeProtobuf(data) {
@@ -494,6 +501,7 @@ enum GRPCWebParser {
         return ProductUsage(id: meta.id, displayName: meta.name, percentOfPool: percent)
     }
 
+    /// Throws `.unauthorized` on gRPC auth trailers, else maps `grpc-status` to an error.
     static func validateTrailers(_ data: Data) throws {
         let fields = trailerFields(from: data)
         guard let raw = fields["grpc-status"], let status = Int(raw), status != 0 else { return }

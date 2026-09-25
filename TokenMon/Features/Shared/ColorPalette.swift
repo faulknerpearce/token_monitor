@@ -12,7 +12,7 @@ struct SRGB {
     var blue: Double
     var alpha: Double = 1
 
-    /// SwiftUI color.
+    /// SwiftUI color (sRGB).
     var color: Color {
         Color(red: red, green: green, blue: blue, opacity: alpha)
     }

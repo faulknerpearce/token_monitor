@@ -1,5 +1,6 @@
 import Foundation
 
+/// Go limit windows (`rolling5h`, `weekly`, `monthly`).
 enum OpenCodeWindowKind: String, Codable, CaseIterable, Sendable {
     case rolling5h
     case weekly
@@ -22,6 +23,7 @@ enum OpenCodeWindowKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// Spend against one Go limit window with its reset.
 struct OpenCodeWindowUsage: Identifiable, Hashable, Sendable {
     var kind: OpenCodeWindowKind
     var usedUSD: Double
@@ -35,12 +37,14 @@ struct OpenCodeWindowUsage: Identifiable, Hashable, Sendable {
         Self.clampedPercent(usedUSD: usedUSD, limitUSD: limitUSD)
     }
 
+    /// Spend as percent of limit; returns `0` when `limitUSD` is not positive.
     static func clampedPercent(usedUSD: Double, limitUSD: Double) -> Double {
         guard limitUSD > 0 else { return 0 }
         return Percent.clamp(usedUSD / limitUSD * 100)
     }
 }
 
+/// Plan spend and tokens for one `provider/model` in the week window.
 struct OpenCodeModelUsage: Identifiable, Hashable, Sendable {
     var providerID: String
     var modelID: String
@@ -112,6 +116,7 @@ struct OpenCodeHourUsage: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Legend entry for one `provider/model` in the day chart.
 struct OpenCodeHourLegendItem: Identifiable, Hashable, Sendable {
     var id: String
     var label: String
@@ -119,6 +124,7 @@ struct OpenCodeHourLegendItem: Identifiable, Hashable, Sendable {
     var modelID: String
 }
 
+/// Local day usage as 24 hourly stacks with a legend.
 struct OpenCodeDayHourlyUsage: Hashable, Sendable {
     var dayStart: Date
     var hours: [OpenCodeHourUsage] // always 24 entries, hour 0…23
@@ -196,6 +202,7 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
         return (openCodeGo, openCodeZen)
     }
 
+    /// Hourly token counts split into Go and Zen series.
     func overviewProviderHourTokenCounts() -> (
         openCodeGo: [Int64],
         openCodeZen: [Int64]
@@ -218,6 +225,7 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
     }
 }
 
+/// Provider and model display names with stealth-alias handling.
 enum OpenCodeCatalog {
     static func providerShortName(_ providerID: String) -> String {
         switch providerID.lowercased() {
@@ -235,6 +243,7 @@ enum OpenCodeCatalog {
         }
     }
 
+    /// Display name for `providerID`/`modelID`, resolving the `Muse Spark` alias.
     static func modelDisplayName(providerID: String, modelID: String) -> String {
         let lower = modelID.lowercased()
         if lower.contains("muse-spark") || lower.contains("muse_spark") || lower.contains("musepark") {
@@ -244,6 +253,7 @@ enum OpenCodeCatalog {
     }
 }
 
+/// Local or console OpenCode usage with windows, models, and monthly totals.
 struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     var id: UUID
     var fetchedAt: Date
@@ -333,6 +343,7 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     )
 }
 
+/// Shared Go/Zen accents and deterministic model colors.
 enum ModelPalette {
     /// Shared orange accent — OpenCode Go (5-hour limit, models); overview uses orange too.
     static let orange = ProviderAccent.openCode

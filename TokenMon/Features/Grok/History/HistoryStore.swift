@@ -3,6 +3,7 @@ import Foundation
 import os
 import SwiftData
 
+/// SwiftData-backed row for one daily `WeeklyUsageSnapshot`.
 @Model
 final class UsageSnapshotRecord {
     @Attribute(.unique) var id: UUID
@@ -77,6 +78,7 @@ final class UsageSnapshotRecord {
     }
 }
 
+/// Persists one snapshot per calendar day and publishes the recent window.
 @MainActor
 final class HistoryStore: ObservableObject {
     private static let logger = Logger(category: "HistoryStore")
@@ -130,6 +132,7 @@ final class HistoryStore: ObservableObject {
         AppSupport.directory().appendingPathComponent("history.store")
     }
 
+    /// Appends `snapshot`, collapsing same-day polls into one end-of-day row.
     func append(_ snapshot: WeeklyUsageSnapshot) {
         guard let context else { return }
         let cal = Calendar.current

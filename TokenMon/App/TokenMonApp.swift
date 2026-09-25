@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// Menu-bar app root wiring `AppModel` to settings and sign-in scenes.
 @main
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -83,6 +84,7 @@ struct TokenMonApp: App {
     }
 }
 
+/// Scene identifiers for settings and each provider sign-in window.
 enum AppWindowID: String {
     case preferences
     case grokSignIn = "signin"
@@ -230,12 +232,14 @@ final class AppModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Activates dock presence, then opens the window for `id`.
     func openWindow(_ id: AppWindowID, openWindow: OpenWindowAction) {
         AppDelegate.revealWindow()
         openWindow(id: id.rawValue)
     }
 }
 
+/// Bridges `AppModel` into the menu-bar dropdown content.
 struct MenuBarRoot: View {
     @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow

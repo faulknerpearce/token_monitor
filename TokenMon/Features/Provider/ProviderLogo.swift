@@ -1,7 +1,9 @@
 import AppKit
 import SwiftUI
 
+/// Asset-catalog logomarks per provider, as template images for tinting.
 enum ProviderLogo {
+    /// Logomark for `provider`; `overview` falls back to the Grok mark.
     static func image(for provider: MonitorProvider) -> NSImage {
         switch provider {
         case .overview:

@@ -249,6 +249,7 @@ struct OverviewHourlyUsageChart: View {
         }
     }
 
+    /// One provider's slice of a stacked hourly bar.
     struct HourBarSegment {
         let id: String
         let title: String

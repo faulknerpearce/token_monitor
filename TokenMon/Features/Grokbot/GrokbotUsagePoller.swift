@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Periodically refreshes the Grok Bot allowance from the shared Cursor session.
 @MainActor
 final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: GrokbotSnapshot?

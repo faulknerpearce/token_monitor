@@ -63,6 +63,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         refreshFromDisk()
     }
 
+    /// Reloads persisted credentials into sign-in state and advances `sessionGeneration`.
     func refreshFromDisk() {
         let cookies = loadCookieHeader()
         isSignedIn = !(cookies?.isEmpty ?? true)
@@ -188,6 +189,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         sessionGeneration += 1
     }
 
+    /// Captures the isolated store's session cookies; returns false and records `lastAuthError` when none qualify.
     func captureCookiesFromWebKit() async -> Bool {
         // Finish any pending sign-out purge first so it cannot delete cookies
         // being captured from a fresh sign-in.

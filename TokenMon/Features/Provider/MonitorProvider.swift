@@ -1,5 +1,6 @@
 import Foundation
 
+/// Usage providers plus the `overview` aggregate pseudo-provider.
 enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case overview
     case grok

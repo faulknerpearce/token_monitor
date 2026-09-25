@@ -90,6 +90,7 @@ final class UpdateChecker: ObservableObject {
         }
     }
 
+    /// Installs the pending zip, or opens the release page when there is none.
     func installAvailableUpdate() async {
         guard let release = availableRelease, !isInstalling else { return }
         guard let archiveURL = release.archiveURL else {

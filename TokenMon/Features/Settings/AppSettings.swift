@@ -2,6 +2,7 @@ import Foundation
 import ServiceManagement
 import SwiftUI
 
+/// Persisted user settings published to pollers and menu-bar surfaces.
 @MainActor
 final class AppSettings: ObservableObject {
     private let defaults: UserDefaults

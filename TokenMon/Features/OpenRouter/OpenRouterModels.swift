@@ -26,6 +26,7 @@ struct OpenRouterKeyData: Codable, Sendable {
     }
 }
 
+/// `/key` response wrapper with the authenticated key's usage.
 struct OpenRouterKeyResponse: Codable, Sendable {
     var data: OpenRouterKeyData
 }
@@ -43,10 +44,12 @@ struct OpenRouterCreditsData: Codable, Sendable {
     }
 }
 
+/// `/credits` response wrapper with account totals.
 struct OpenRouterCreditsResponse: Codable, Sendable {
     var data: OpenRouterCreditsData
 }
 
+/// Denominator backing `usedPercent` (account credits or key limit).
 enum OpenRouterBudgetSource: String, Sendable {
     /// Credits purchased on the account (`/credits`, management keys).
     case accountCredits
@@ -100,6 +103,7 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         return Percent.clamp(usedUSD / budgetUSD * 100)
     }
 
+    /// Builds a snapshot preferring account credits, then key limit, then spend only.
     static func build(
         key: OpenRouterKeyData,
         credits: OpenRouterCreditsData?,
@@ -185,6 +189,7 @@ struct OpenRouterActivityRow: Codable, Sendable {
     }
 }
 
+/// `/activity` response wrapper with per-model daily rows.
 struct OpenRouterActivityResponse: Codable, Sendable {
     var data: [OpenRouterActivityRow]
 }

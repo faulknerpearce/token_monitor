@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Claude sign-in sheet (captures the `sessionKey` session cookie).
 struct ClaudeSignInView: View {
     @ObservedObject var auth: ClaudeAuthSession
     var onComplete: () -> Void

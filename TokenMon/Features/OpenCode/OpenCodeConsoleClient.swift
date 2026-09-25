@@ -3,6 +3,7 @@ import os
 
 /// Console `/console/api/go/status` meters for the 5-hour, week, and month windows.
 struct OpenCodeGoMeters: Equatable {
+    /// One console access meter (`limitMicroCents`/`usedMicroCents` with reset).
     struct Meter: Equatable {
         var limitUSD: Double?
         var usedUSD: Double
@@ -163,6 +164,7 @@ struct OpenCodeConsoleClient: Sendable {
 
     // MARK: - Parsing
 
+    /// Parses `access.meters` from Go status; returns empty meters when absent.
     static func parseGoMeters(_ data: Data) throws -> OpenCodeGoMeters {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError.badResponse(.openCode, "Unrecognized Go status response.")

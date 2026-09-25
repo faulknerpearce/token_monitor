@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Claude usage panel (5-hour and weekly windows plus daily bars).
 struct ClaudePanelView: View {
     @ObservedObject var poller: ClaudeUsagePoller
     @ObservedObject var auth: ClaudeAuthSession

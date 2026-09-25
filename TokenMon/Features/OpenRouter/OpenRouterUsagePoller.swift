@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import os
 
+/// Polls OpenRouter usage for the saved API key.
 @MainActor
 final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: OpenRouterSnapshot?

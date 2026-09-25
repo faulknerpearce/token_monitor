@@ -1,5 +1,6 @@
 import Foundation
 
+/// Constants converting between provider quota cadences.
 enum QuotaNormalization {
     /// Average calendar weeks in a month, used to compare monthly plans with Grok's weekly pool.
     static let averageWeeksPerMonth = 365.2425 / 12 / 7
@@ -51,6 +52,7 @@ struct ProviderHourUsage: Identifiable, Hashable, Sendable {
     var hasActivity: Bool { activity > 0 }
 }
 
+/// One day of per-hour provider quota consumption (24 entries).
 struct ProviderDayHourlyUsage: Hashable, Sendable {
     var dayStart: Date
     var hours: [ProviderHourUsage] // 24 entries

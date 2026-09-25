@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// Dropdown panel switching between Overview and provider tabs.
 struct MenuBarPanelView: View {
     @ObservedObject var auth: AuthSessionService
     @ObservedObject var poller: UsagePoller

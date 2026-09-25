@@ -12,6 +12,7 @@ struct CursorUsageClient: Sendable {
         self.cookieHeader = cookieHeader
     }
 
+    /// Fetches the summary, account email, and event aggregates for `now`.
     func fetchSnapshot(now: Date = Date()) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double]) {
         async let summaryData = get(path: "/api/usage-summary")
         async let meData = try? get(path: "/api/auth/me")
@@ -75,6 +76,7 @@ struct CursorUsageClient: Sendable {
         return (snap, hourly, estimatedWeightByDay)
     }
 
+    /// Fetches today's event weights; quota weights stay zero without a plan limit.
     func fetchDayHourlyUsage(now: Date = Date()) async throws -> CursorDayHourlyUsage {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: now)
@@ -97,6 +99,7 @@ struct CursorUsageClient: Sendable {
 
     // MARK: - Parsing (testable)
 
+    /// Parses `usage-summary` into a snapshot, preferring dashboard `totalPercentUsed`.
     static func parseSummary(data: Data, fetchedAt: Date = Date()) throws -> CursorSnapshot {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError.badResponse(.cursor, "Expected JSON object")
@@ -219,6 +222,7 @@ struct CursorUsageClient: Sendable {
         return nil
     }
 
+    /// Parses one usage-events page; a missing count yields `0` (unknown, not empty).
     static func parseUsageEventsPage(data: Data) throws -> (events: [[String: Any]], total: Int) {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError.badResponse(.cursor, "Expected events JSON object")
@@ -254,6 +258,7 @@ struct CursorUsageClient: Sendable {
         ((event["model"] as? String) ?? "").hasPrefix("grok-bot")
     }
 
+    /// Sums cycle/today/20-day cost and tokens, excluding `grok-bot-*` events.
     static func aggregateCostStats(
         events: [[String: Any]],
         cycleStart: Date,
@@ -346,6 +351,7 @@ struct CursorUsageClient: Sendable {
         return weights
     }
 
+    /// Sums input/output/cache tokens per hour, excluding `grok-bot-*` events.
     static func tokenHourWeights(
         fromEvents events: [[String: Any]],
         dayStart: Date,
@@ -362,6 +368,7 @@ struct CursorUsageClient: Sendable {
         return weights
     }
 
+    /// Event weight: `requestsCosts`, else token total, else charged cents, else `1`.
     static func eventWeight(_ event: [String: Any]) -> Double {
         if let requests = JSON.number(event["requestsCosts"]), requests > 0 {
             return requests
@@ -373,6 +380,7 @@ struct CursorUsageClient: Sendable {
         return 1
     }
 
+    /// Hour of day for events on `dayStart`; `nil` for other days or bad timestamps.
     static func hourIndex(
         for event: [String: Any],
         dayStart: Date,
@@ -383,6 +391,7 @@ struct CursorUsageClient: Sendable {
         return calendar.component(.hour, from: date)
     }
 
+    /// Event `timestamp` as a `Date`; accepts string/double/int epoch values.
     static func eventTimestamp(_ event: [String: Any]) -> Date? {
         if let msString = event["timestamp"] as? String, let raw = Double(msString) {
             return date(fromEpochNumber: raw)
@@ -405,6 +414,7 @@ struct CursorUsageClient: Sendable {
         return Date(timeIntervalSince1970: seconds)
     }
 
+    /// Charged cents (`chargedCents`, else `tokenUsage.totalCents`, else `0`).
     static func chargedCents(_ event: [String: Any]) -> Double {
         if let cents = JSON.number(event["chargedCents"]), cents > 0 {
             return cents
@@ -416,6 +426,7 @@ struct CursorUsageClient: Sendable {
         return 0
     }
 
+    /// Input + output + cache-write + cache-read tokens for one event.
     static func tokenCount(_ event: [String: Any]) -> Int64 {
         guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
         let input = JSON.number(tokenUsage["inputTokens"]) ?? 0
@@ -504,6 +515,7 @@ struct CursorUsageClient: Sendable {
 
     // MARK: - Helpers
 
+    /// Earliest event fetch date: cycle start capped to the last 30 days.
     static func eventsWindowStart(cycleStart: Date?, now: Date, calendar: Calendar = .current) -> Date {
         let dayStart = calendar.startOfDay(for: now)
         let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: dayStart) ?? now.addingTimeInterval(-30 * 86400)

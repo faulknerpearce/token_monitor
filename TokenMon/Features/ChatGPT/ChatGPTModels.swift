@@ -56,6 +56,7 @@ struct ChatGPTUsageResponse: Hashable, Sendable {
     }
 }
 
+/// Headline Codex rate-limit snapshot (5-hour and weekly windows).
 struct ChatGPTSnapshot: Identifiable, Hashable, Sendable {
     var id: Date { fetchedAt }
     var fetchedAt: Date
@@ -77,6 +78,7 @@ struct ChatGPTSnapshot: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Extracts the ChatGPT account id from a web access-token JWT.
 enum ChatGPTAccountID {
     /// Decodes the ChatGPT web access-token JWT payload and extracts the
     /// account id from the `https://api.openai.com/auth` claim.
