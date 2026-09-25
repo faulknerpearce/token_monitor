@@ -715,8 +715,8 @@ final class OpenCodeStatsTests: XCTestCase {
 
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
         let zen = try XCTUnwrap(snap.models.first { $0.modelID == "deepseek-v4-flash-free" })
-        // 1M * $0.14 + 0.5M * $0.28 = $0.28 of included-use value.
-        XCTAssertEqual(zen.costUSD, 0.28, accuracy: 0.001)
+        // 1M * $0.04872 + 0.5M * $0.09744 = $0.09744 of included-use value.
+        XCTAssertEqual(zen.costUSD, 0.09744, accuracy: 0.001)
         XCTAssertTrue(zen.isCostEstimated)
 
         let go = try XCTUnwrap(snap.models.first { $0.modelID == "minimax-m3" })
@@ -734,7 +734,7 @@ final class OpenCodeStatsTests: XCTestCase {
             cacheReadTokens: 0,
             cacheWriteTokens: 0
         )
-        XCTAssertEqual(billable.cost, 0.14, accuracy: 0.001)
+        XCTAssertEqual(billable.cost, 0.04872, accuracy: 0.001)
         XCTAssertTrue(billable.isEstimated)
 
         let recorded = OpenCodeZenCostEstimate.billableCostUSD(
@@ -748,6 +748,53 @@ final class OpenCodeStatsTests: XCTestCase {
         )
         XCTAssertEqual(recorded.cost, 1.5, accuracy: 0.001)
         XCTAssertFalse(recorded.isEstimated)
+    }
+
+    /// Free Zen alias of the Go Muse Spark contributor model must carry the
+    /// paid-equivalent value instead of estimating to $0.
+    func testMuseSparkFreeAliasEstimatesPaidEquivalentValue() {
+        let billable = OpenCodeZenCostEstimate.billableCostUSD(
+            providerID: "opencode",
+            modelID: "muse-spark-1.3-contributor-free",
+            recordedCostUSD: 0,
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0
+        )
+        // 1M * $0.10 + 1M * $0.20 = $0.30.
+        XCTAssertEqual(billable.cost, 0.30, accuracy: 0.001)
+        XCTAssertTrue(billable.isEstimated)
+    }
+
+    /// A free alias of a listed base model resolves without its own table entry.
+    func testFreeAliasResolvesToBaseRates() {
+        XCTAssertEqual(
+            OpenCodeZenCostEstimate.estimate(
+                modelID: "kimi-k3-free",
+                inputTokens: 1_000_000,
+                outputTokens: 0,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0
+            ),
+            3.0,
+            accuracy: 0.001
+        )
+    }
+
+    /// An unknown model with no base rate still stays unmarked at $0.
+    func testUnknownFreeModelStaysZero() {
+        let billable = OpenCodeZenCostEstimate.billableCostUSD(
+            providerID: "opencode",
+            modelID: "totally-new-model-free",
+            recordedCostUSD: 0,
+            inputTokens: 1_000_000,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0
+        )
+        XCTAssertEqual(billable.cost, 0, accuracy: 1e-9)
+        XCTAssertFalse(billable.isEstimated)
     }
 
     func testMonthlyTokensAndEstimatedValue() throws {
@@ -775,8 +822,8 @@ final class OpenCodeStatsTests: XCTestCase {
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
         // 1M + 1M input from the two in-month messages (session inserts also mirror messages).
         XCTAssertGreaterThanOrEqual(snap.monthlyTokens, 2_000_000)
-        // Recorded Go $2 + DeepSeek V4 Flash included-use value $0.14.
-        XCTAssertEqual(snap.monthlyEstimatedUSD, 2.14, accuracy: 0.02)
+        // Recorded Go $2 + DeepSeek V4 Flash included-use value $0.04872.
+        XCTAssertEqual(snap.monthlyEstimatedUSD, 2.04872, accuracy: 0.02)
     }
 
     func testDayHourlyUsageStacksModelsByLocalHour() throws {

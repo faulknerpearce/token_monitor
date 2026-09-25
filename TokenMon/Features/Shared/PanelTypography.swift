@@ -87,7 +87,7 @@ extension View {
 struct ResetCaptionStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(PanelTypography.bodyDigit)
+            .font(PanelTypography.metricLabel)
             .foregroundStyle(.tertiary)
     }
 }

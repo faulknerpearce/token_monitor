@@ -11,7 +11,7 @@ struct GrokbotPanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                ProviderHeaderLabel(provider: .grokbot, title: "Grokbot")
+                ProviderHeaderRow(provider: .grokbot, title: "Grokbot")
 
                 PanelCard {
                     PanelSectionHeaderRow(
@@ -68,7 +68,7 @@ struct GrokbotPanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .grokbot, title: "Grokbot")
+                ProviderHeaderRow(provider: .grokbot, title: "Grokbot")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -82,7 +82,7 @@ struct GrokbotPanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .grokbot, title: "Grokbot")
+            ProviderHeaderRow(provider: .grokbot, title: "Grokbot")
             Text("Sign in to Cursor to load your weekly Grokbot allowance. "
                 + "Grokbot is billed through Cursor even when a SuperGrok plan pays for it.")
                 .font(PanelTypography.body)

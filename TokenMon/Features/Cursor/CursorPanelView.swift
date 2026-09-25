@@ -22,9 +22,7 @@ struct CursorPanelView: View {
             let cursorModelsResetsAt = snapshot.pools.first(where: { $0.kind == .total })?.resetsAt ?? snapshot.resetsAt
             let otherModelsResetsAt = snapshot.pools.first(where: { $0.kind == .api })?.resetsAt ?? snapshot.resetsAt
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .cursor, title: "Cursor")
-                    Spacer()
+                ProviderHeaderRow(provider: .cursor, title: "Cursor") {
                     Text(snapshot.displayPlanName)
                         .panelMetaLabel()
                 }
@@ -98,7 +96,7 @@ struct CursorPanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .cursor, title: "Cursor")
+                ProviderHeaderRow(provider: .cursor, title: "Cursor")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -112,7 +110,7 @@ struct CursorPanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .cursor, title: "Cursor")
+            ProviderHeaderRow(provider: .cursor, title: "Cursor")
             Text("Sign in to cursor.com to load Total, Auto, and API usage.")
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)

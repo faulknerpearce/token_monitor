@@ -33,7 +33,7 @@ struct GrokPanelView: View {
     }
 
     private var grokTitle: some View {
-        ProviderHeaderLabel(provider: .grok, title: "SuperGrok")
+        ProviderHeaderRow(provider: .grok, title: "SuperGrok")
     }
 
     private var sessionExpiredHeader: some View {

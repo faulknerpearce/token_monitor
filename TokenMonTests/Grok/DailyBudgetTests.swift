@@ -591,7 +591,7 @@ final class DailyBudgetTests: XCTestCase {
         let caption = DailyBudget.paceCaption(
             pace(dailyBudget: 10, periodConsumed: 55, headroomToday: -5)
         )
-        XCTAssertEqual(caption, "usage 5.0% over pace for today")
+        XCTAssertEqual(caption, "Usage 5.0% over today's allowance")
     }
 
     func testPaceCaptionBankedSurplus() {
@@ -646,7 +646,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertLessThan(pace.headroomToday, 0)
         let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
         XCTAssertFalse(caption.contains("used"), "must not report the used amount, got: \(caption)")
-        XCTAssertTrue(caption.hasPrefix("usage 7.1% over pace for today"), "got: \(caption)")
+        XCTAssertTrue(caption.hasPrefix("Usage 7.1% over today's allowance"), "got: \(caption)")
     }
 
     /// Regression (Grokbot, first day of a fresh period): the allowance is one
@@ -690,7 +690,7 @@ final class DailyBudgetTests: XCTestCase {
         ))
         XCTAssertLessThan(pace.headroomToday, 0, "must read as over pace")
         let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
-        XCTAssertTrue(caption.hasSuffix("over pace for today"), "got: \(caption)")
+        XCTAssertTrue(caption.hasSuffix("over today's allowance"), "got: \(caption)")
         XCTAssertFalse(caption.contains("left today"), "got: \(caption)")
     }
 
@@ -758,7 +758,7 @@ final class DailyBudgetTests: XCTestCase {
         ))
         XCTAssertLessThan(pace.headroomToday, 0)
         let caption = try XCTUnwrap(DailyBudget.paceCaption(pace))
-        XCTAssertTrue(caption.hasSuffix("over pace for today"), "got: \(caption)")
+        XCTAssertTrue(caption.hasSuffix("over today's allowance"), "got: \(caption)")
         XCTAssertFalse(caption.contains("used"), "must not report the used amount, got: \(caption)")
     }
 }

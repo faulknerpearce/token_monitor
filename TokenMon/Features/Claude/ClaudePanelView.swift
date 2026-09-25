@@ -10,7 +10,7 @@ struct ClaudePanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                ProviderHeaderLabel(provider: .claude, title: "Claude")
+                ProviderHeaderRow(provider: .claude, title: "Claude")
 
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
@@ -61,7 +61,7 @@ struct ClaudePanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .claude, title: "Claude")
+                ProviderHeaderRow(provider: .claude, title: "Claude")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -75,7 +75,7 @@ struct ClaudePanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .claude, title: "Claude")
+            ProviderHeaderRow(provider: .claude, title: "Claude")
             Text("Sign in to claude.ai to load your 5-hour and weekly usage.")
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)

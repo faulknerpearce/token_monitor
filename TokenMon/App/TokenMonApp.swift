@@ -255,7 +255,6 @@ struct MenuBarRoot: View {
             openRouterAuth: model.openRouterAuth,
             openRouterPoller: model.openRouterPoller,
             grokbotPoller: model.grokbotPoller,
-            updateChecker: model.updateChecker,
             settings: model.settings,
             history: model.history,
             grokHourly: model.grokHourly,

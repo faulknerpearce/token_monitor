@@ -26,6 +26,7 @@ struct OverviewPanelView: View {
     var openClaudeSignIn: () -> Void
     var openChatGPTSignIn: () -> Void
     var selectOpenRouter: () -> Void
+    var openPreferences: () -> Void
 
     private var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
@@ -48,6 +49,7 @@ struct OverviewPanelView: View {
                 Text(appVersion)
                     .font(PanelTypography.bodyDigit)
                     .foregroundStyle(.tertiary)
+                SettingsCogButton(action: openPreferences)
             }
 
             ForEach(settings.visibleUsageProviders) { provider in

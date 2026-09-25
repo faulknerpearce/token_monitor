@@ -15,7 +15,6 @@ struct MenuBarPanelView: View {
     @ObservedObject var openRouterAuth: OpenRouterAuthSession
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var grokbotPoller: GrokbotUsagePoller
-    @ObservedObject var updateChecker: UpdateChecker
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
@@ -61,13 +60,10 @@ struct MenuBarPanelView: View {
             case .grokbot:
                 grokbotContent
             }
-
-            Divider().padding(.vertical, 6)
-
-            menuActions
         }
         .padding(12)
         .frame(width: Self.panelWidth)
+        .environment(\.openPreferences, openPreferences)
         .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear {
@@ -230,152 +226,8 @@ struct MenuBarPanelView: View {
             openCursorSignIn: openCursorSignIn,
             openClaudeSignIn: openClaudeSignIn,
             openChatGPTSignIn: openChatGPTSignIn,
-            selectOpenRouter: selectOpenRouter
+            selectOpenRouter: selectOpenRouter,
+            openPreferences: openPreferences
         )
-    }
-
-    private var menuActions: some View {
-        VStack(spacing: 2) {
-            panelButton("Refresh Now", shortcut: "⌘R") {
-                Task { await refreshActivePoller() }
-            }
-            .keyboardShortcut("r", modifiers: [.command])
-
-            switch settings.selectedProvider {
-            case .grok:
-                Toggle(isOn: $settings.showCategoriesInMenuBar) {
-                    toggleLabel("Show Categories in Menu Bar", isOn: settings.showCategoriesInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-
-                Toggle(isOn: $settings.showGrokBarInMenuBar) {
-                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showGrokBarInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-
-                if !auth.isSignedIn {
-                    panelButton("Sign In…", shortcut: nil, action: openSignIn)
-                }
-            case .opencode:
-                Toggle(isOn: $settings.showOpenCodeBarInMenuBar) {
-                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showOpenCodeBarInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-            case .cursor:
-                Toggle(isOn: $settings.showCursorBarInMenuBar) {
-                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showCursorBarInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-            case .claude:
-                Toggle(isOn: $settings.showClaudeBarInMenuBar) {
-                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showClaudeBarInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-            case .chatgpt:
-                EmptyView()
-            case .openrouter:
-                EmptyView()
-            case .grokbot:
-                Toggle(isOn: $settings.showGrokbotBarInMenuBar) {
-                    toggleLabel("Show Bar Graph in Menu Bar", isOn: settings.showGrokbotBarInMenuBar)
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.plain)
-                .font(PanelTypography.body)
-            case .overview:
-                EmptyView()
-            }
-
-            Divider().padding(.vertical, 4)
-
-            panelButton(updateChecker.actionTitle, shortcut: nil, disabled: !updateChecker.canAct) {
-                Task { await updateChecker.performPrimaryAction() }
-            }
-            if let statusMessage = updateChecker.statusMessage {
-                Text(statusMessage)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 4)
-            }
-
-            panelButton("Settings", shortcut: "⌘O", action: openPreferences)
-                .keyboardShortcut("o", modifiers: [.command])
-
-            if let url = settings.selectedProvider.websiteURL {
-                let title: String = {
-                    switch settings.selectedProvider {
-                    case .grok: return "Open Grok.com"
-                    case .cursor: return "Open Cursor.com"
-                    case .opencode: return "Open Opencode.com"
-                    case .claude: return "Open Claude.ai"
-                    case .chatgpt: return "Open ChatGPT.com"
-                    case .openrouter: return "Open OpenRouter.ai"
-                    case .grokbot: return "Open Cursor.com/bot"
-                    case .overview: return "Visit website"
-                    }
-                }()
-                panelButton(title, shortcut: nil) {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-
-            Divider().padding(.vertical, 4)
-
-            panelButton("Quit TokenMon", shortcut: "⌘Q") {
-                NSApp.terminate(nil)
-            }
-            .keyboardShortcut("q", modifiers: [.command])
-        }
-    }
-
-    private func panelButton(
-        _ title: String,
-        shortcut: String?,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                Spacer()
-                if let shortcut {
-                    Text(shortcut)
-                        .foregroundStyle(.secondary)
-                        .font(PanelTypography.body)
-                }
-            }
-            .contentShape(Rectangle())
-            .padding(.horizontal, 6)
-            .padding(.vertical, 5)
-        }
-        .buttonStyle(.plain)
-        .font(PanelTypography.body)
-        .disabled(disabled)
-        .foregroundStyle(disabled ? Color.secondary : Color.primary)
-    }
-
-    private func toggleLabel(_ title: String, isOn: Bool) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            if isOn {
-                Image(systemName: "checkmark")
-                    .font(PanelTypography.bodySemibold)
-            }
-        }
-        .contentShape(Rectangle())
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
     }
 }

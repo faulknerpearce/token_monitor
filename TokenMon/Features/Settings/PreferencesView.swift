@@ -296,6 +296,12 @@ struct PreferencesView: View {
                 }
             }
 
+            Section {
+                Button("Quit TokenMon") {
+                    NSApp.terminate(nil)
+                }
+            }
+
             if let exportError {
                 Section {
                     Text(exportError).foregroundStyle(.red)

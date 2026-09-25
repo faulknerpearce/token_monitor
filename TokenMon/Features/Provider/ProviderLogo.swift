@@ -111,3 +111,65 @@ struct ProviderHeaderLabel: View {
         }
     }
 }
+
+/// Opens the app's Settings window. Injected once at the panel root so any
+/// provider header can show a Settings cog without threading the closure through
+/// every panel.
+private struct OpenPreferencesActionKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var openPreferences: () -> Void {
+        get { self[OpenPreferencesActionKey.self] }
+        set { self[OpenPreferencesActionKey.self] = newValue }
+    }
+}
+
+/// Small gear button that opens Settings.
+struct SettingsCogButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "gearshape")
+                .font(PanelTypography.body)
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Settings")
+    }
+}
+
+/// Menu-dropdown provider header: logo + title, optional trailing meta, and the
+/// Settings cog pinned to the far right. Used by every provider panel so the cog
+/// is reachable from any section.
+struct ProviderHeaderRow<Trailing: View>: View {
+    let provider: MonitorProvider
+    let title: String
+    let trailing: Trailing
+
+    @Environment(\.openPreferences) private var openPreferences
+
+    init(provider: MonitorProvider, title: String, @ViewBuilder trailing: () -> Trailing) {
+        self.provider = provider
+        self.title = title
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProviderHeaderLabel(provider: provider, title: title)
+            Spacer(minLength: 8)
+            trailing
+            SettingsCogButton(action: openPreferences)
+        }
+    }
+}
+
+extension ProviderHeaderRow where Trailing == EmptyView {
+    init(provider: MonitorProvider, title: String) {
+        self.init(provider: provider, title: title) { EmptyView() }
+    }
+}

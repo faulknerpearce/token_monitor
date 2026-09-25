@@ -11,7 +11,7 @@ struct OpenCodePanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                ProviderHeaderLabel(provider: .opencode, title: "OpenCode Go")
+                ProviderHeaderRow(provider: .opencode, title: "OpenCode Go")
 
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
@@ -92,7 +92,7 @@ struct OpenCodePanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .opencode, title: "OpenCode Go")
+                ProviderHeaderRow(provider: .opencode, title: "OpenCode Go")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -106,7 +106,7 @@ struct OpenCodePanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .opencode, title: "OpenCode Go")
+            ProviderHeaderRow(provider: .opencode, title: "OpenCode Go")
             Text("Sign in to the OpenCode console to load official rolling, weekly, and monthly usage.")
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)

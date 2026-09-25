@@ -22,13 +22,25 @@ struct OpenRouterUsageClient: Sendable {
         // Inference keys are refused on /credits (HTTP 403) — that is an
         // expected shape, not an error, so degrade to key-limit budgeting.
         async let creditsData = try? get("credits")
+        // /activity (per-model spend) also requires a management key; ordinary
+        // keys get 403, so degrade to no model breakdown.
+        async let activityData = try? get("activity")
 
         let key = try await decode(OpenRouterKeyResponse.self, from: keyData)
         var credits: OpenRouterCreditsResponse?
         if let data = await creditsData {
             credits = try? decode(OpenRouterCreditsResponse.self, from: data)
         }
-        return OpenRouterSnapshot.build(key: key.data, credits: credits?.data, fetchedAt: now)
+        var activity: [OpenRouterActivityRow]?
+        if let data = await activityData {
+            activity = try? decode(OpenRouterActivityResponse.self, from: data).data
+        }
+        return OpenRouterSnapshot.build(
+            key: key.data,
+            credits: credits?.data,
+            activity: activity,
+            fetchedAt: now
+        )
     }
 
     /// Parses a `/key` payload without network access (tests + diagnostics).
@@ -39,6 +51,11 @@ struct OpenRouterUsageClient: Sendable {
     /// Parses a `/credits` payload without network access (tests + diagnostics).
     static func parseCredits(_ data: Data) throws -> OpenRouterCreditsResponse {
         try JSONDecoder().decode(OpenRouterCreditsResponse.self, from: data)
+    }
+
+    /// Parses an `/activity` payload without network access (tests + diagnostics).
+    static func parseActivity(_ data: Data) throws -> OpenRouterActivityResponse {
+        try JSONDecoder().decode(OpenRouterActivityResponse.self, from: data)
     }
 
     private func get(_ path: String) async throws -> Data {

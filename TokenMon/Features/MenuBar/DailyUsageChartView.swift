@@ -86,7 +86,7 @@ struct DailyUsageChartView: View {
 
             if let footerCaption {
                 Text(footerCaption)
-                    .font(PanelTypography.bodyDigit)
+                    .font(PanelTypography.metricLabel)
                     .foregroundStyle(.secondary)
             }
         }

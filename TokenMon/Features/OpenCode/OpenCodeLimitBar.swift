@@ -15,8 +15,21 @@ struct OpenCodeLimitBar: View {
             label: window.kind.label,
             percent: window.usedPercent,
             color: fill,
-            caption: window.resetsAt.map { resetLabel(for: $0) }
+            caption: caption
         )
+    }
+
+    private var caption: String? {
+        if let resetsAt = window.resetsAt {
+            return resetLabel(for: resetsAt)
+        }
+        // The local rolling window has no reset clock until a Go session lands
+        // in the last 5h; say so rather than dropping the caption row. If there
+        // is usage but no reset time, the reset genuinely cannot be derived.
+        if window.kind == .rolling5h, window.usedPercent <= 0 {
+            return "No usage in last 5h"
+        }
+        return nil
     }
 
     private func resetLabel(for date: Date) -> String {

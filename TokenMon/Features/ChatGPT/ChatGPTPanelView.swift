@@ -10,9 +10,7 @@ struct ChatGPTPanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .chatgpt, title: "ChatGPT")
-                    Spacer()
+                ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT") {
                     Text(snapshot.displayPlanName)
                         .panelMetaLabel()
                 }
@@ -62,7 +60,7 @@ struct ChatGPTPanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .chatgpt, title: "ChatGPT")
+                ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -76,7 +74,7 @@ struct ChatGPTPanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .chatgpt, title: "ChatGPT")
+            ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT")
             Text("Sign in to chatgpt.com to load your 5-hour and weekly Codex usage.")
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)

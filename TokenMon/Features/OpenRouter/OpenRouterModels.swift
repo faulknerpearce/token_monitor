@@ -83,6 +83,8 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
     var keyUsageMonthlyUSD: Double
     var keyLimitUSD: Double?
     var keyLimitRemainingUSD: Double?
+    /// Per-model spend over the last 30 days (`/activity`; management keys only).
+    var models: [OpenRouterModelUsage] = []
 
     /// Which denominator backs `usedPercent`.
     var budgetSource: OpenRouterBudgetSource?
@@ -101,6 +103,7 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
     static func build(
         key: OpenRouterKeyData,
         credits: OpenRouterCreditsData?,
+        activity: [OpenRouterActivityRow]? = nil,
         fetchedAt: Date = Date()
     ) -> OpenRouterSnapshot {
         var snapshot = OpenRouterSnapshot(
@@ -143,6 +146,8 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
                 ?? max(0, limit - key.usage)
         }
 
+        snapshot.models = OpenRouterModelUsage.models(from: activity ?? [])
+
         // Negative balances (overdraft) clamp so the bar never underfills.
         snapshot.usedUSD = max(0, snapshot.usedUSD)
         return snapshot
@@ -156,5 +161,128 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         case "monthly": return key.usageMonthly
         default: return nil
         }
+    }
+}
+
+/// One row of `GET /activity` — spend/tokens for a model on a UTC day, grouped
+/// by endpoint (so a model can appear several times in one day).
+struct OpenRouterActivityRow: Codable, Sendable {
+    var date: String
+    var model: String
+    var providerName: String?
+    var usage: Double
+    var requests: Int
+    var promptTokens: Int
+    var completionTokens: Int
+    var reasoningTokens: Int
+
+    enum CodingKeys: String, CodingKey {
+        case date, model, usage, requests
+        case providerName = "provider_name"
+        case promptTokens = "prompt_tokens"
+        case completionTokens = "completion_tokens"
+        case reasoningTokens = "reasoning_tokens"
+    }
+}
+
+struct OpenRouterActivityResponse: Codable, Sendable {
+    var data: [OpenRouterActivityRow]
+}
+
+/// One model in the OpenRouter spend breakdown, aggregated over the activity window.
+struct OpenRouterModelUsage: Identifiable, Hashable, Sendable {
+    /// Canonical display slug — stealth aliases resolved (e.g. `z-ai/glm-5.3-flash`).
+    var modelID: String
+    /// The slug OpenRouter actually reported (e.g. `stealth/ox-alpha`).
+    var activitySlug: String
+    var requests: Int
+    var promptTokens: Int
+    var completionTokens: Int
+    var costUSD: Double
+    /// True when `costUSD` was derived from tokens (a free/stealth row reported $0).
+    var isCostEstimated: Bool
+    /// Share of the window's model spend, 0…100.
+    var percentOfWindow: Double = 0
+
+    var id: String { activitySlug }
+
+    /// The slug was a stealth alias later revealed as a known model.
+    var isRevealed: Bool { modelID != activitySlug }
+
+    var totalTokens: Int { promptTokens + completionTokens }
+
+    /// Aggregates activity rows by canonical model, estimating value for rows
+    /// OpenRouter reports at $0 (free/stealth models).
+    static func models(from rows: [OpenRouterActivityRow]) -> [OpenRouterModelUsage] {
+        var byCanonical: [String: OpenRouterModelUsage] = [:]
+        for row in rows {
+            let canonical = OpenRouterModelPricing.canonicalSlug(row.model)
+            var usage = byCanonical[canonical] ?? OpenRouterModelUsage(
+                modelID: canonical,
+                activitySlug: row.model,
+                requests: 0,
+                promptTokens: 0,
+                completionTokens: 0,
+                costUSD: 0,
+                isCostEstimated: false
+            )
+            usage.requests += max(0, row.requests)
+            usage.promptTokens += max(0, row.promptTokens)
+            usage.completionTokens += max(0, row.completionTokens)
+            usage.costUSD += max(0, row.usage)
+            byCanonical[canonical] = usage
+        }
+
+        for (key, var usage) in byCanonical where usage.costUSD <= 0 {
+            let value = OpenRouterModelPricing.estimatedValueUSD(
+                slug: usage.modelID,
+                promptTokens: usage.promptTokens,
+                completionTokens: usage.completionTokens
+            )
+            if value > 0 {
+                usage.costUSD = value
+                usage.isCostEstimated = true
+            }
+            byCanonical[key] = usage
+        }
+
+        let total = byCanonical.values.reduce(0) { $0 + $1.costUSD }
+        return byCanonical.values
+            .sorted { lhs, rhs in
+                if lhs.costUSD != rhs.costUSD { return lhs.costUSD > rhs.costUSD }
+                return lhs.totalTokens > rhs.totalTokens
+            }
+            .map { usage in
+                var copy = usage
+                copy.percentOfWindow = total > 0 ? copy.costUSD / total * 100 : 0
+                return copy
+            }
+    }
+}
+
+/// OpenRouter model identity and value helpers.
+enum OpenRouterModelPricing {
+    /// Stealth slugs that were later revealed as a public model: display and
+    /// price them as the real slug.
+    private static let revealedSlugs: [String: String] = [
+        "stealth/ox-alpha": "z-ai/glm-5.3-flash"
+    ]
+
+    /// Resolves a stealth alias to the model it was revealed to be.
+    static func canonicalSlug(_ slug: String) -> String {
+        revealedSlugs[slug.lowercased()] ?? slug
+    }
+
+    /// Value of a model's tokens when OpenRouter reports no cost. Reuses the
+    /// shared OpenRouter-sourced rate table via the bare model id.
+    static func estimatedValueUSD(slug: String, promptTokens: Int, completionTokens: Int) -> Double {
+        let bare = canonicalSlug(slug).split(separator: "/").last.map(String.init) ?? slug
+        return OpenCodeZenCostEstimate.estimate(
+            modelID: bare,
+            inputTokens: Int64(max(0, promptTokens)),
+            outputTokens: Int64(max(0, completionTokens)),
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0
+        )
     }
 }

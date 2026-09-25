@@ -11,9 +11,7 @@ struct OpenRouterPanelView: View {
             signedOut
         } else if let snapshot = poller.snapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProviderHeaderLabel(provider: .openrouter, title: "OpenRouter")
-                    Spacer()
+                ProviderHeaderRow(provider: .openrouter, title: "OpenRouter") {
                     Text(snapshot.budgetSource?.label ?? "No credit limit")
                         .panelMetaLabel()
                 }
@@ -61,6 +59,12 @@ struct OpenRouterPanelView: View {
                         .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                 )
 
+                if !snapshot.models.isEmpty {
+                    PanelCard {
+                        OpenRouterModelsSection(models: snapshot.models)
+                    }
+                }
+
                 if let err = poller.lastError {
                     Text(err)
                         .font(PanelTypography.caption)
@@ -78,7 +82,7 @@ struct OpenRouterPanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ProviderHeaderLabel(provider: .openrouter, title: "OpenRouter")
+                ProviderHeaderRow(provider: .openrouter, title: "OpenRouter")
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
@@ -90,7 +94,7 @@ struct OpenRouterPanelView: View {
 
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderHeaderLabel(provider: .openrouter, title: "OpenRouter")
+            ProviderHeaderRow(provider: .openrouter, title: "OpenRouter")
             Text("Paste an OpenRouter API key to track spending against your purchased credits.")
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)
@@ -136,5 +140,82 @@ struct OpenRouterPanelView: View {
         isReplacingKey = false
         apiKeyDraft = ""
         Task { await poller.refreshNow() }
+    }
+}
+
+/// Ranked OpenRouter model spend for the activity window (last 30 UTC days).
+struct OpenRouterModelsSection: View {
+    let models: [OpenRouterModelUsage]
+
+    private let previewCount = 3
+    @State private var showAll = false
+
+    private var visible: [OpenRouterModelUsage] {
+        showAll ? models : Array(models.prefix(previewCount))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PanelSectionHeader(title: "Top Models by Spend")
+
+            ForEach(Array(visible.enumerated()), id: \.element.id) { index, model in
+                OpenRouterModelRow(model: model)
+                if index < visible.count - 1 {
+                    Divider().opacity(0.35)
+                }
+            }
+
+            if models.count > previewCount {
+                HStack {
+                    Spacer()
+                    Button {
+                        showAll.toggle()
+                    } label: {
+                        Text(showAll ? "Show less" : "View all")
+                            .font(PanelTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+private struct OpenRouterModelRow: View {
+    let model: OpenRouterModelUsage
+
+    private var costLabel: String {
+        let formatted = Format.usd(model.costUSD)
+        return model.isCostEstimated ? "~\(formatted)" : formatted
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(model.modelID)
+                    .font(PanelTypography.bodySemibold)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if model.isRevealed {
+                    Text("revealed").panelMetaLabel()
+                }
+                Spacer(minLength: 8)
+                Text(costLabel)
+                    .font(PanelTypography.bodyDigit)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+
+            GeometryReader { geo in
+                let width = max(0, geo.size.width * CGFloat(max(0, min(100, model.percentOfWindow)) / 100))
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.12))
+                    Capsule().fill(ProviderColors.openRouterColor).frame(width: width)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.vertical, 4)
     }
 }

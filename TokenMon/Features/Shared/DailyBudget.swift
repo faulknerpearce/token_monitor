@@ -443,8 +443,8 @@ enum DailyBudget {
     ///
     /// A plain surplus reads "X% usage left today"; when the surplus exceeds one
     /// day's share the caption notes the extra banked from unused prior days.
-    /// An overrun reads "usage X% over pace for today" — the used amount is never
-    /// reported.
+    /// An overrun reads "Usage X% over today's allowance" — the used amount is
+    /// never reported.
     static func paceCaption(_ pace: PaceHeadroom) -> String? {
         /// Headroom meaningfully above zero → otherwise call it on pace.
         let bankEpsilon = 0.05
