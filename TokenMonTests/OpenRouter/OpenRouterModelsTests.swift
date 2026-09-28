@@ -19,7 +19,7 @@ final class OpenRouterModelsTests: XCTestCase {
           }
         }
         """.utf8)
-        let key = try OpenRouterUsageClient.parseKey(data).data
+        let key = try JSONDecoder().decode(OpenRouterKeyResponse.self, from: data).data
         XCTAssertEqual(key.label, "TokenMon Key")
         XCTAssertEqual(key.usage, 25.5, accuracy: 0.001)
         XCTAssertEqual(key.usageDaily ?? -1, 2.5, accuracy: 0.001)
@@ -31,7 +31,7 @@ final class OpenRouterModelsTests: XCTestCase {
         let data = Data("""
         {"data": {"total_credits": 100.5, "total_usage": 25.75}}
         """.utf8)
-        let credits = try OpenRouterUsageClient.parseCredits(data).data
+        let credits = try JSONDecoder().decode(OpenRouterCreditsResponse.self, from: data).data
         XCTAssertEqual(credits.totalCredits, 100.5, accuracy: 0.001)
         XCTAssertEqual(credits.totalUsage, 25.75, accuracy: 0.001)
     }
@@ -137,7 +137,7 @@ final class OpenRouterModelsTests: XCTestCase {
 
     func testKeyParsingDefaults() throws {
         let data = Data(#"{"data": {"usage": 3}}"#.utf8)
-        let key = try OpenRouterUsageClient.parseKey(data).data
+        let key = try JSONDecoder().decode(OpenRouterKeyResponse.self, from: data).data
         XCTAssertNil(key.label)
         XCTAssertNil(key.limit)
         let snapshot = OpenRouterSnapshot.build(key: key, credits: nil)
@@ -170,7 +170,7 @@ final class OpenRouterModelsTests: XCTestCase {
           }
         ]}
         """.utf8)
-        let rows = try OpenRouterUsageClient.parseActivity(data).data
+        let rows = try JSONDecoder().decode(OpenRouterActivityResponse.self, from: data).data
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(rows[0].model, "z-ai/glm-5.3-flash")
         XCTAssertEqual(rows[0].usage, 2.5, accuracy: 0.001)

@@ -564,7 +564,10 @@ final class OpenCodeStatsTests: XCTestCase {
             openCodeZenHourWeights: split.openCodeZen
         )
         XCTAssertFalse(built.isEmpty)
-        XCTAssertGreaterThan(built.hours[10].openCodeSharePercent, 99)
+        XCTAssertGreaterThan(
+            built.hours[10].openCodeGoSharePercent + built.hours[10].openCodeZenSharePercent,
+            99
+        )
         XCTAssertGreaterThan(built.hours[10].openCodeGoSharePercent, 74)
         XCTAssertGreaterThan(built.hours[10].openCodeZenSharePercent, 24)
         XCTAssertGreaterThan(built.hours[11].grokSharePercent, 99)
@@ -843,7 +846,7 @@ final class OpenCodeStatsTests: XCTestCase {
 
         let hourly = try OpenCodeLocalStats.fetchDayHourlyUsage(dbURL: dbURL, now: now)
         XCTAssertEqual(hourly.hours.count, 24)
-        XCTAssertEqual(hourly.dayTotalUSD, 7, accuracy: 0.001)
+        XCTAssertEqual(hourly.hours.reduce(0) { $0 + $1.totalUSD }, 7, accuracy: 0.001)
         XCTAssertEqual(hourly.hours[9].totalUSD, 3, accuracy: 0.001)
         XCTAssertEqual(hourly.hours[9].segments.count, 2)
         XCTAssertEqual(hourly.hours[14].totalUSD, 4, accuracy: 0.001)

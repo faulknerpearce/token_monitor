@@ -6,7 +6,6 @@ import SwiftUI
 /// were never instantiated; only these color statics were referenced.
 enum ProviderColors {
     static let grokColor = ProviderAccent.grok.color.opacity(0.85)
-    static let openCodeColor = ProviderAccent.openCode.color.opacity(0.78)
     /// Canonical Cursor sRGB, shared with other renderers (e.g. the menu bar icon).
     static let cursorSRGB = ProviderAccent.cursor
     static let cursorColor = cursorSRGB.color.opacity(0.85)

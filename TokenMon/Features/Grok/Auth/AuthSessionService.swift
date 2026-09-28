@@ -31,7 +31,7 @@ final class AuthSessionService: ProviderAuthSession {
                 extraStoreKeys: [],
                 signOutHosts: Self.grokHosts,
                 capturePolicy: Self.grokPolicy(),
-                isDomain: { domain in Domain.matches(domain, hosts: Self.grokHosts) }
+                isDomain: { domain in Self.isGrokDomain(domain) }
             ),
             directory: directory
         )
@@ -40,7 +40,7 @@ final class AuthSessionService: ProviderAuthSession {
     /// Cookie-capture policy for the grok.com/xAI sign-in flow.
     static func grokPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
-            isDomain: { domain in Domain.matches(domain, hosts: grokHosts) },
+            isDomain: { domain in Self.isGrokDomain(domain) },
             isPreferredSessionCookie: { cookie in
                 Self.essentialCookieNames.contains(cookie.name.lowercased())
             },

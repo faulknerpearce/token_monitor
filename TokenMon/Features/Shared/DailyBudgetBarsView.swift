@@ -130,7 +130,7 @@ struct DailyBudgetBarsView: View {
             return String(format: "No usage yet · %.1f%%/day", dailyBudget)
         }
         if days.contains(where: {
-            Calendar.current.isDate($0.date, inSameDayAs: Date()) && $0.spentUSD > $0.budgetUSD
+            Calendar.current.isDate($0.date, inSameDayAs: Date()) && $0.isOverBudget
         }) {
             return "Over today's allowance"
         }
@@ -170,7 +170,7 @@ struct DailyBudgetBarsView: View {
 
     private func dayColumn(_ day: DailyBudgetDay) -> some View {
         // Full stem height = the day's allowance; fill = usage vs that allowance.
-        let fraction = day.budgetUSD > 0 ? min(1, max(0, day.spentUSD / day.budgetUSD)) : 0
+        let fraction = day.percentOfBudget / 100
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
         let isFuture = day.date > Calendar.current.startOfDay(for: Date())
         let (weekday, _) = Self.formatters(for: day.date)

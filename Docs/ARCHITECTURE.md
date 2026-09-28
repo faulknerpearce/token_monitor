@@ -2,21 +2,23 @@
 
 ## Overview
 
-TokenMon is a SwiftUI agent-style macOS app (`LSUIElement` + `MenuBarExtra`) with provider-specific services for Grok, OpenCode, and Cursor. The shared shell owns provider selection, menu-bar presentation, settings, and lifecycle; each provider owns its authentication and usage implementation.
+TokenMon is an agent-style macOS app (`LSUIElement` + a custom `NSStatusItem`, not `MenuBarExtra`) with provider-specific services for Grok, OpenCode, Cursor, Claude, ChatGPT, OpenRouter, and Grokbot, plus an Overview aggregate. The shared shell owns provider selection, menu-bar presentation, settings, and lifecycle; each provider owns its authentication and usage implementation.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ MenuBarExtra label  →  MenuBarPanelView (window style)  │
+│ NSStatusItem label  →  MenuBarPanel (borderless NSPanel)│
 │ Preferences Window  →  charts / export / settings       │
 └───────────────┬─────────────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────────────┐
-│ Provider selection → Grok / OpenCode / Cursor services  │
-│      │              │                 │                 │
-│      ▼              ▼                 ▼                 │
-│ Grok UsagePoller  OpenCode Poller   Cursor Poller       │
-│ Auth / history    Console / local   Dashboard cookies   │
-│      │              │                 │                 │
+│ Provider selection → per-provider services              │
+│   Grok · OpenCode · Cursor · Claude · ChatGPT ·         │
+│   OpenRouter · Grokbot   (+ Overview aggregate)         │
+│      │                                                  │
+│      ▼                                                  │
+│ One poller per provider (ProviderUsagePoller)           │
+│ Auth / history · console / local · dashboard cookies    │
+│      │                                                  │
 │      └────────── shared MenuBar / Settings ─────────────┘
 └─────────────────────────────────────────────────────────┘
 ```
@@ -25,15 +27,18 @@ TokenMon is a SwiftUI agent-style macOS app (`LSUIElement` + `MenuBarExtra`) wit
 
 | Area | Responsibility |
 |------|----------------|
-| `App/` | `MenuBarExtra` scenes, `AppDelegate` activation policy |
+| `App/` | `MenuBarController` (`NSStatusItem` + `MenuBarPanel`), SwiftUI `Window` scenes, `AppDelegate` activation policy |
 | `Grok/` | Grok auth, usage client/parser/poller, history, and alerts |
 | `Grokbot/` | Grokbot weekly allowance client/poller and panel. Owns no session: Grok Bot is a Cursor-backed product (`com.anysphere.sand`), so it borrows `CursorAuthSession` and its sign-in window |
 | `OpenCode/` | OpenCode auth, console/local usage, models, and panel |
 | `Cursor/` | Cursor auth, dashboard usage client/poller, and panel |
-| `Overview/` | Concentric usage rings and hourly multi-provider chart |
+| `Claude/` | Claude auth, usage client/poller, and panel |
+| `ChatGPT/` | ChatGPT/Codex auth, usage client/poller, and panel |
+| `OpenRouter/` | OpenRouter bearer-key auth, usage client/poller, and panel |
+| `Overview/` | Multi-provider hourly chart and shared provider accent colors |
 | `Provider/` | Provider identity, switching, and logos |
 | `Shared/` | Provider-neutral infrastructure: WebKit cookie bridge/capture, sign-in sheet shell, poll interval, formatters |
-| `MenuBar/` | Label, panel, segmented bar, category rows |
+| `MenuBar/` | Status-item bitmap renderer, panel, segmented bar, category rows |
 | `Settings/` | UserDefaults-backed preferences, launch-at-login |
 
 ## Data flow

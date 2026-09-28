@@ -138,10 +138,6 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
         maxHourUSD <= 0 && hours.allSatisfy { $0.messageCount == 0 }
     }
 
-    var dayTotalUSD: Double {
-        hours.reduce(0) { $0 + $1.totalUSD }
-    }
-
     /// Overview weights: keep Go and Zen separate; xAI/Grok-via-harness → Grok;
     /// other BYOK providers are excluded.
     func overviewProviderHourWeights() -> (

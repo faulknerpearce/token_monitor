@@ -21,6 +21,8 @@ xcodebuild -exportArchive -archivePath build/TokenMon.xcarchive \
   -exportOptionsPlist Scripts/ExportOptions.plist
 ```
 
+`make archive` and `make export` wrap these two steps (archive → `build/export`).
+
 `Scripts/ExportOptions.plist` has no `teamID` — with `signingStyle: automatic` this is inferred from the archive's own signing identity. If your Apple ID belongs to more than one team, add a `teamID` key (`<key>teamID</key><string>YOURTEAMID</string>`) to disambiguate.
 
 ## 2. Notarize

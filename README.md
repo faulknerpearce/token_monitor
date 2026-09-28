@@ -100,6 +100,7 @@ All targets are listed below (`make help` also shows your detected signing ident
 | `make release` | Full release into `dist/`: signed `.app` + `.pkg` + `.zip` |
 | `make pkg` | Build only the installer `.pkg` into `dist/` |
 | `make archive` | Create an `.xcarchive` (Xcode Organizer-compatible) |
+| `make export` | Export a Developer ID `.app` from the archive into `build/export` |
 | `make notarize` | Notarize the `dist/` app via `notarytool` profile |
 | `make test` | Run the full Xcode unit test suite |
 | `make test-core` | Run the CLT-only parser/builder tests (no app host) |

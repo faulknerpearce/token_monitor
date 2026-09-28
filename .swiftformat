@@ -32,3 +32,12 @@
   wrapLoopBodies, \
   wrapMultilineStatementBraces, \
   wrapPropertyBodies
+
+# The three rules the 2026-09-28 hygiene audit flagged as "useful but off" are
+# intentional style choices, kept off to avoid churn against the codebase:
+#   indent               — mis-indents top-level `#Preview { … }` / `#if` blocks,
+#                          which this repo keeps at column 0.
+#   spaceAroundOperators — rewrites `0..<n` to `0 ..< n`; the tight range style
+#                          is used throughout.
+#   noForceUnwrapInTests — ~168 intentional force-unwraps in test fixtures;
+#                          converting them is a separate refactor.

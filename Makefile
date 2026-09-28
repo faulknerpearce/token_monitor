@@ -1,6 +1,6 @@
 # Makefile — TokenMon (macOS Swift / Xcode)
 .PHONY: default help tasks build release run install uninstall clean test test-core lint lint-fix format format-fix secrets \
-	project icon check open archive pkg notarize distclean
+	project icon check open archive export pkg notarize distclean
 
 default: help
 
@@ -273,6 +273,19 @@ archive: ## Create an .xcarchive (Xcode Organizer-compatible)
 			archive; \
 	fi
 	$(call ok,Archive → $(ARCHIVE_PATH))
+
+export: ## Export a Developer ID .app from the archive into build/export
+	$(call say,Exporting from $(ARCHIVE_PATH)…)
+	@if [ ! -d "$(ARCHIVE_PATH)" ]; then \
+		printf "$(YELL)No archive found — running 'make archive' first$(RESET)\n"; \
+		$(MAKE) --no-print-directory archive; \
+	fi
+	@rm -rf "$(EXPORT_DIR)"
+	@xcodebuild -exportArchive \
+		-archivePath "$(ARCHIVE_PATH)" \
+		-exportPath "$(EXPORT_DIR)" \
+		-exportOptionsPlist Scripts/ExportOptions.plist
+	$(call ok,Exported → $(EXPORT_DIR))
 
 notarize: ## Notarize dist app (requires: xcrun notarytool store-credentials)
 	@if [ ! -d "$(DIST_APP)" ]; then \

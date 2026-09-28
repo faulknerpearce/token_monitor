@@ -44,21 +44,6 @@ struct OpenRouterUsageClient: Sendable {
         )
     }
 
-    /// Parses a `/key` payload without network access (tests + diagnostics).
-    static func parseKey(_ data: Data) throws -> OpenRouterKeyResponse {
-        try JSONDecoder().decode(OpenRouterKeyResponse.self, from: data)
-    }
-
-    /// Parses a `/credits` payload without network access (tests + diagnostics).
-    static func parseCredits(_ data: Data) throws -> OpenRouterCreditsResponse {
-        try JSONDecoder().decode(OpenRouterCreditsResponse.self, from: data)
-    }
-
-    /// Parses an `/activity` payload without network access (tests + diagnostics).
-    static func parseActivity(_ data: Data) throws -> OpenRouterActivityResponse {
-        try JSONDecoder().decode(OpenRouterActivityResponse.self, from: data)
-    }
-
     private func get(_ path: String) async throws -> Data {
         try await ProviderHTTP.get(
             path,

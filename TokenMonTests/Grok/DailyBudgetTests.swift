@@ -72,7 +72,7 @@ final class DailyBudgetTests: XCTestCase {
     func testLast7AtPeriodStartPadsForward() {
         // Period starts today: only one real day exists; window must still be 7 bars.
         let today = date(2026, 8, 1)
-        let days = DailyBudget.buildLast7Days(
+        let all = DailyBudget.buildDays(
             periodStart: today,
             periodEnd: date(2026, 9, 1),
             limitUSD: 310,
@@ -80,6 +80,7 @@ final class DailyBudgetTests: XCTestCase {
             now: today,
             calendar: calendar
         )
+        let days = DailyBudget.last7(from: all, now: today, calendar: calendar)
         XCTAssertEqual(days.count, 7)
     }
 

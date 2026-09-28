@@ -70,28 +70,6 @@ enum DailyBudget {
         return days
     }
 
-    /// 7-bar window ending on the last painted day of the period. Daily budget
-    /// is derived from the *full period* allocation (`limit` / daysInPeriod),
-    /// but only the last 7 days are returned for the chart.
-    static func buildLast7Days(
-        periodStart: Date,
-        periodEnd: Date,
-        limitUSD: Double,
-        spentByDay: [Date: Double],
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> [DailyBudgetDay] {
-        let all = buildDays(
-            periodStart: periodStart,
-            periodEnd: periodEnd,
-            limitUSD: limitUSD,
-            spentByDay: spentByDay,
-            now: now,
-            calendar: calendar
-        )
-        return last7(from: all, now: now, calendar: calendar)
-    }
-
     /// Filters `all` to the 7 calendar days ending on `now` (inclusive). If `now`
     /// is outside `all`'s period, returns the last 7 of `all`.
     static func last7(from all: [DailyBudgetDay], now: Date, calendar: Calendar) -> [DailyBudgetDay] {

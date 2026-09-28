@@ -19,6 +19,9 @@ struct GrokbotPanelView: View {
                         title: snapshot.usagePool.sectionTitle,
                         trailing: "\(Int(snapshot.usedPercent.rounded()))% Used"
                     )
+                    Text(snapshot.entitlement.captionText)
+                        .font(PanelTypography.caption)
+                        .foregroundStyle(.secondary)
                     if snapshot.hasIncludedAllowance {
                         SlimUsageTrack(
                             label: "Weekly",

@@ -13,7 +13,7 @@ final class CursorAuthSession: ProviderAuthSession {
 
     static func cursorPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
-            isDomain: { domain in Domain.matches(domain, hosts: cursorHosts) },
+            isDomain: { domain in Self.isCursorDomain(domain) },
             isPreferredSessionCookie: {
                 $0.name == "WorkosCursorSessionToken"
                     || $0.name.lowercased() == "workoscursorsessiontoken"
@@ -39,7 +39,7 @@ final class CursorAuthSession: ProviderAuthSession {
             extraStoreKeys: [],
             signOutHosts: cursorHosts,
             capturePolicy: cursorPolicy(),
-            isDomain: { domain in Domain.matches(domain, hosts: cursorHosts) }
+            isDomain: { domain in Self.isCursorDomain(domain) }
         )
     }
 

@@ -15,10 +15,8 @@ enum PanelTypography {
     static let captionSemibold = Font.system(size: 11, weight: .semibold)
     /// Chart axis / dense tertiary marks.
     static let micro = Font.system(size: 10)
-    /// Stats-sheet label and value. Value matches `bodyDigit` so stats
-    /// numbers are the same size as other numbers in the panel.
+    /// Stats-sheet label. Numbers use `bodyDigit` so they match the rest of the panel.
     static let metricLabel = Font.system(size: 12)
-    static let metricValue = Font.system(size: 12, weight: .semibold).monospacedDigit()
 }
 
 /// Shared vertical-stem size for Grok daily bars and Overview hourly bars.

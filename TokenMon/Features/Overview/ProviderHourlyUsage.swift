@@ -34,10 +34,6 @@ struct ProviderHourUsage: Identifiable, Hashable, Sendable {
 
     var id: Int { hour }
 
-    var openCodeSharePercent: Double {
-        openCodeGoSharePercent + openCodeZenSharePercent
-    }
-
     var grokActivity: Double { activity * grokSharePercent / 100 }
     var openCodeGoActivity: Double { activity * openCodeGoSharePercent / 100 }
     var openCodeZenActivity: Double { activity * openCodeZenSharePercent / 100 }

@@ -60,26 +60,4 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     func polls(_ provider: MonitorProvider) -> Bool {
         self == provider || self == .overview
     }
-
-    /// Public dashboard / console URL for “Visit website”.
-    var websiteURL: URL? {
-        switch self {
-        case .overview:
-            return nil
-        case .grok:
-            return URL(string: "https://grok.com/?_s=usage")
-        case .opencode:
-            return URL(string: "https://opencode.ai")
-        case .cursor:
-            return URL(string: "https://cursor.com/dashboard/usage")
-        case .claude:
-            return URL(string: "https://claude.ai/settings/usage")
-        case .chatgpt:
-            return URL(string: "https://chatgpt.com/codex")
-        case .openrouter:
-            return URL(string: "https://openrouter.ai/credits")
-        case .grokbot:
-            return URL(string: "https://cursor.com/bot")
-        }
-    }
 }
