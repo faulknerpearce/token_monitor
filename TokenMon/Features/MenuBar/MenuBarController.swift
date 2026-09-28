@@ -109,15 +109,23 @@ final class MenuBarController: NSObject, ObservableObject {
     }
 
     @objc private func handleStatusItemClick(_ sender: Any?) {
+        guard let button = statusItem.button else { return }
+        let clicked = clickedProvider(in: button)
+
         if panel.isVisible {
+            // Switch tabs in place when another provider's bar is clicked;
+            // only toggle closed when the active provider (or a miss) is clicked.
+            if let clicked, clicked != model.settings.selectedProvider {
+                model.settings.selectedProvider = clicked
+                return
+            }
             hidePanel()
             return
         }
-        guard let button = statusItem.button else { return }
 
         // Open on the provider whose bar was clicked; a miss keeps the selection.
-        if let provider = clickedProvider(in: button) {
-            model.settings.selectedProvider = provider
+        if let clicked {
+            model.settings.selectedProvider = clicked
         }
         showPanel()
     }
@@ -182,16 +190,29 @@ final class MenuBarController: NSObject, ObservableObject {
     }
 
     /// Maps the click's x onto the status-image coordinate space and resolves the
-    /// provider segment under it.
+    /// provider segment under it. Uses gap-tolerant snapping so clicks landing
+    /// in the inter-segment gap, the trailing image padding, or a few points
+    /// of `variableLength` button padding still select the adjacent provider.
     private func clickedProvider(in button: NSStatusBarButton) -> MonitorProvider? {
-        guard let event = NSApp.currentEvent else { return nil }
-        let pointInButton = button.convert(event.locationInWindow, from: nil)
-        // The button is sized to the bitmap, but center the image defensively in
-        // case AppKit insets it.
-        let imageWidth = button.image?.size.width ?? button.bounds.width
-        let imageOriginX = (button.bounds.width - imageWidth) / 2
+        guard let window = button.window else { return nil }
+        // `NSApp.currentEvent` is unreliable for status items: its
+        // `locationInWindow` reports the button's center rather than the click,
+        // so every segment would resolve to the same provider. Read the live
+        // pointer position instead and map it through the window.
+        let pointInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let pointInButton = button.convert(pointInWindow, from: nil)
+        // Map into the drawn bitmap's coordinate space. The button is wider than
+        // the image (AppKit pads it), so ask the cell where the image actually
+        // sits rather than assuming it is centered.
+        let imageOriginX: CGFloat
+        if let cell = button.cell as? NSButtonCell {
+            imageOriginX = cell.imageRect(forBounds: button.bounds).minX
+        } else {
+            let imageWidth = button.image?.size.width ?? button.bounds.width
+            imageOriginX = (button.bounds.width - imageWidth) / 2
+        }
         let xInImage = pointInButton.x - imageOriginX
-        return MenuBarStatusRenderer.provider(atX: xInImage, in: regions)
+        return MenuBarStatusRenderer.providerSnapped(atX: xInImage, in: regions)
     }
 }
 

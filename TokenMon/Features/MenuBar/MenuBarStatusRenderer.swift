@@ -475,6 +475,36 @@ enum MenuBarStatusRenderer {
         regions.first { x >= $0.minX && x <= $0.maxX }?.provider
     }
 
+    /// Gap-tolerant variant of `provider(atX:in:)` for live click handling.
+    ///
+    /// The composite layout leaves a `segmentGap` between provider spans plus a
+    /// couple points of trailing image padding, and a `variableLength` status
+    /// item can add a few points of button padding around the bitmap. A click
+    /// landing in one of those dead zones should still select the adjacent
+    /// provider rather than keeping a stale tab. Far misses (beyond
+    /// `tolerance`) still return nil so stray clicks do not switch tabs.
+    static func providerSnapped(atX x: CGFloat, in regions: [Region], tolerance: CGFloat = 8) -> MonitorProvider? {
+        if let exact = provider(atX: x, in: regions) { return exact }
+        var bestProvider: MonitorProvider?
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for region in regions {
+            let distance: CGFloat
+            if x < region.minX {
+                distance = region.minX - x
+            } else if x > region.maxX {
+                distance = x - region.maxX
+            } else {
+                distance = 0
+            }
+            if distance < bestDistance {
+                bestDistance = distance
+                bestProvider = region.provider
+            }
+        }
+        guard let bestProvider, bestDistance <= tolerance else { return nil }
+        return bestProvider
+    }
+
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
     ///
     /// All selections render through this template so the status item width never

@@ -191,6 +191,42 @@ final class MenuBarStatusRendererTests: XCTestCase {
         XCTAssertFalse(disabled.regions.map(\.provider).contains(.claude))
     }
 
+    // MARK: - Snapped hit-testing (live click path)
+
+    /// Clicks landing in the inter-segment gap still select the adjacent
+    /// provider instead of keeping a stale tab.
+    func testSnappedProviderResolvesGapClicks() {
+        let status = renderStatus(provider: .grok, showSelectedProvider: false, showGrokbotBar: true)
+        XCTAssertGreaterThanOrEqual(status.regions.count, 2)
+        for index in 0 ..< (status.regions.count - 1) {
+            let gapMid = (status.regions[index].maxX + status.regions[index + 1].minX) / 2
+            // Only meaningful when the layout actually leaves a gap.
+            guard status.regions[index + 1].minX - status.regions[index].maxX > 0.5 else { continue }
+            XCTAssertNil(MenuBarStatusRenderer.provider(atX: gapMid, in: status.regions))
+            XCTAssertNotNil(MenuBarStatusRenderer.providerSnapped(atX: gapMid, in: status.regions))
+        }
+    }
+
+    /// Clicks a few points into the button padding around the bitmap still
+    /// select the edge provider; far misses still return nil.
+    func testSnappedProviderHandlesEdgePaddingButRejectsFarMisses() {
+        let status = renderStatus(provider: .grok, showSelectedProvider: false, showGrokbotBar: true)
+        guard let first = status.regions.first, let last = status.regions.last else {
+            XCTFail("Expected composite regions")
+            return
+        }
+        XCTAssertEqual(
+            MenuBarStatusRenderer.providerSnapped(atX: first.minX - 4, in: status.regions),
+            first.provider
+        )
+        XCTAssertEqual(
+            MenuBarStatusRenderer.providerSnapped(atX: last.maxX + 2, in: status.regions),
+            last.provider
+        )
+        XCTAssertNil(MenuBarStatusRenderer.providerSnapped(atX: last.maxX + 50, in: status.regions))
+        XCTAssertNil(MenuBarStatusRenderer.providerSnapped(atX: -50, in: status.regions))
+    }
+
     private func renderStatus(
         provider: MonitorProvider,
         showSelectedProvider: Bool,
