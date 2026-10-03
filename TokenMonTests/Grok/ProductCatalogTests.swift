@@ -61,4 +61,26 @@ final class ProductCatalogTests: XCTestCase {
         let result = ProductCatalog.panelProducts(products, visible: ["chat"])
         XCTAssertEqual(result.map(\.id), ["chat"])
     }
+
+    /// The Categories card always shows Chat, Build, Imagine, and Voice — absent
+    /// or unused products fall back to a 0% placeholder; API and Other never show.
+    func testCategoryProductsAlwaysIncludesTheFourCategories() {
+        let products = [
+            product("chat", 40),
+            product("api", 8),
+            product("other", 7)
+        ]
+        let result = ProductCatalog.categoryProducts(products, visible: Set(ProductCatalog.knownIDs))
+        XCTAssertEqual(result.map(\.id), ["chat", "build", "imagine", "voice"])
+        XCTAssertEqual(result.map(\.percentOfPool), [40, 0, 0, 0])
+    }
+
+    /// Hidden categories stay hidden, even the 0% placeholders.
+    func testCategoryProductsRespectsVisibility() {
+        let result = ProductCatalog.categoryProducts(
+            [product("chat", 40)],
+            visible: ["chat", "voice"]
+        )
+        XCTAssertEqual(result.map(\.id), ["chat", "voice"])
+    }
 }

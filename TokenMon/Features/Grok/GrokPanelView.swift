@@ -57,6 +57,10 @@ struct GrokPanelView: View {
             snapshot.products,
             visible: settings.visibleProductIDs
         )
+        let categoryProducts = ProductCatalog.categoryProducts(
+            products,
+            visible: settings.visibleProductIDs
+        )
         let week = DailyUsageBuilder.week(
             history: history.recent.reversed(),
             current: snapshot,
@@ -81,12 +85,14 @@ struct GrokPanelView: View {
                 }
             }
 
-            PanelCard {
-                PanelSectionHeader(title: "Categories")
-                HStack(spacing: 12) {
-                    ForEach(products) { product in
-                        CategoryRow(product: product)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            if !categoryProducts.isEmpty {
+                PanelCard {
+                    PanelSectionHeader(title: "Categories")
+                    HStack(spacing: 12) {
+                        ForEach(categoryProducts) { product in
+                            CategoryRow(product: product)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }

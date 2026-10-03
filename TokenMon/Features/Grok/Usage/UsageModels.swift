@@ -45,6 +45,8 @@ enum ProductCatalog {
     static let knownIDs = ["build", "api", "chat", "imagine", "voice", "other"]
     /// Visual priority for bars / chips (matches grok.com: Chat, Build, Imagine, …).
     static let displayOrder = ["chat", "build", "imagine", "voice", "api", "other"]
+    /// Product IDs shown in the panel's Categories card (excludes API and Other).
+    static let categoryIDs = ["chat", "build", "imagine", "voice"]
 
     static func displayName(for id: String) -> String {
         switch id.lowercased() {
@@ -88,6 +90,23 @@ enum ProductCatalog {
         filtered(products, visible: visible, threshold: 0)
     }
 
+    /// One row per canonical category (Chat, Build, Imagine, Voice) in display
+    /// order, using the snapshot's value when present and a 0% placeholder when
+    /// the product is absent or unused, limited to the user's visible set.
+    static func categoryProducts(
+        _ products: [ProductUsage],
+        visible: Set<String>
+    ) -> [ProductUsage] {
+        let byID = Dictionary(
+            products.map { ($0.id.lowercased(), $0) },
+            uniquingKeysWith: { _, last in last }
+        )
+        return categoryIDs.compactMap { id in
+            guard visible.contains(id) else { return nil }
+            return byID[id]
+                ?? ProductUsage(id: id, displayName: displayName(for: id), percentOfPool: 0)
+        }
+    }
     /// Products that are both user-visible and contribute at least `threshold` to
     /// the pool, in canonical display order. Used by the menu bar renderer and panels.
     static func filtered(
