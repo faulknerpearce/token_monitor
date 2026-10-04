@@ -762,4 +762,130 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(caption.hasSuffix("over today's allowance"), "got: \(caption)")
         XCTAssertFalse(caption.contains("used"), "must not report the used amount, got: \(caption)")
     }
+
+    // MARK: - Provider-initiated early resets
+
+    /// Oct 2 2026 is a Friday. The old window (Sep 30 – Oct 6) was reset early on
+    /// Oct 2 and the provider reports the new period as Oct 2 – Oct 8.
+    func testWeeklyWindowAnchorsToEarlyResetStartAndLeadsWithPriorDays() {
+        let spent = [
+            calendar.startOfDay(for: date(2026, 9, 30)): 12.0,
+            calendar.startOfDay(for: date(2026, 10, 1)): 18.0,
+            calendar.startOfDay(for: date(2026, 10, 2)): 3.0
+        ]
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 100,
+            daysInPeriod: 7,
+            resetsAt: date(2026, 10, 9, hour: 18),
+            spentByDay: spent,
+            windowStart: date(2026, 10, 2, hour: 18),
+            interruptedWindowStart: date(2026, 9, 30, hour: 11),
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(days.count, 9)
+        XCTAssertEqual(days.filter(\.isPriorWindow).map(\.spentUSD), [12, 18])
+        let window = days.filter { !$0.isPriorWindow }
+        XCTAssertEqual(window.count, 7)
+        XCTAssertEqual(window.first?.date, calendar.startOfDay(for: date(2026, 10, 2)))
+        XCTAssertEqual(window.first?.spentUSD, 3)
+        XCTAssertEqual(window.last?.date, calendar.startOfDay(for: date(2026, 10, 8)))
+        XCTAssertEqual(
+            DailyBudget.weeklyPacePeriodStart(days: days, calendar: calendar),
+            calendar.startOfDay(for: date(2026, 10, 2))
+        )
+    }
+
+    /// Prior-window days never feed the new window's elapsed-day count or allowance.
+    func testPaceHeadroomIgnoresPriorWindowDays() throws {
+        let daily = 100.0 / 7
+        var days = (0..<2).map {
+            DailyBudgetDay(
+                date: calendar.startOfDay(for: date(2026, 9, 30 + $0)),
+                spentUSD: 20,
+                budgetUSD: daily,
+                isPriorWindow: true
+            )
+        }
+        days += (0..<7).map {
+            DailyBudgetDay(
+                date: calendar.startOfDay(for: date(2026, 10, 2 + $0)),
+                spentUSD: 0,
+                budgetUSD: daily
+            )
+        }
+        let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
+            days: days,
+            periodConsumed: 5,
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        ))
+        // Oct 2 and Oct 3 have elapsed in the new window; Sep 30 / Oct 1 do not count.
+        XCTAssertEqual(pace.earned, daily * 2, accuracy: 1e-9)
+        XCTAssertEqual(pace.headroomToday, daily * 2 - 5, accuracy: 1e-9)
+    }
+
+    /// Without an early-reset window start nothing changes: bars follow `resetsAt`.
+    func testWeeklyWindowWithoutWindowStartIsUnchanged() {
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 100,
+            daysInPeriod: 7,
+            resetsAt: date(2026, 10, 9, hour: 18),
+            spentByDay: [:],
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertFalse(days.contains(where: \.isPriorWindow))
+        XCTAssertEqual(days.first?.date, calendar.startOfDay(for: date(2026, 10, 2)))
+    }
+
+    /// A window start that predates the one implied by `resetsAt` (or a future one)
+    /// never drags the bars backwards.
+    func testWindowStartNeverMovesBarsBeforeResetImpliedStart() {
+        let earlier = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 100,
+            daysInPeriod: 7,
+            resetsAt: date(2026, 10, 9, hour: 18),
+            spentByDay: [:],
+            windowStart: date(2026, 9, 25),
+            interruptedWindowStart: date(2026, 9, 20),
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(earlier.first?.date, calendar.startOfDay(for: date(2026, 10, 2)))
+        XCTAssertFalse(earlier.contains(where: \.isPriorWindow))
+
+        let future = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 100,
+            daysInPeriod: 7,
+            resetsAt: date(2026, 10, 9, hour: 18),
+            spentByDay: [:],
+            windowStart: date(2026, 10, 5),
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(future.first?.date, calendar.startOfDay(for: date(2026, 10, 2)))
+    }
+
+    /// Monthly (Monday–Sunday) bars: days of the interrupted cycle before the new
+    /// cycle start show their preserved spend, flagged as prior-window history.
+    func testMondayWeekShowsPriorWindowDaysBeforeNewCycleStart() {
+        let days = DailyBudget.buildMondayWeekDays(
+            periodStart: date(2026, 10, 2, hour: 18),
+            periodEnd: date(2026, 11, 2, hour: 18),
+            limitUSD: 100,
+            spentByDay: [calendar.startOfDay(for: date(2026, 10, 3)): 1.5],
+            priorWindowSpentByDay: [calendar.startOfDay(for: date(2026, 9, 30)): 4, calendar.startOfDay(for: date(2026, 10, 1)): 6],
+            now: date(2026, 10, 3, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        // Week of Mon Sep 28: Sep 28, 29 (no prior data), Sep 30, Oct 1 prior, Oct 2+ live.
+        XCTAssertEqual(days.map(\.isPriorWindow), [false, false, true, true, false, false, false])
+        XCTAssertEqual(days[2].spentUSD, 4)
+        XCTAssertEqual(days[3].spentUSD, 6)
+        XCTAssertEqual(days[5].spentUSD, 1.5)
+    }
 }

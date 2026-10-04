@@ -62,6 +62,14 @@ than a decode failure.
 absent the snapshot carries `resetsAt == nil` and the panel withholds both the
 weekly caption and the Daily Budget bars — no calendar-derived substitute.
 
+**Early resets:** the provider may reset everyone mid-cycle. It shows up as
+`current_period_start` jumping forward to a date before the previous
+`next_reset_timestamp_utc`, together with a used-% drop of at least
+`Percent.resetDropFloor`. Detection uses only those two fields (never the
+calendar); see `QuotaWindowTransition` and the data-flow notes in
+`ARCHITECTURE.md`. A payload whose reset instant stays put while the period
+start moves still anchors the bars to the new start, over 7 bars.
+
 ### Daily use — status
 
 **No confirmed public daily series endpoint.**

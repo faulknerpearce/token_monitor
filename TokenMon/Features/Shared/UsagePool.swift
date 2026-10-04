@@ -37,10 +37,10 @@ extension WeeklyUsageSnapshot {
 }
 
 extension GrokbotSnapshot {
-    /// The period length comes from the payload's own start → reset span, so a
-    /// non-weekly plan still labels correctly.
+    /// The period length comes from the payload's own start → reset span (not the
+    /// sanitized bar count), so a non-weekly plan still labels correctly.
     var usagePool: UsagePool {
-        let days = daysInPeriod()
+        let days = reportedSpanDays() ?? 7
         if days >= 25 { return .monthly }
         if days <= 10 { return .weekly }
         return .mixed

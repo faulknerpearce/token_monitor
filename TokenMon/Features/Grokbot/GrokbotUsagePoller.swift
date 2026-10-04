@@ -98,26 +98,31 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             lastRefreshedAt = Date()
             logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
-            // A rollover moves the reset instant forward by roughly a whole period;
-            // reset the accumulated deltas and baseline so the fresh window's first
-            // sample is credited whole.
-            if Self.isNewWindow(
-                previousResetsAt: weeklyResetsAt,
-                nextResetsAt: fresh.resetsAt,
-                periodDays: fresh.daysInPeriod()
-            ) {
-                hourly.beginNewWindow()
-                daily.beginNewWindow()
-            }
             if let resetsAt = fresh.resetsAt {
                 weeklyResetsAt = resetsAt
             }
+            // The daily store recognizes a normal rollover or a provider-initiated
+            // early reset from the payload's own start / reset instants and keeps
+            // the earlier days as history. Hourly deltas restart their baseline
+            // either way; an early reset keeps the hours already recorded today.
+            let transition = daily.record(
+                windowUsedPercent: fresh.usedPercent,
+                at: fresh.fetchedAt,
+                window: QuotaWindow(start: fresh.periodStart, resetsAt: fresh.resetsAt),
+                periodDays: fresh.daysInPeriod()
+            )
+            switch transition {
+            case .none: break
+            case .rollover: hourly.beginNewWindow()
+            case .earlyReset: hourly.beginNewWindow(keepingHours: true)
+            }
             hourly.record(usedPercent: fresh.usedPercent, at: fresh.fetchedAt)
-            daily.record(windowUsedPercent: fresh.usedPercent, at: fresh.fetchedAt)
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
                 resetsAt: fresh.resetsAt ?? weeklyResetsAt,
                 daysInPeriod: fresh.daysInPeriod(),
+                windowStart: daily.windowStart,
+                interruptedWindowStart: daily.interruptedWindowStart,
                 now: fresh.fetchedAt
             )
         } catch let error as ProviderError {
@@ -148,17 +153,19 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// True when `nextResetsAt` represents a genuinely new allowance period
-    /// rather than the same period's reset instant creeping forward. A rollover
-    /// advances the anchor by at least half the period.
+    /// rather than the same period's reset instant creeping forward. Forwards to
+    /// the shared rule used by `DailyQuotaDeltaStore`.
     static func isNewWindow(
         previousResetsAt: Date?,
         nextResetsAt: Date?,
         periodDays: Int,
         calendar: Calendar = .current
     ) -> Bool {
-        guard let previous = previousResetsAt, let next = nextResetsAt, next > previous else { return false }
-        let threshold = TimeInterval(max(1, periodDays)) * 86_400 * 0.5
-        return next.timeIntervalSince(previous) >= threshold
+        QuotaWindowTransition.isRollover(
+            previousResetsAt: previousResetsAt,
+            nextResetsAt: nextResetsAt,
+            periodDays: periodDays
+        )
     }
 
     /// Daily bars for the current allowance period, anchored to the provider's
@@ -166,12 +173,16 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// a rolling window is never substituted for the real period.
     ///
     /// `daysInPeriod` comes from the payload's own
-    /// `current_period_start` → `next_reset_timestamp_utc` span, so a plan on a
-    /// non-7-day cadence still paces correctly.
+    /// `current_period_start` → `next_reset_timestamp_utc` span (see
+    /// `GrokbotSnapshot.daysInPeriod`). `windowStart` / `interruptedWindowStart`
+    /// anchor the bars to a window the provider began early and lead them with the
+    /// preserved days before it (see `DailyBudget.buildWeeklyWindowDays`).
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,
         daysInPeriod: Int = 7,
+        windowStart: Date? = nil,
+        interruptedWindowStart: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
@@ -181,6 +192,8 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             daysInPeriod: daysInPeriod,
             resetsAt: resetsAt,
             spentByDay: spentByDay,
+            windowStart: windowStart,
+            interruptedWindowStart: interruptedWindowStart,
             now: now,
             calendar: calendar
         )

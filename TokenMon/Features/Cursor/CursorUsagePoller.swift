@@ -115,13 +115,22 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             if let cycleEnd = snap.billingCycleEnd {
                 billingCycleEnd = cycleEnd
             }
-            daily.record(windowUsedPercent: snap.usedPercent, at: snap.fetchedAt)
+            // The store spots a billing-cycle rollover or a provider-initiated early
+            // reset from the cycle start/end and keeps earlier days as history.
+            let cycleEnd = snap.billingCycleEnd ?? billingCycleEnd
+            daily.record(
+                windowUsedPercent: snap.usedPercent,
+                at: snap.fetchedAt,
+                window: QuotaWindow(start: snap.billingCycleStart, resetsAt: cycleEnd),
+                periodDays: Self.cycleLengthDays(start: snap.billingCycleStart, end: cycleEnd)
+            )
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 observedByDay: daily.spentByDay,
+                interruptedWindowStart: daily.interruptedWindowStart,
                 estimatedWeightByDay: estimatedWeightByDay,
                 usedPercent: snap.usedPercent,
                 billingCycleStart: snap.billingCycleStart,
-                billingCycleEnd: snap.billingCycleEnd ?? billingCycleEnd,
+                billingCycleEnd: cycleEnd,
                 now: snap.fetchedAt
             )
             lastError = nil
@@ -160,6 +169,12 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
     }
 
+    /// Billing-cycle length in days for rollover detection; 30 when either end is unknown.
+    private static func cycleLengthDays(start: Date?, end: Date?) -> Int {
+        guard let start, let end, end > start else { return 30 }
+        return DailyBudget.daysInBillingCycle(start: start, end: end)
+    }
+
     /// Daily bars for the current **billing cycle**.
     ///
     /// Days the app observed directly use the real day-over-day growth of the
@@ -169,8 +184,14 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// pool %, they are rescaled down to match instead of overshooting. Returns
     /// nil when the subscription month cannot be resolved (a calendar month is
     /// never substituted).
+    ///
+    /// After an early provider reset, `interruptedWindowStart` marks the cycle
+    /// that was cut short: its observed days that fall before the new cycle start
+    /// are shown (dimmed) as history in the displayed Monday–Sunday week, but
+    /// never count toward the new cycle's pool math.
     static func buildDailyBudgetDays(
         observedByDay: [Date: Double],
+        interruptedWindowStart: Date? = nil,
         estimatedWeightByDay: [Date: Double],
         usedPercent: Double,
         billingCycleStart: Date?,
@@ -223,11 +244,17 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             }
         }
 
+        var prior: [Date: Double] = [:]
+        if let interruptedWindowStart {
+            let from = calendar.startOfDay(for: interruptedWindowStart)
+            prior = observedByDay.filter { $0.key >= from && $0.key < cycleStartDay }
+        }
         return DailyBudget.buildMondayWeekDays(
             periodStart: bounds.start,
             periodEnd: bounds.end,
             limitUSD: 100,
             spentByDay: blended,
+            priorWindowSpentByDay: prior,
             now: now,
             calendar: calendar
         )

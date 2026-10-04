@@ -106,11 +106,20 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             if let weeklyPercent = response.sevenDay?.usedPercent {
                 noteWeeklyResetAdvance(response.sevenDay?.resetsAt)
-                daily.record(windowUsedPercent: weeklyPercent, at: fetchedAt)
+                // Claude sends only `resets_at`, so a rollover or early reset is
+                // recognized from a moved reset instant plus a used-% drop; the
+                // store keeps earlier days as history.
+                daily.record(
+                    windowUsedPercent: weeklyPercent,
+                    at: fetchedAt,
+                    window: QuotaWindow(start: nil, resetsAt: response.sevenDay?.resetsAt)
+                )
             }
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
                 resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
+                windowStart: daily.windowStart,
+                interruptedWindowStart: daily.interruptedWindowStart,
                 now: fetchedAt
             )
         } catch let error as ProviderError {
@@ -147,8 +156,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
     /// weekly pool is a rolling window whose reset time advances with usage, so a
     /// forward move is not necessarily a fresh period. Old-period days fall outside
-    /// the anchored window and are hidden; a true reset is captured by the
-    /// drop-as-reset credit in `DailyQuotaDeltaStore`.
+    /// the anchored window and are hidden. A true reset is recognized by
+    /// `DailyQuotaDeltaStore` only when the used % also drops (rollover, or an
+    /// early provider reset); it then keeps earlier days as prior-window history.
     private func noteWeeklyResetAdvance(_ resetsAt: Date?) {
         guard let resetsAt else { return }
         weeklyResetsAt = resetsAt
@@ -158,9 +168,14 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// time; returns [] when no provider reset has been observed (a rolling 7-day
     /// window is never substituted). The pool is split evenly across the period's
     /// days, so each day's budget is 1/7th.
+    ///
+    /// `windowStart` / `interruptedWindowStart` come from the daily store after a
+    /// rollover or early reset (see `DailyBudget.buildWeeklyWindowDays`).
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,
+        windowStart: Date? = nil,
+        interruptedWindowStart: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
@@ -170,6 +185,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             daysInPeriod: 7,
             resetsAt: resetsAt,
             spentByDay: spentByDay,
+            windowStart: windowStart,
+            interruptedWindowStart: interruptedWindowStart,
             now: now,
             calendar: calendar
         )

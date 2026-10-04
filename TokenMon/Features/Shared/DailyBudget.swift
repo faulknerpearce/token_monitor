@@ -9,6 +9,9 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     var date: Date
     var spentUSD: Double
     var budgetUSD: Double
+    /// True for a preserved day of the window an early provider reset cut short.
+    /// It is history only: it never counts toward the new window's pace or elapsed days.
+    var isPriorWindow = false
 
     var percentOfBudget: Double {
         guard budgetUSD > 0 else { return 0 }
@@ -88,23 +91,54 @@ enum DailyBudget {
     /// opened (a Thursday reset → Thursday first) and stays there until the
     /// reset instant, when the window rolls to the new period. A stale
     /// `resetsAt` advances by whole periods so the window still contains today.
+    ///
+    /// `windowStart` is the start of a window the provider began on its own
+    /// (rollover or early reset). When it is later than the start implied by
+    /// `resetsAt` it wins, so an early reset that left `resetsAt` unchanged still
+    /// anchors the bars (and pace) to the new period start. When
+    /// `interruptedWindowStart` is also given and the bars begin exactly at
+    /// `windowStart`, the preserved days of the interrupted window (at most
+    /// `daysInPeriod - 1` of them) lead the result flagged `isPriorWindow`.
     static func buildWeeklyWindowDays(
         limitUSD: Double,
         daysInPeriod: Int,
         resetsAt: Date,
         spentByDay: [Date: Double],
+        windowStart: Date? = nil,
+        interruptedWindowStart: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
         let count = max(1, daysInPeriod)
         let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: count)
-        let weekStart = weeklyPeriodStart(
+        var weekStart = weeklyPeriodStart(
             resetsAt: resetsAt,
             daysInPeriod: count,
             now: now,
             calendar: calendar
         )
+        let anchoredToWindowStart: Bool
+        if let windowStart, windowStart <= now, calendar.startOfDay(for: windowStart) >= weekStart {
+            weekStart = calendar.startOfDay(for: windowStart)
+            anchoredToWindowStart = true
+        } else {
+            anchoredToWindowStart = false
+        }
         var days: [DailyBudgetDay] = []
+        if anchoredToWindowStart, let interruptedWindowStart {
+            let earliest = calendar.date(byAdding: .day, value: -(count - 1), to: weekStart) ?? weekStart
+            let first = max(calendar.startOfDay(for: interruptedWindowStart), earliest)
+            let priorCount = calendar.dateComponents([.day], from: first, to: weekStart).day ?? 0
+            for offset in 0..<max(0, priorCount) {
+                let key = calendar.startOfDay(for: calendar.date(byAdding: .day, value: offset, to: first) ?? first)
+                days.append(DailyBudgetDay(
+                    date: key,
+                    spentUSD: spentByDay[key] ?? 0,
+                    budgetUSD: perDay,
+                    isPriorWindow: true
+                ))
+            }
+        }
         for offset in 0..<count {
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
@@ -152,11 +186,17 @@ enum DailyBudget {
 
     /// Monday–Sunday bars for a subscription month. Days outside the billing
     /// period are present so the week still starts on Monday, with 0 spend.
+    ///
+    /// `priorWindowSpentByDay` holds preserved days of a window an early provider
+    /// reset cut short. Any such day that falls before `periodStart` inside the
+    /// displayed week is shown with its recorded spend and flagged `isPriorWindow`;
+    /// without it, days before the billing period read 0.
     static func buildMondayWeekDays(
         periodStart: Date,
         periodEnd: Date,
         limitUSD: Double,
         spentByDay: [Date: Double],
+        priorWindowSpentByDay: [Date: Double] = [:],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
@@ -178,6 +218,9 @@ enum DailyBudget {
         return (0..<7).map { offset in
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
+            if key < calendar.startOfDay(for: periodStart), let prior = priorWindowSpentByDay[key] {
+                return DailyBudgetDay(date: key, spentUSD: prior, budgetUSD: perDay, isPriorWindow: true)
+            }
             return DailyBudgetDay(date: key, spentUSD: spentInPeriod[key] ?? 0, budgetUSD: perDay)
         }
     }
@@ -296,11 +339,13 @@ enum DailyBudget {
 
     /// Weekly providers (Claude / Grok): the painted window *is* the period, so
     /// the first bar is the start. `resetsAt` is ignored for start resolution.
+    /// Preserved prior-window days lead the bars after an early reset but belong
+    /// to the old pool, so the start is the first bar that is not one of them.
     static func weeklyPacePeriodStart(
         days: [DailyBudgetDay],
         calendar: Calendar = .current
     ) -> Date? {
-        days.first.map { calendar.startOfDay(for: $0.date) }
+        days.first { !$0.isPriorWindow }.map { calendar.startOfDay(for: $0.date) }
     }
 
     /// Monthly providers (Cursor / OpenCode): always a subscription/billing month.
@@ -388,6 +433,7 @@ enum DailyBudget {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> PaceHeadroom? {
+        let days = days.filter { !$0.isPriorWindow }
         guard let first = days.first, first.budgetUSD > 0 else { return nil }
         let today = calendar.startOfDay(for: now)
         let periodLength = max(

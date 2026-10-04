@@ -92,8 +92,14 @@ final class HourlyDeltaActivityStore: ObservableObject {
 
     /// Clears the finished window's hourly growth and resets the utilization
     /// baseline so the first sample of the new window is credited in full.
-    func beginNewWindow() {
-        hourWeights = Array(repeating: 0, count: 24)
+    ///
+    /// After an early provider reset pass `keepingHours: true`: the hours already
+    /// recorded today are real activity from before the reset, so only the
+    /// baseline restarts and the hourly chart keeps them.
+    func beginNewWindow(keepingHours: Bool = false) {
+        if !keepingHours {
+            hourWeights = Array(repeating: 0, count: 24)
+        }
         lastUsedPercent = 0
         persist()
     }

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Daily-budget bar chart for providers whose quota window is a **week**
 /// (Claude). Bars usually cover the full period; pace uses the first bar as
-/// period start.
+/// period start. After an early provider reset, preserved prior-window days
+/// lead the bars (dimmed) and pace starts at the first bar that is not one.
 struct WeeklyDailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
@@ -182,7 +183,10 @@ struct DailyBudgetBarsView: View {
                 Color.primary.opacity(0.12)
 
                 if fraction > 0.005 && !isFuture {
+                    // Prior-window history is dimmed: it belongs to the pool an
+                    // early provider reset ended, not the one being paced.
                     accent
+                        .opacity(day.isPriorWindow ? 0.45 : 1)
                         .frame(height: min(trackHeight, fillHeight))
                 }
             }
@@ -233,6 +237,9 @@ struct DailyBudgetBarsView: View {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "EEE, MMM d"
         let dateStr = formatter.string(from: day.date)
+        if day.isPriorWindow {
+            return String(format: "%@: %.1f%% of the %@ pool before the provider reset it early", dateStr, day.spentUSD, allowanceNoun)
+        }
         if day.budgetUSD <= 0 { return "\(dateStr): no budget" }
         if day.spentUSD <= 0.001 { return String(format: "%@: used 0%% of %.1f%% allowance", dateStr, day.budgetUSD) }
         let ofAllowance = Int((day.spentUSD / day.budgetUSD * 100).rounded())
