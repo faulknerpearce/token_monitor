@@ -43,17 +43,14 @@ struct CursorPanelView: View {
                     )
                 }
 
-                if let days = poller.dailyBudgetDays, !days.isEmpty {
-                    PanelCard {
-                        MonthlyDailyBudgetBarsView(
-                            days: days,
-                            accent: ProviderColors.cursorColor,
-                            periodUsedPercent: cursorModelsPercent,
-                            periodStart: snapshot.billingCycleStart,
-                            resetsAt: snapshot.billingCycleEnd
-                        )
-                    }
-                }
+                NavigableDailyBudgetCard(
+                    style: .monthly,
+                    accent: ProviderColors.cursorColor,
+                    periodUsedPercent: cursorModelsPercent,
+                    periodStart: snapshot.billingCycleStart,
+                    resetsAt: snapshot.billingCycleEnd,
+                    daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) ?? [] }
+                )
 
                 if let stats = snapshot.costStats {
                     CursorStatsGrid(stats: stats)

@@ -56,19 +56,25 @@ struct GrokbotSnapshot: Codable, Hashable, Sendable {
         Percent.clamp(100 - usedPercent)
     }
 
-    /// Length of the current allowance period, derived from the provider's own
-    /// `current_period_start` → `next_reset_timestamp_utc` pair. Uses calendar
-    /// days (start-of-day) so a 7×24h window that is a few hours short still
-    /// counts as 7 bars. Falls back to 7 only when the payload gave a reset
-    /// but no period start.
+    /// Length of the current allowance period in calendar days. The Bot pool is
+    /// weekly, so the provider's `current_period_start` → `next_reset_timestamp_utc`
+    /// span is only trusted when it is itself roughly a week (6...8 calendar days,
+    /// which absorbs a window that is a few hours short or long). Any other span —
+    /// a same-day collapse on reset day, a truncated 5-day span, a fortnight —
+    /// is unreliable and falls back to 7, as does a payload missing either end.
     func daysInPeriod(calendar: Calendar = .current) -> Int {
-        guard let periodStart, let resetsAt, resetsAt > periodStart else { return 7 }
-        let days = DailyBudget.daysInBillingCycle(start: periodStart, end: resetsAt, calendar: calendar)
-        // On reset day the payload can report both ends on the same calendar day,
-        // collapsing the span to a single day; treat a sub-2-day span as unreliable
-        // since the pool is weekly.
-        guard days >= 2 else { return 7 }
-        return min(31, days)
+        guard let days = reportedSpanDays(calendar: calendar), (6 ... 8).contains(days) else { return 7 }
+        return days
+    }
+
+    /// Calendar-day span exactly as the payload reports it
+    /// (`current_period_start` → `next_reset_timestamp_utc`), or nil when either
+    /// end is missing or the pair is not ordered. Unlike `daysInPeriod` this is
+    /// not sanitized: the pool label (`usagePool`) follows what the provider says,
+    /// while bars and pace only trust a roughly weekly span.
+    func reportedSpanDays(calendar: Calendar = .current) -> Int? {
+        guard let periodStart, let resetsAt, resetsAt > periodStart else { return nil }
+        return DailyBudget.daysInBillingCycle(start: periodStart, end: resetsAt, calendar: calendar)
     }
 
     static let preview = GrokbotSnapshot(

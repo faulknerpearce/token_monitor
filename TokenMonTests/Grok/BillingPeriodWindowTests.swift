@@ -351,4 +351,54 @@ final class BillingPeriodWindowTests: XCTestCase {
         let localWed = fromLocal.days.first { cal.isDate($0.dayStart, inSameDayAs: wed) }
         XCTAssertEqual(localWed?.totalPercent ?? 0, 15, accuracy: 0.2)
     }
+
+    /// SuperGrok keeps one snapshot per day in SwiftData, so an early provider reset
+    /// needs no wipe: the current window opens on the new period start and the
+    /// previous page still paints the old window's days from the stored snapshots.
+    func testEarlyResetKeepsOldWindowHistoryOnThePreviousPage() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        cal.firstWeekday = 2
+        let iso = ISO8601DateFormatter()
+        let oldResets = try XCTUnwrap(iso.date(from: "2026-10-07T18:05:00Z")) // old window: Sep 30 – Oct 6
+        let newResets = try XCTUnwrap(iso.date(from: "2026-10-09T18:05:00Z")) // reset early on Oct 2
+        let now = try XCTUnwrap(iso.date(from: "2026-10-03T15:00:00Z"))
+        func snap(_ stamp: String, _ used: Double, _ resets: Date) throws -> WeeklyUsageSnapshot {
+            WeeklyUsageSnapshot(
+                fetchedAt: try XCTUnwrap(iso.date(from: stamp)),
+                usedPercent: used,
+                resetsAt: resets,
+                products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: used)]
+            )
+        }
+        let history = [
+            try snap("2026-09-30T12:00:00Z", 10, oldResets),
+            try snap("2026-10-01T12:00:00Z", 30, oldResets),
+            try snap("2026-10-02T20:00:00Z", 3, newResets),
+            try snap("2026-10-03T12:00:00Z", 8, newResets)
+        ]
+
+        let current = try XCTUnwrap(DailyUsageBuilder.week(
+            history: history,
+            current: history.last,
+            weekOffset: 0,
+            resetsAt: newResets,
+            calendar: cal,
+            now: now
+        ))
+        XCTAssertEqual(cal.component(.day, from: current.weekStart), 2)
+        let oct2 = try XCTUnwrap(current.days.first { cal.component(.day, from: $0.dayStart) == 2 })
+        XCTAssertEqual(oct2.totalPercent, 3, accuracy: 0.5)
+
+        let previous = try XCTUnwrap(DailyUsageBuilder.week(
+            history: history,
+            current: history.last,
+            weekOffset: -1,
+            resetsAt: newResets,
+            calendar: cal,
+            now: now
+        ))
+        let oct1 = try XCTUnwrap(previous.days.first { cal.component(.day, from: $0.dayStart) == 1 })
+        XCTAssertEqual(oct1.totalPercent, 20, accuracy: 0.5)
+    }
 }

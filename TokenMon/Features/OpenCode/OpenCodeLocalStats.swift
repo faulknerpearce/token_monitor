@@ -644,7 +644,8 @@ enum OpenCodeLocalStats {
     static func fetchDailySpends(
         from start: Date,
         to end: Date,
-        dbURL: URL = databaseURL
+        dbURL: URL = databaseURL,
+        calendar: Calendar = .current
     ) -> [Date: Double] {
         guard FileManager.default.fileExists(atPath: dbURL.path),
               let db = try? openConnection(at: dbURL) else { return [:] }
@@ -654,7 +655,7 @@ enum OpenCodeLocalStats {
             startMS: Int64(start.timeIntervalSince1970 * 1000),
             endMS: Int64(end.timeIntervalSince1970 * 1000)
         ) else { return [:] }
-        return dailySpendsByDay(rows: rows.filter { goEligibleProvider($0.providerID) })
+        return dailySpendsByDay(rows: rows.filter { goEligibleProvider($0.providerID) }, calendar: calendar)
     }
 
     /// Sums billable Go spend per calendar day, skipping `$0` rows.
@@ -678,21 +679,39 @@ enum OpenCodeLocalStats {
         return byDay
     }
 
+    /// Scaled in-period spends plus unscaled history so the panel can re-slice
+    /// an earlier Monday week without reading SQLite again.
+    struct OpenCodeMonthBudget: Sendable {
+        var days: [DailyBudgetDay]
+        var periodStart: Date
+        /// Percent of the monthly pool, scaled so in-period days sum to the headline used %.
+        var spentPercentByDay: [Date: Double]
+        /// Percent of the monthly limit for days before the period. Not scaled into the headline.
+        var historyPercentByDay: [Date: Double]
+        var knownStart: Date?
+        var resetsAt: Date?
+        var referenceNow: Date
+    }
+
     /// Builds the last-7 daily-budget bars for the Go **subscription** month,
     /// plus that period's start for pace captions.
     ///
     /// Console `periodResetsAt` is authoritative when present; the local
     /// first-Go-session anniversary is the fallback. Returns nil when neither
     /// signal exists.
+    ///
+    /// `weekOffset` selects an earlier Monday week. Days before the billing
+    /// period come from local history and are not mixed into the headline scale.
     static func monthDailyBudgetDays(
         limitUSD: Double,
         usedPercent: Double = 0,
         periodResetsAt: Date? = nil,
+        weekOffset: Int = 0,
         now: Date = Date(),
         spentByDay: [Date: Double]? = nil,
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
-    ) -> (days: [DailyBudgetDay], periodStart: Date)? {
+    ) -> OpenCodeMonthBudget? {
         // Prefer the console billing window when we have it. The per-day shares
         // must cover exactly the days the monthly percent was measured over, or
         // the rescale below spreads the console total across days outside the
@@ -705,14 +724,18 @@ enum OpenCodeLocalStats {
         )
 
         let usdSpends: [Date: Double]
+        var historyUSD: [Date: Double] = [:]
         if let spentByDay {
             usdSpends = spentByDay
         } else if let consoleBounds {
-            usdSpends = fetchDailySpends(
-                from: consoleBounds.start,
-                to: consoleBounds.end,
-                dbURL: dbURL
+            let split = spendHistory(
+                periodStart: consoleBounds.start,
+                periodEnd: consoleBounds.end,
+                dbURL: dbURL,
+                calendar: calendar
             )
+            usdSpends = split.period
+            historyUSD = split.history
         } else {
             usdSpends = (try? fetchMonthDailySpends(dbURL: dbURL, now: now)) ?? [:]
         }
@@ -743,16 +766,34 @@ enum OpenCodeLocalStats {
         }
         let percentLimit: Double = 100 // monthly allocation = 100%
 
-        // Console monthly reset wins: signed-in bars must agree with the Monthly bar.
-        if let periodResetsAt {
-            return DailyBudget.buildSubscriptionMonthLast7Days(
+        func packaged(knownStart: Date?, resetsAt: Date?, historyUSD: [Date: Double]) -> OpenCodeMonthBudget? {
+            let historyPercent: [Date: Double] = limitUSD > 0
+                ? historyUSD.mapValues { $0 / limitUSD * 100 }
+                : [:]
+            guard let built = DailyBudget.buildSubscriptionMonthLast7Days(
                 limitUSD: percentLimit,
                 spentByDay: anchoredPercent,
-                knownStart: nil,
-                resetsAt: periodResetsAt,
+                knownStart: knownStart,
+                resetsAt: resetsAt,
+                historyByDay: historyPercent,
+                weekOffset: weekOffset,
                 now: now,
                 calendar: calendar
+            ) else { return nil }
+            return OpenCodeMonthBudget(
+                days: built.days,
+                periodStart: built.periodStart,
+                spentPercentByDay: anchoredPercent,
+                historyPercentByDay: historyPercent,
+                knownStart: knownStart,
+                resetsAt: resetsAt,
+                referenceNow: now
             )
+        }
+
+        // Console monthly reset wins: signed-in bars must agree with the Monthly bar.
+        if let periodResetsAt {
+            return packaged(knownStart: nil, resetsAt: periodResetsAt, historyUSD: historyUSD)
         }
 
         if FileManager.default.fileExists(atPath: dbURL.path),
@@ -761,18 +802,40 @@ enum OpenCodeLocalStats {
             if let rows = try? readRows(db: db),
                let subscribedAt = earliestGoSessionDate(in: rows) {
                 let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
-                return DailyBudget.buildSubscriptionMonthLast7Days(
-                    limitUSD: percentLimit,
-                    spentByDay: anchoredPercent,
-                    knownStart: month.start,
-                    resetsAt: month.end,
-                    now: now,
-                    calendar: calendar
-                )
+                if spentByDay == nil, historyUSD.isEmpty {
+                    historyUSD = spendHistory(
+                        periodStart: month.start,
+                        periodEnd: month.end,
+                        dbURL: dbURL,
+                        calendar: calendar
+                    ).history
+                }
+                return packaged(knownStart: month.start, resetsAt: month.end, historyUSD: historyUSD)
             }
         }
 
         return nil
+    }
+
+    /// Days of local Go spend kept so the daily-budget arrows can show weeks
+    /// before the current billing period. Matches the quota store's ~30-day
+    /// horizon closely enough for four earlier weeks.
+    private static let priorWeekHistoryDays = 28
+
+    /// Period spends stay inside the billing window so the headline percent is
+    /// not diluted. Earlier days are returned separately for week browsing.
+    private static func spendHistory(
+        periodStart: Date,
+        periodEnd: Date,
+        dbURL: URL,
+        calendar: Calendar
+    ) -> (period: [Date: Double], history: [Date: Double]) {
+        let startDay = calendar.startOfDay(for: periodStart)
+        let lookback = calendar.date(byAdding: .day, value: -priorWeekHistoryDays, to: startDay) ?? startDay
+        let all = fetchDailySpends(from: lookback, to: periodEnd, dbURL: dbURL, calendar: calendar)
+        let period = all.filter { $0.key >= startDay && $0.key < periodEnd }
+        let history = all.filter { $0.key < startDay }
+        return (period, history)
     }
 
     /// Scales per-day percentage-point spends so their sum equals the consumed

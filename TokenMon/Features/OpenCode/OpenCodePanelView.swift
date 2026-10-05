@@ -25,18 +25,14 @@ struct OpenCodePanelView: View {
                     }
                 }
 
-                if let days = poller.dailyBudgetDays, !days.isEmpty {
-                    let monthly = snapshot.windows.first { $0.kind == .monthly }
-                    PanelCard {
-                        MonthlyDailyBudgetBarsView(
-                            days: days,
-                            accent: ModelPalette.purple.color,
-                            periodUsedPercent: snapshot.monthlyUsedPercent,
-                            periodStart: poller.dailyBudgetPeriodStart,
-                            resetsAt: monthly?.resetsAt
-                        )
-                    }
-                }
+                NavigableDailyBudgetCard(
+                    style: .monthly,
+                    accent: ModelPalette.purple.color,
+                    periodUsedPercent: snapshot.monthlyUsedPercent,
+                    periodStart: poller.dailyBudgetPeriodStart,
+                    resetsAt: snapshot.windows.first { $0.kind == .monthly }?.resetsAt,
+                    daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) ?? [] }
+                )
 
                 if !snapshot.models.isEmpty {
                     PanelCard {

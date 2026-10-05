@@ -108,4 +108,19 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         activity.record(usedPercent: 30, at: date(hour: 10))
         XCTAssertEqual(activity.hourWeights[10], 30, accuracy: 0.001)
     }
+
+    /// An early provider reset restarts the baseline but keeps the hours already
+    /// recorded today: they are real activity from before the reset.
+    func testBeginNewWindowKeepingHoursPreservesTodaysSeries() {
+        let (activity, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        activity.record(usedPercent: 20, at: date(hour: 8))
+        activity.record(usedPercent: 35, at: date(hour: 9))
+        activity.beginNewWindow(keepingHours: true)
+        activity.record(usedPercent: 4, at: date(hour: 11))
+
+        XCTAssertEqual(activity.hourWeights[9], 15, accuracy: 0.001)
+        XCTAssertEqual(activity.hourWeights[11], 4, accuracy: 0.001)
+    }
 }

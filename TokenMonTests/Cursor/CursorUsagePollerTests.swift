@@ -149,4 +149,78 @@ final class CursorUsagePollerTests: XCTestCase {
         let chartSum = days.map(\.spentUSD).reduce(0, +)
         XCTAssertEqual(chartSum, 5.0, accuracy: 0.001)
     }
+
+    // MARK: - Provider-initiated early resets
+
+    /// A billing cycle restarted early (cycle start Oct 2, old cycle began Sep 10):
+    /// observed days of the old cycle that fall in the displayed week show up as
+    /// dimmed history, but only days from the new cycle count toward its pool.
+    func testEarlyResetKeepsOldCycleDaysAsHistoryAndRestartsPoolMath() throws {
+        let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
+            observedByDay: [
+                day(2026, 9, 29): 2, // old cycle
+                day(2026, 10, 1): 5, // old cycle
+                day(2026, 10, 2): 1, // new cycle (its first tracked day is estimated instead)
+                day(2026, 10, 3): 3 // new cycle
+            ],
+            interruptedWindowStart: date(2026, 9, 10, hour: 17),
+            estimatedWeightByDay: [:],
+            usedPercent: 4,
+            billingCycleStart: date(2026, 10, 2, hour: 17),
+            billingCycleEnd: date(2026, 11, 2, hour: 17),
+            now: date(2026, 10, 4, hour: 12),
+            calendar: calendar
+        ))
+
+        // Week of Mon Sep 28.
+        XCTAssertEqual(days.count, 7)
+        let sep29 = days[1]
+        let oct1 = days[3]
+        let oct3 = days[5]
+        XCTAssertTrue(sep29.isPriorWindow)
+        XCTAssertEqual(sep29.spentUSD, 2, accuracy: 0.001)
+        XCTAssertTrue(oct1.isPriorWindow)
+        XCTAssertEqual(oct1.spentUSD, 5, accuracy: 0.001)
+        XCTAssertFalse(oct3.isPriorWindow)
+        XCTAssertEqual(oct3.spentUSD, 3, accuracy: 0.001)
+        // Daily share is the new 31-day cycle's, and old-cycle spend does not leak in.
+        XCTAssertEqual(days[0].budgetUSD, 100.0 / 31, accuracy: 1e-9)
+        let live = days.filter { !$0.isPriorWindow }.map(\.spentUSD).reduce(0, +)
+        XCTAssertLessThanOrEqual(live, 4.001)
+    }
+
+    /// With no early reset the displayed week behaves exactly as before: days
+    /// before the cycle start read 0 and nothing is flagged.
+    func testWithoutEarlyResetOldDaysStayHidden() throws {
+        let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
+            observedByDay: [day(2026, 10, 1): 5, day(2026, 10, 3): 4],
+            estimatedWeightByDay: [:],
+            usedPercent: 4,
+            billingCycleStart: date(2026, 10, 2, hour: 17),
+            billingCycleEnd: date(2026, 11, 2, hour: 17),
+            now: date(2026, 10, 4, hour: 12),
+            calendar: calendar
+        ))
+        XCTAssertFalse(days.contains(where: \.isPriorWindow))
+        XCTAssertEqual(days[3].spentUSD, 0)
+    }
+
+    /// Chevron-left shows the previous Monday week. A day before the cycle start
+    /// uses preserved history and is not dimmed — that week is the one on screen.
+    func testBuildDailyBudgetDaysWeekOffsetShowsPreviousMonday() throws {
+        let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
+            observedByDay: [day(2026, 8, 18): 4, day(2026, 8, 25): 3],
+            estimatedWeightByDay: [:],
+            usedPercent: 3,
+            billingCycleStart: date(2026, 8, 22, hour: 17),
+            billingCycleEnd: date(2026, 9, 22, hour: 17),
+            weekOffset: -1,
+            now: date(2026, 8, 28, hour: 12),
+            calendar: calendar
+        ))
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 17)))
+        let aug18 = try XCTUnwrap(days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 8, 18)) })
+        XCTAssertEqual(aug18.spentUSD, 4, accuracy: 0.001)
+        XCTAssertFalse(aug18.isPriorWindow)
+    }
 }

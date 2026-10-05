@@ -26,6 +26,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Last observed `seven_day.resets_at`; anchors the chart when a later payload
     /// omits the reset time. A forward move does not clear accumulated day deltas.
     private var weeklyResetsAt: Date?
+    /// Instant the current bars were built against, so earlier weeks shift from
+    /// the same window.
+    private var budgetReferenceNow: Date?
 
     private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
@@ -67,6 +70,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         snapshot = nil
         dailyBudgetDays = nil
         weeklyResetsAt = nil
+        budgetReferenceNow = nil
         lastError = nil
         lastRefreshedAt = nil
         hourly.clear()
@@ -106,11 +110,21 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             if let weeklyPercent = response.sevenDay?.usedPercent {
                 noteWeeklyResetAdvance(response.sevenDay?.resetsAt)
-                daily.record(windowUsedPercent: weeklyPercent, at: fetchedAt)
+                // Claude sends only `resets_at`, so a rollover or early reset is
+                // recognized from a moved reset instant plus a used-% drop; the
+                // store keeps earlier days as history.
+                daily.record(
+                    windowUsedPercent: weeklyPercent,
+                    at: fetchedAt,
+                    window: QuotaWindow(start: nil, resetsAt: response.sevenDay?.resetsAt)
+                )
             }
+            budgetReferenceNow = fetchedAt
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
                 resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
+                windowStart: daily.windowStart,
+                interruptedWindowStart: daily.interruptedWindowStart,
                 now: fetchedAt
             )
         } catch let error as ProviderError {
@@ -147,8 +161,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
     /// weekly pool is a rolling window whose reset time advances with usage, so a
     /// forward move is not necessarily a fresh period. Old-period days fall outside
-    /// the anchored window and are hidden; a true reset is captured by the
-    /// drop-as-reset credit in `DailyQuotaDeltaStore`.
+    /// the anchored window and are hidden. A true reset is recognized by
+    /// `DailyQuotaDeltaStore` only when the used % also drops (rollover, or an
+    /// early provider reset); it then keeps earlier days as prior-window history.
     private func noteWeeklyResetAdvance(_ resetsAt: Date?) {
         guard let resetsAt else { return }
         weeklyResetsAt = resetsAt
@@ -158,9 +173,16 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// time; returns [] when no provider reset has been observed (a rolling 7-day
     /// window is never substituted). The pool is split evenly across the period's
     /// days, so each day's budget is 1/7th.
+    ///
+    /// `windowStart` / `interruptedWindowStart` come from the daily store after a
+    /// rollover or early reset (see `DailyBudget.buildWeeklyWindowDays`).
+    /// `weekOffset` selects an earlier weekly window (`0` is the current one).
     static func buildDailyBudgetDays(
         spentByDay: [Date: Double],
         resetsAt: Date?,
+        windowStart: Date? = nil,
+        interruptedWindowStart: Date? = nil,
+        weekOffset: Int = 0,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
@@ -170,8 +192,26 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             daysInPeriod: 7,
             resetsAt: resetsAt,
             spentByDay: spentByDay,
+            windowStart: windowStart,
+            interruptedWindowStart: interruptedWindowStart,
+            weekOffset: weekOffset,
             now: now,
             calendar: calendar
+        )
+    }
+
+    /// Bars for the weekly window `weekOffset` steps before the current one.
+    ///
+    /// Reads the live daily store so the panel can browse earlier weeks without
+    /// a new poll. `0` matches ``dailyBudgetDays``.
+    func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay] {
+        Self.buildDailyBudgetDays(
+            spentByDay: daily.spentByDay,
+            resetsAt: snapshot?.sevenDay?.resetsAt ?? weeklyResetsAt,
+            windowStart: daily.windowStart,
+            interruptedWindowStart: daily.interruptedWindowStart,
+            weekOffset: weekOffset,
+            now: budgetReferenceNow ?? Date()
         )
     }
 }

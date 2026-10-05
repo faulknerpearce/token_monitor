@@ -114,9 +114,9 @@ struct GrokPanelView: View {
                 PanelCard {
                     DailyUsageChartView(
                         week: week,
-                        onPreviousWeek: { weekOffset -= 1 },
-                        onNextWeek: { weekOffset = min(0, weekOffset + 1) },
-                        canGoNext: weekOffset < 0,
+                        onPreviousWeek: { weekOffset = WeekOffset.previous(weekOffset) },
+                        onNextWeek: { weekOffset = WeekOffset.next(weekOffset) },
+                        canGoNext: WeekOffset.canGoNext(weekOffset),
                         periodUsedPercent: weekOffset == 0 ? snapshot.usedPercent : nil,
                         resetsAt: weekOffset == 0 ? snapshot.resetsAt : nil
                     )

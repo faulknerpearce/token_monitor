@@ -62,19 +62,11 @@ struct DailyUsageChartView: View {
                     .foregroundStyle(.primary)
             }
 
-            HStack(spacing: 8) {
-                weekNavButton(
-                    systemName: "chevron.left",
-                    action: onPreviousWeek,
-                    disabled: onPreviousWeek == nil
-                )
-                Spacer(minLength: 0)
-                weekNavButton(
-                    systemName: "chevron.right",
-                    action: onNextWeek,
-                    disabled: !canGoNext
-                )
-            }
+            WeekChartNavigation(
+                onPreviousWeek: onPreviousWeek,
+                onNextWeek: onNextWeek,
+                canGoNext: canGoNext
+            )
 
             HStack(alignment: .bottom, spacing: 0) {
                 ForEach(week.displayDays) { day in
@@ -129,27 +121,6 @@ struct DailyUsageChartView: View {
             .opacity(isFuture ? 0.5 : 1)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private func weekNavButton(
-        systemName: String,
-        action: (() -> Void)?,
-        disabled: Bool = false
-    ) -> some View {
-        Button {
-            action?()
-        } label: {
-            Image(systemName: systemName)
-                .font(PanelTypography.captionSemibold)
-                .frame(width: 22, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                )
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(disabled ? Color.secondary.opacity(0.35) : Color.secondary)
-        .disabled(disabled)
     }
 
     /// Maps weekly-pool percent into track height using the equal daily cap (`100/7`).
