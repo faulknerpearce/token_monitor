@@ -969,4 +969,67 @@ final class OpenCodeStatsTests: XCTestCase {
             0
         )
     }
+
+    /// Spend before the console window must not dilute the current week's scale,
+    /// and chevron-left still paints that earlier week from local history.
+    func testMonthDailyBudgetWeekOffsetKeepsHistoryOutOfHeadlineScale() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        func day(_ month: Int, _ day: Int, hour: Int = 12) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour))!
+        }
+
+        // Aug 20 2026 is a Thursday, so the current Monday week starts Aug 17.
+        // Jul 20 is four Mondays earlier and before the Aug 5 period start.
+        insertAssistantMessage(
+            sessionID: "ses_hist",
+            timeCreated: day(7, 20),
+            cost: 6,
+            input: 1_000,
+            providerID: "opencode-go",
+            modelID: "m"
+        )
+        insertAssistantMessage(
+            sessionID: "ses_hist",
+            timeCreated: day(8, 18),
+            cost: 4,
+            input: 1_000,
+            providerID: "opencode-go",
+            modelID: "m"
+        )
+
+        let now = day(8, 20)
+        let resetsAt = day(9, 5, hour: 0)
+        let current = try XCTUnwrap(
+            OpenCodeLocalStats.monthDailyBudgetDays(
+                limitUSD: 60,
+                usedPercent: 20,
+                periodResetsAt: resetsAt,
+                now: now,
+                dbURL: dbURL,
+                calendar: calendar
+            )
+        )
+        XCTAssertEqual(current.days.map(\.spentUSD).reduce(0, +), 20, accuracy: 0.01)
+        XCTAssertEqual(
+            current.days.first { calendar.isDate($0.date, inSameDayAs: day(8, 18)) }?.spentUSD ?? 0,
+            20,
+            accuracy: 0.01
+        )
+
+        let previous = try XCTUnwrap(
+            OpenCodeLocalStats.monthDailyBudgetDays(
+                limitUSD: 60,
+                usedPercent: 20,
+                periodResetsAt: resetsAt,
+                weekOffset: -4,
+                now: now,
+                dbURL: dbURL,
+                calendar: calendar
+            )
+        )
+        XCTAssertTrue(calendar.isDate(previous.days[0].date, inSameDayAs: day(7, 20)))
+        XCTAssertEqual(previous.days[0].spentUSD, 10, accuracy: 0.01) // 6 / 60 * 100
+        XCTAssertFalse(previous.days[0].isPriorWindow)
+    }
 }

@@ -27,6 +27,19 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// payload omits it.
     private var billingCycleEnd: Date?
 
+    /// Inputs from the last refresh, so the panel can rebuild an earlier Monday
+    /// week without paging Cursor events again.
+    private var budgetContext: BudgetContext?
+
+    /// Estimate weights and cycle bounds captured at the last successful refresh.
+    private struct BudgetContext {
+        var estimatedWeightByDay: [Date: Double]
+        var usedPercent: Double
+        var billingCycleStart: Date?
+        var billingCycleEnd: Date?
+        var referenceNow: Date
+    }
+
     /// Reuse the last refreshed result when a rapid consecutive poll lands within
     /// this window, avoiding redundant full-cycle event paging on every poll step.
     private let eventCacheTTL: TimeInterval = 4
@@ -71,6 +84,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         dayHourlyUsage = nil
         dailyBudgetDays = nil
         billingCycleEnd = nil
+        budgetContext = nil
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
@@ -123,6 +137,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
                 at: snap.fetchedAt,
                 window: QuotaWindow(start: snap.billingCycleStart, resetsAt: cycleEnd),
                 periodDays: Self.cycleLengthDays(start: snap.billingCycleStart, end: cycleEnd)
+            )
+            budgetContext = BudgetContext(
+                estimatedWeightByDay: estimatedWeightByDay,
+                usedPercent: snap.usedPercent,
+                billingCycleStart: snap.billingCycleStart,
+                billingCycleEnd: cycleEnd,
+                referenceNow: snap.fetchedAt
             )
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 observedByDay: daily.spentByDay,
@@ -196,6 +217,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         usedPercent: Double,
         billingCycleStart: Date?,
         billingCycleEnd: Date?,
+        weekOffset: Int = 0,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay]? {
@@ -255,8 +277,27 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             limitUSD: 100,
             spentByDay: blended,
             priorWindowSpentByDay: prior,
+            historyByDay: observedByDay,
+            weekOffset: weekOffset,
             now: now,
             calendar: calendar
+        )
+    }
+
+    /// Monday-week bars `weekOffset` steps before the week containing the last
+    /// refresh. `0` matches ``dailyBudgetDays``. Returns nil before the first
+    /// refresh, or when the subscription month cannot be resolved.
+    func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay]? {
+        guard let budgetContext else { return nil }
+        return Self.buildDailyBudgetDays(
+            observedByDay: daily.spentByDay,
+            interruptedWindowStart: daily.interruptedWindowStart,
+            estimatedWeightByDay: budgetContext.estimatedWeightByDay,
+            usedPercent: budgetContext.usedPercent,
+            billingCycleStart: budgetContext.billingCycleStart,
+            billingCycleEnd: budgetContext.billingCycleEnd,
+            weekOffset: weekOffset,
+            now: budgetContext.referenceNow
         )
     }
 }

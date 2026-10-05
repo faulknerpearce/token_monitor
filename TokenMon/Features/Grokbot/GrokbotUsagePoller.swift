@@ -28,6 +28,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Last observed reset instant, so the chart stays anchored if a later
     /// payload omits it.
     private var weeklyResetsAt: Date?
+    /// Instant the current bars were built against, so earlier weeks shift from
+    /// the same window.
+    private var budgetReferenceNow: Date?
 
     private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
@@ -71,6 +74,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         snapshot = nil
         dailyBudgetDays = nil
         weeklyResetsAt = nil
+        budgetReferenceNow = nil
         lastError = nil
         lastRefreshedAt = nil
         hourly.clear()
@@ -117,6 +121,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             case .earlyReset: hourly.beginNewWindow(keepingHours: true)
             }
             hourly.record(usedPercent: fresh.usedPercent, at: fresh.fetchedAt)
+            budgetReferenceNow = fresh.fetchedAt
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
                 resetsAt: fresh.resetsAt ?? weeklyResetsAt,
@@ -183,6 +188,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         daysInPeriod: Int = 7,
         windowStart: Date? = nil,
         interruptedWindowStart: Date? = nil,
+        weekOffset: Int = 0,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
@@ -194,8 +200,25 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             spentByDay: spentByDay,
             windowStart: windowStart,
             interruptedWindowStart: interruptedWindowStart,
+            weekOffset: weekOffset,
             now: now,
             calendar: calendar
+        )
+    }
+
+    /// Bars for the allowance window `weekOffset` steps before the current one.
+    ///
+    /// Reads the live daily store so the panel can browse earlier weeks without
+    /// a new poll. `0` matches ``dailyBudgetDays``.
+    func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay] {
+        Self.buildDailyBudgetDays(
+            spentByDay: daily.spentByDay,
+            resetsAt: snapshot?.resetsAt ?? weeklyResetsAt,
+            daysInPeriod: snapshot?.daysInPeriod() ?? 7,
+            windowStart: daily.windowStart,
+            interruptedWindowStart: daily.interruptedWindowStart,
+            weekOffset: weekOffset,
+            now: budgetReferenceNow ?? Date()
         )
     }
 }

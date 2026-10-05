@@ -37,15 +37,14 @@ struct GrokbotPanelView: View {
                     }
                 }
 
-                if snapshot.hasIncludedAllowance, let days = poller.dailyBudgetDays, !days.isEmpty {
-                    PanelCard {
-                        WeeklyDailyBudgetBarsView(
-                            days: days,
-                            accent: ProviderColors.grokbotColor,
-                            periodUsedPercent: snapshot.usedPercent,
-                            resetsAt: snapshot.resetsAt
-                        )
-                    }
+                if snapshot.hasIncludedAllowance {
+                    NavigableDailyBudgetCard(
+                        style: .weekly,
+                        accent: ProviderColors.grokbotColor,
+                        periodUsedPercent: snapshot.usedPercent,
+                        resetsAt: snapshot.resetsAt,
+                        daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
+                    )
                 }
 
                 if auth.needsSignIn || poller.lastError != nil {

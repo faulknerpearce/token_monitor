@@ -204,4 +204,23 @@ final class CursorUsagePollerTests: XCTestCase {
         XCTAssertFalse(days.contains(where: \.isPriorWindow))
         XCTAssertEqual(days[3].spentUSD, 0)
     }
+
+    /// Chevron-left shows the previous Monday week. A day before the cycle start
+    /// uses preserved history and is not dimmed — that week is the one on screen.
+    func testBuildDailyBudgetDaysWeekOffsetShowsPreviousMonday() throws {
+        let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
+            observedByDay: [day(2026, 8, 18): 4, day(2026, 8, 25): 3],
+            estimatedWeightByDay: [:],
+            usedPercent: 3,
+            billingCycleStart: date(2026, 8, 22, hour: 17),
+            billingCycleEnd: date(2026, 9, 22, hour: 17),
+            weekOffset: -1,
+            now: date(2026, 8, 28, hour: 12),
+            calendar: calendar
+        ))
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 17)))
+        let aug18 = try XCTUnwrap(days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 8, 18)) })
+        XCTAssertEqual(aug18.spentUSD, 4, accuracy: 0.001)
+        XCTAssertFalse(aug18.isPriorWindow)
+    }
 }

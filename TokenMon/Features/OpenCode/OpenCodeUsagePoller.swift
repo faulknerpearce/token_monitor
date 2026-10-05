@@ -10,6 +10,8 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
     /// Full monthly-period start matching `dailyBudgetDays` (for pace captions).
     @Published private(set) var dailyBudgetPeriodStart: Date?
+    /// Last month build, kept so week arrows can re-slice without another SQLite read.
+    private var budgetSource: OpenCodeLocalStats.OpenCodeMonthBudget?
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
@@ -73,6 +75,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         dayHourlyUsage = nil
         dailyBudgetDays = nil
         dailyBudgetPeriodStart = nil
+        budgetSource = nil
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
@@ -105,6 +108,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 snapshot = snap
                 if let hourly = localBundle?.1 { dayHourlyUsage = hourly }
                 let budget = await Self.buildDailyBudgetDays(for: snap)
+                budgetSource = budget
                 dailyBudgetDays = budget?.days
                 dailyBudgetPeriodStart = budget?.periodStart
                 lastError = nil
@@ -153,6 +157,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             snapshot = snap
             let budget = await Self.buildDailyBudgetDays(for: snap)
+            budgetSource = budget
             dailyBudgetDays = budget?.days
             dailyBudgetPeriodStart = budget?.periodStart
             dataSourceLabel = "Local estimate"
@@ -180,6 +185,22 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private func currentInterval() -> TimeInterval {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    }
+
+    /// Monday-week bars `weekOffset` steps before the week of the last refresh.
+    /// `0` matches ``dailyBudgetDays``.
+    func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay]? {
+        guard let budgetSource else { return nil }
+        if weekOffset == 0 { return budgetSource.days }
+        return DailyBudget.buildSubscriptionMonthLast7Days(
+            limitUSD: 100,
+            spentByDay: budgetSource.spentPercentByDay,
+            knownStart: budgetSource.knownStart,
+            resetsAt: budgetSource.resetsAt,
+            historyByDay: budgetSource.historyPercentByDay,
+            weekOffset: weekOffset,
+            now: budgetSource.referenceNow
+        )?.days
     }
 
     private static func buildDailyBudgetDays(

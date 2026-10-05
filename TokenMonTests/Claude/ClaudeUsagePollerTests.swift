@@ -101,4 +101,20 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertEqual(days.count, 7)
         XCTAssertFalse(days.contains(where: \.isPriorWindow))
     }
+
+    /// The same chevron-left shift the Grok chart uses: one weekly period back,
+    /// with that period's recorded spend on the matching bar.
+    func testBuildDailyBudgetDaysWeekOffsetShowsPriorPeriod() {
+        let days = ClaudeUsagePoller.buildDailyBudgetDays(
+            spentByDay: [calendar.startOfDay(for: date(2026, 8, 14)): 6],
+            resetsAt: date(2026, 8, 27, hour: 11),
+            weekOffset: -1,
+            now: date(2026, 8, 25, hour: 15),
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 13)))
+        XCTAssertEqual(days[1].spentUSD, 6, accuracy: 0.001)
+        XCTAssertFalse(days.contains(where: \.isPriorWindow))
+    }
 }

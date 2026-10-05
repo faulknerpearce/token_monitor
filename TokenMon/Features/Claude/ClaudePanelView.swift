@@ -29,16 +29,13 @@ struct ClaudePanelView: View {
                     )
                 }
 
-                if let days = poller.dailyBudgetDays, !days.isEmpty {
-                    PanelCard {
-                        WeeklyDailyBudgetBarsView(
-                            days: days,
-                            accent: ProviderColors.claudeColor,
-                            periodUsedPercent: snapshot.sevenDay?.usedPercent,
-                            resetsAt: snapshot.sevenDay?.resetsAt
-                        )
-                    }
-                }
+                NavigableDailyBudgetCard(
+                    style: .weekly,
+                    accent: ProviderColors.claudeColor,
+                    periodUsedPercent: snapshot.sevenDay?.usedPercent,
+                    resetsAt: snapshot.sevenDay?.resetsAt,
+                    daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
+                )
 
                 if auth.needsSignIn || poller.lastError != nil {
                     if let err = poller.lastError {

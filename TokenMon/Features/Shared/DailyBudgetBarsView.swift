@@ -11,6 +11,11 @@ struct WeeklyDailyBudgetBarsView: View {
     var periodUsedPercent: Double?
     /// Pool reset instant — paces the remainder against time left until reset.
     var resetsAt: Date?
+    var onPreviousWeek: (() -> Void)?
+    var onNextWeek: (() -> Void)?
+    var canGoNext: Bool = false
+    /// Past weeks omit the live "left today" footer.
+    var showsLiveFooter: Bool = true
 
     var body: some View {
         DailyBudgetBarsView(
@@ -21,7 +26,11 @@ struct WeeklyDailyBudgetBarsView: View {
             allowanceNoun: "weekly",
             periodUsedPercent: periodUsedPercent,
             resetsAt: resetsAt,
-            periodStart: DailyBudget.weeklyPacePeriodStart(days: days)
+            periodStart: DailyBudget.weeklyPacePeriodStart(days: days),
+            onPreviousWeek: onPreviousWeek,
+            onNextWeek: onNextWeek,
+            canGoNext: canGoNext,
+            showsLiveFooter: showsLiveFooter
         )
     }
 }
@@ -38,6 +47,11 @@ struct MonthlyDailyBudgetBarsView: View {
     var periodStart: Date?
     /// Next reset / cycle end — used to derive start when `periodStart` is nil.
     var resetsAt: Date?
+    var onPreviousWeek: (() -> Void)?
+    var onNextWeek: (() -> Void)?
+    var canGoNext: Bool = false
+    /// Past weeks omit the live "left today" footer.
+    var showsLiveFooter: Bool = true
 
     var body: some View {
         let start = DailyBudget.monthlyPacePeriodStart(
@@ -52,7 +66,11 @@ struct MonthlyDailyBudgetBarsView: View {
             allowancePeriod: .monthly,
             allowanceNoun: "monthly",
             periodUsedPercent: periodUsedPercent,
-            periodStart: start
+            periodStart: start,
+            onPreviousWeek: onPreviousWeek,
+            onNextWeek: onNextWeek,
+            canGoNext: canGoNext,
+            showsLiveFooter: showsLiveFooter
         )
     }
 }
@@ -72,6 +90,11 @@ struct DailyBudgetBarsView: View {
     var resetsAt: Date?
     /// Start of the full quota period (subscription month or weekly window).
     var periodStart: Date?
+    var onPreviousWeek: (() -> Void)?
+    var onNextWeek: (() -> Void)?
+    var canGoNext: Bool = false
+    /// Past weeks omit pace and the "no usage yet" fallback.
+    var showsLiveFooter: Bool = true
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -123,6 +146,7 @@ struct DailyBudgetBarsView: View {
     }
 
     private var footerCaption: String? {
+        guard showsLiveFooter else { return nil }
         if let pace {
             return DailyBudget.paceCaption(pace)
         }
@@ -151,6 +175,14 @@ struct DailyBudgetBarsView: View {
                 Text(rangeLabel)
                     .font(PanelTypography.bodyDigit)
                     .foregroundStyle(.primary)
+            }
+
+            if onPreviousWeek != nil || onNextWeek != nil {
+                WeekChartNavigation(
+                    onPreviousWeek: onPreviousWeek,
+                    onNextWeek: onNextWeek,
+                    canGoNext: canGoNext
+                )
             }
 
             HStack(alignment: .bottom, spacing: 0) {
@@ -244,6 +276,104 @@ struct DailyBudgetBarsView: View {
         if day.spentUSD <= 0.001 { return String(format: "%@: used 0%% of %.1f%% allowance", dateStr, day.budgetUSD) }
         let ofAllowance = Int((day.spentUSD / day.budgetUSD * 100).rounded())
         return String(format: "%@: %.1f%% of %@, %d%% of daily allowance", dateStr, day.spentUSD, allowanceNoun, ofAllowance)
+    }
+}
+
+/// Back and forward arrows shared by the SuperGrok daily chart and the other
+/// providers' daily-budget bars.
+struct WeekChartNavigation: View {
+    var onPreviousWeek: (() -> Void)?
+    var onNextWeek: (() -> Void)?
+    var canGoNext: Bool = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            button(
+                systemName: "chevron.left",
+                action: onPreviousWeek,
+                disabled: onPreviousWeek == nil
+            )
+            Spacer(minLength: 0)
+            button(
+                systemName: "chevron.right",
+                action: onNextWeek,
+                disabled: !canGoNext
+            )
+        }
+    }
+
+    private func button(
+        systemName: String,
+        action: (() -> Void)?,
+        disabled: Bool
+    ) -> some View {
+        Button {
+            action?()
+        } label: {
+            Image(systemName: systemName)
+                .font(PanelTypography.captionSemibold)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? Color.secondary.opacity(0.35) : Color.secondary)
+        .disabled(disabled)
+    }
+}
+
+/// Weekly or monthly daily-budget card with the same week arrows as SuperGrok.
+///
+/// `0` shows the current window and its live pace caption. Negative offsets
+/// show earlier weeks of bars and drop the "left today" footer.
+struct NavigableDailyBudgetCard: View {
+    enum Style {
+        case weekly
+        case monthly
+    }
+
+    var style: Style
+    var accent: Color
+    var periodUsedPercent: Double?
+    var periodStart: Date?
+    var resetsAt: Date?
+    var daysForWeek: (Int) -> [DailyBudgetDay]
+
+    @State private var weekOffset = 0
+
+    var body: some View {
+        let days = daysForWeek(weekOffset)
+        if !days.isEmpty {
+            PanelCard {
+                switch style {
+                case .weekly:
+                    WeeklyDailyBudgetBarsView(
+                        days: days,
+                        accent: accent,
+                        periodUsedPercent: weekOffset == 0 ? periodUsedPercent : nil,
+                        resetsAt: weekOffset == 0 ? resetsAt : nil,
+                        onPreviousWeek: { weekOffset = WeekOffset.previous(weekOffset) },
+                        onNextWeek: { weekOffset = WeekOffset.next(weekOffset) },
+                        canGoNext: WeekOffset.canGoNext(weekOffset),
+                        showsLiveFooter: weekOffset == 0
+                    )
+                case .monthly:
+                    MonthlyDailyBudgetBarsView(
+                        days: days,
+                        accent: accent,
+                        periodUsedPercent: weekOffset == 0 ? periodUsedPercent : nil,
+                        periodStart: weekOffset == 0 ? periodStart : nil,
+                        resetsAt: weekOffset == 0 ? resetsAt : nil,
+                        onPreviousWeek: { weekOffset = WeekOffset.previous(weekOffset) },
+                        onNextWeek: { weekOffset = WeekOffset.next(weekOffset) },
+                        canGoNext: WeekOffset.canGoNext(weekOffset),
+                        showsLiveFooter: weekOffset == 0
+                    )
+                }
+            }
+        }
     }
 }
 
