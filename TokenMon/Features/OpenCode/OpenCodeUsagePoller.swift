@@ -205,7 +205,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private static func buildDailyBudgetDays(
         for snapshot: OpenCodeSnapshot
-    ) async -> (days: [DailyBudgetDay], periodStart: Date)? {
+    ) async -> OpenCodeLocalStats.OpenCodeMonthBudget? {
         let monthly = snapshot.windows.first { $0.kind == .monthly }
         let monthlyLimit = monthly?.limitUSD ?? OpenCodeWindowKind.monthly.defaultLimitUSD
         guard monthlyLimit > 0 else { return nil }
