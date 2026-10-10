@@ -79,10 +79,19 @@ enum QuotaWindowTransition: Hashable, Sendable {
 /// or after its own start day (usage that belongs to the old window but shares a
 /// calendar day with the new one), so the days *before* the new window stay
 /// available as history. See ``beginNewWindow(startingAt:interruptedWindowStart:)``.
+///
+/// Days are persisted as ``DayKey`` strings, so a recorded day keeps its
+/// calendar date across time-zone changes; `spentByDay` re-derives its
+/// start-of-day dates in the store's calendar, and again when the system time
+/// zone changes. Only the last `retentionDays` days are kept.
 @MainActor
 final class DailyQuotaDeltaStore: ObservableObject {
     /// Local-start-of-day → percentage-point growth of the tracked window.
-    @Published private(set) var spentByDay: [Date: Double]
+    @Published private(set) var spentByDay: [Date: Double] = [:]
+
+    /// Days kept, counted back from today. Covers a 31-day billing cycle plus
+    /// its reset-day bar and the Monday-aligned week the monthly chart shows.
+    static let retentionDays = 40
 
     /// Start of the window that began at the most recent rollover or early
     /// reset, when one was observed. Charts anchor to it when it is later than
@@ -100,17 +109,27 @@ final class DailyQuotaDeltaStore: ObservableObject {
     /// Last recorded utilization of the tracked window.
     private(set) var lastUsedPercent: Double?
 
+    /// `DayKey` → percentage-point growth; the persisted source of `spentByDay`.
+    private var dayTotals: [String: Double] = [:] {
+        didSet { publishDays() }
+    }
+
     private let store: FileBackedStringStore
     private let storageKey: String
+    private let calendar: Calendar
+    private let now: () -> Date
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     /// Last payload read from or written to disk; `persist()` skips identical writes.
     private var persisted: Payload?
+    private var timeZoneObserver: NSObjectProtocol?
 
-    /// Optional fields decode as nil from payloads written before window
-    /// metadata existed, so old stores keep loading unchanged.
+    /// `dayTotals` holds the days by `DayKey`. `days` is the older format,
+    /// keyed by absolute start-of-day instants; it is only read, and converted
+    /// on load. Window fields decode as nil from payloads that predate them.
     private struct Payload: Codable, Equatable {
-        var days: [Date: Double]
+        var dayTotals: [String: Double]?
+        var days: [Date: Double]?
         var lastUsedPercent: Double?
         var windowStart: Date?
         var interruptedWindowStart: Date?
@@ -122,11 +141,34 @@ final class DailyQuotaDeltaStore: ObservableObject {
         self.init(store: FileBackedStringStore(filenamePrefix: "activity_"), storageKey: storageKey)
     }
 
-    init(store: FileBackedStringStore, storageKey: String) {
+    /// - Parameters:
+    ///   - calendar: Calendar whose days key the history. The default follows
+    ///     system time-zone changes.
+    ///   - now: Clock for pruning on load (tests inject a fixed one).
+    init(
+        store: FileBackedStringStore,
+        storageKey: String,
+        calendar: Calendar = .autoupdatingCurrent,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.store = store
         self.storageKey = storageKey
-        self.spentByDay = [:]
+        self.calendar = calendar
+        self.now = now
         load()
+        timeZoneObserver = NotificationCenter.default.addObserver(
+            forName: .NSSystemTimeZoneDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.publishDays() }
+        }
+    }
+
+    deinit {
+        if let timeZoneObserver {
+            NotificationCenter.default.removeObserver(timeZoneObserver)
+        }
     }
 
     /// Records a new window utilization snapshot. Growth since the last sample is
@@ -144,9 +186,10 @@ final class DailyQuotaDeltaStore: ObservableObject {
         at date: Date = Date(),
         window: QuotaWindow? = nil,
         periodDays: Int = 7,
-        calendar: Calendar = .current
+        calendar: Calendar? = nil
     ) -> QuotaWindowTransition {
         defer { persist() }
+        let calendar = calendar ?? self.calendar
 
         let transition = window.map {
             QuotaWindowTransition.classify(
@@ -184,11 +227,10 @@ final class DailyQuotaDeltaStore: ObservableObject {
         // Ignore tiny noise.
         guard delta >= Percent.noiseFloor else { return transition }
 
-        let dayKey = calendar.startOfDay(for: date)
-        var next = spentByDay
-        next[dayKey, default: 0] += delta
-        Self.prune(&next)
-        spentByDay = next
+        var next = dayTotals
+        next[DayKey.key(for: date, calendar: calendar), default: 0] += delta
+        Self.prune(&next, now: date, calendar: calendar)
+        dayTotals = next
         return transition
     }
 
@@ -198,7 +240,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
         interruptedWindowStart = nil
         observedStart = nil
         windowResetsAt = nil
-        spentByDay = [:]
+        dayTotals = [:]
         persist()
     }
 
@@ -215,10 +257,10 @@ final class DailyQuotaDeltaStore: ObservableObject {
     func beginNewWindow(
         startingAt windowStart: Date = Date(),
         interruptedWindowStart: Date? = nil,
-        calendar: Calendar = .current
+        calendar: Calendar? = nil
     ) {
-        let boundary = calendar.startOfDay(for: windowStart)
-        spentByDay = spentByDay.filter { $0.key < boundary }
+        let boundary = DayKey.key(for: windowStart, calendar: calendar ?? self.calendar)
+        dayTotals = dayTotals.filter { $0.key < boundary }
         lastUsedPercent = 0
         self.windowStart = windowStart
         self.interruptedWindowStart = interruptedWindowStart
@@ -249,9 +291,26 @@ final class DailyQuotaDeltaStore: ObservableObject {
         )
     }
 
-    private static func prune(_ days: inout [Date: Double]) {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Calendar.current.startOfDay(for: Date())) ?? .distantPast
+    /// Drops days older than `retentionDays` before the day containing `now`.
+    private static func prune(_ days: inout [String: Double], now: Date, calendar: Calendar) {
+        guard let cutoff = DayKey.adding(
+            days: -retentionDays,
+            to: DayKey.key(for: now, calendar: calendar),
+            calendar: calendar
+        ) else { return }
         days = days.filter { $0.key >= cutoff }
+    }
+
+    /// Rebuilds `spentByDay` from `dayTotals` in the store's calendar.
+    private func publishDays() {
+        var byDate: [Date: Double] = [:]
+        for (key, value) in dayTotals {
+            guard let start = DayKey.startOfDay(for: key, calendar: calendar) else { continue }
+            byDate[start, default: 0] += value
+        }
+        if byDate != spentByDay {
+            spentByDay = byDate
+        }
     }
 
     private func load() {
@@ -263,19 +322,33 @@ final class DailyQuotaDeltaStore: ObservableObject {
             return
         }
         persisted = payload
-        var days = payload.days
-        Self.prune(&days)
+        var days = payload.dayTotals ?? Self.convertLegacyDays(payload.days ?? [:], calendar: calendar)
+        Self.prune(&days, now: now(), calendar: calendar)
         lastUsedPercent = payload.lastUsedPercent
         windowStart = payload.windowStart
         interruptedWindowStart = payload.interruptedWindowStart
         observedStart = payload.observedStart
         windowResetsAt = payload.windowResetsAt
-        spentByDay = days
+        dayTotals = days
+        // An older-format payload is rewritten once in the `dayTotals` format.
+        persist()
+    }
+
+    /// Converts start-of-day instants to `DayKey`s, summing any that land on
+    /// the same day.
+    private static func convertLegacyDays(_ days: [Date: Double], calendar: Calendar) -> [String: Double] {
+        var converted: [String: Double] = [:]
+        for (instant, value) in days {
+            let offset = calendar.timeZone.secondsFromGMT(for: instant)
+            converted[DayKey.key(forStoredStartOfDay: instant, preferredOffset: offset), default: 0] += value
+        }
+        return converted
     }
 
     private func persist() {
         let payload = Payload(
-            days: spentByDay,
+            dayTotals: dayTotals,
+            days: nil,
             lastUsedPercent: lastUsedPercent,
             windowStart: windowStart,
             interruptedWindowStart: interruptedWindowStart,

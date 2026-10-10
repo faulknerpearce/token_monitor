@@ -139,4 +139,75 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         activity.record(usedPercent: 12, at: date(hour: 9, minute: 10))
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
     }
+
+    // MARK: - Midnight, time zones, and older payloads
+
+    private func denver() throws -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Denver"))
+        return calendar
+    }
+
+    private func makeBacking() throws -> (FileBackedStringStore, URL) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (FileBackedStringStore(directory: dir, filenamePrefix: "activity_"), dir)
+    }
+
+    /// Growth between the last sample before midnight and the first after it is
+    /// credited to the new day's first hour instead of being dropped.
+    func testFirstDeltaAfterMidnightIsCredited() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let calendar = try denver()
+        let lateEvening = Date(timeIntervalSinceReferenceDate: 811_144_800 - 300)
+        let activity = HourlyDeltaActivityStore(store: backing, storageKey: "midnight", calendar: calendar, now: lateEvening)
+        activity.record(usedPercent: 20, at: lateEvening)
+        activity.record(usedPercent: 27, at: lateEvening.addingTimeInterval(600))
+
+        XCTAssertEqual(activity.dayStart, Date(timeIntervalSinceReferenceDate: 811_144_800))
+        XCTAssertEqual(activity.hourWeights[0], 7, accuracy: 0.001)
+        XCTAssertEqual(activity.hourWeights.reduce(0, +), 7, accuracy: 0.001)
+    }
+
+    /// The older payload shape (day named by its start instant only) restores
+    /// today's hours and is rewritten with a day key.
+    func testOlderPayloadRestoresTodayAndIsRewritten() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var weights = Array(repeating: 0.0, count: 24)
+        weights[9] = 4
+        weights[14] = 2.5
+        let list = weights.map { String($0) }.joined(separator: ",")
+        backing.set(#"{"dayStart":813304800,"hourWeights":["# + list + #"],"lastUsedPercent":30}"#, forKey: "grok_hourly_today")
+        let afternoon = Date(timeIntervalSinceReferenceDate: 813_304_800 + 15 * 3_600)
+
+        let activity = HourlyDeltaActivityStore(
+            store: backing,
+            storageKey: "grok_hourly_today",
+            calendar: try denver(),
+            now: afternoon
+        )
+
+        XCTAssertEqual(activity.hourWeights, weights)
+        XCTAssertEqual(activity.dayStart, Date(timeIntervalSinceReferenceDate: 813_304_800))
+        activity.record(usedPercent: 33, at: afternoon)
+        XCTAssertEqual(activity.hourWeights[15], 3, accuracy: 0.001)
+        let rewritten = try XCTUnwrap(backing.value(forKey: "grok_hourly_today"))
+        XCTAssertTrue(rewritten.contains("\"dayKey\":\"2026-10-10\""), rewritten)
+    }
+
+    /// An older payload from a previous day starts today empty, with no baseline.
+    func testOlderPayloadFromAnotherDayStartsFresh() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let list = Array(repeating: "1", count: 24).joined(separator: ",")
+        backing.set(#"{"dayStart":813304800,"hourWeights":["# + list + #"],"lastUsedPercent":30}"#, forKey: "old")
+        let nextDay = Date(timeIntervalSinceReferenceDate: 813_304_800 + 30 * 3_600)
+
+        let activity = HourlyDeltaActivityStore(store: backing, storageKey: "old", calendar: try denver(), now: nextDay)
+        activity.record(usedPercent: 50, at: nextDay)
+
+        XCTAssertEqual(activity.hourWeights.reduce(0, +), 0, accuracy: 0.001)
+    }
 }

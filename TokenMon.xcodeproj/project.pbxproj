@@ -14,6 +14,7 @@
 		06229CC9A8E3CA8B2FEF0312 /* ProviderUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7532E728359574D2F985E60E /* ProviderUsagePoller.swift */; };
 		076A8034DCB0D156E353E9D6 /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA281FA162A6CB5D1F2A2904 /* ExportService.swift */; };
 		0A05E33E0D64AE786F3D5B2A /* SignInBrowserNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */; };
+		0B901B77AB21BE9D1BFD2922 /* DayKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C582643621B5DD8EF291CE /* DayKey.swift */; };
 		0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45F0294D7F6833156223A81 /* UsageErrorTests.swift */; };
 		0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF58255DAC5BC7E940010E74 /* JSONTests.swift */; };
 		0DDE379B96487D22147F0C7D /* ChatGPTAccessTokenCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C600412C266CA8599522D27 /* ChatGPTAccessTokenCacheTests.swift */; };
@@ -141,6 +142,7 @@
 		C3510B9D658997562FCD26B6 /* OpenCodeUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF346B5976F1C2455634F18 /* OpenCodeUsagePoller.swift */; };
 		C4FA2825CB5CA5AB1CA50700 /* OpenRouterAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D990A5674BB462011AB5AF9C /* OpenRouterAuthSession.swift */; };
 		C5A045CB89D69EC25265DE64 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39384E817EE6D493EC3E52DB /* Format.swift */; };
+		C5CDCE2F8DC50809BAA5A2E1 /* MonthlyDailyBudgetBarsViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BEE7864A3B0A15E32C518F1 /* MonthlyDailyBudgetBarsViewTests.swift */; };
 		C66EA68B69D41BE27419E22C /* HourlyDeltaActivityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF40560D85850DB0EC7F326 /* HourlyDeltaActivityStoreTests.swift */; };
 		C811978D0E180F43FA791234 /* BackoffTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB9D8707EA6CA028C761114 /* BackoffTimer.swift */; };
 		C8D1DC73D55A2557D3CDB7D0 /* UsageError.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD751090B98E360ADFBE6CFC /* UsageError.swift */; };
@@ -158,6 +160,7 @@
 		E106430343BFDD1D924C785A /* LegacyCacheCleanup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD7779344F8B749DF3977DE /* LegacyCacheCleanup.swift */; };
 		E141DD24CE9930A269665594 /* CursorUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E17B841EF448C0AF47E291 /* CursorUsageClientTests.swift */; };
 		E2B7FFB468F2D30856670B81 /* OpenCodeLimitBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A90F5DA9774809DA84546D /* OpenCodeLimitBar.swift */; };
+		EAEF9A7F3D915D484F7D4917 /* DayKeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F8D3207CDB9227384B61C7C /* DayKeyTests.swift */; };
 		EAF6DBB0C67989D2A7900BF1 /* SegmentedUsageBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A89536F38C6EF369AC30C7 /* SegmentedUsageBar.swift */; };
 		EB1CF81AA2469CEC513A247A /* OpenRouterUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6477629704DECD1265006252 /* OpenRouterUsagePoller.swift */; };
 		ECF4D935AA82598C077C7045 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0D256F75FC792D8E73069426 /* PrivacyInfo.xcprivacy */; };
@@ -262,6 +265,7 @@
 		5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoopTests.swift; sourceTree = "<group>"; };
 		59A75CD9EEFE026263DFB293 /* TokenMonTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserNavigation.swift; sourceTree = "<group>"; };
+		5BEE7864A3B0A15E32C518F1 /* MonthlyDailyBudgetBarsViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyDailyBudgetBarsViewTests.swift; sourceTree = "<group>"; };
 		6477629704DECD1265006252 /* OpenRouterUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsagePoller.swift; sourceTree = "<group>"; };
 		67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusRendererTests.swift; sourceTree = "<group>"; };
 		6AA910F6DC60F8FD9C4B9487 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
@@ -296,6 +300,7 @@
 		9B702888EEE669BE5E778C5F /* DailyQuotaDeltaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyQuotaDeltaStore.swift; sourceTree = "<group>"; };
 		9D9F3805067CAD5F9D7A9F5C /* ProviderLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderLogo.swift; sourceTree = "<group>"; };
 		9DE9ECA5176C08F0FECEABDD /* WebKitCookieCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitCookieCaptureTests.swift; sourceTree = "<group>"; };
+		9F8D3207CDB9227384B61C7C /* DayKeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayKeyTests.swift; sourceTree = "<group>"; };
 		A37FC6F12B3E19C5C9A8C445 /* HistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStoreTests.swift; sourceTree = "<group>"; };
 		A3E0CB1C6A364F5D4CD66107 /* MenuBarStatusRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusRenderer.swift; sourceTree = "<group>"; };
 		A4CC89E3DAFBD90C151C0074 /* ProviderHourlyUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHourlyUsageTests.swift; sourceTree = "<group>"; };
@@ -342,6 +347,7 @@
 		E5685652948176D011F6AD18 /* ProductCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalogTests.swift; sourceTree = "<group>"; };
 		E5BCCDA1B3628DD8C3055CD5 /* PanelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelCard.swift; sourceTree = "<group>"; };
 		E691B506EBE3CF5627C84A26 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
+		E7C582643621B5DD8EF291CE /* DayKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayKey.swift; sourceTree = "<group>"; };
 		E7DD4BD107A72D61C50B064B /* OpenRouterModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterModelsTests.swift; sourceTree = "<group>"; };
 		E93E1B249CCDDCE551407668 /* DailyBudgetWeekOffsetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetWeekOffsetTests.swift; sourceTree = "<group>"; };
 		EA0D9A804736F4798B109224 /* ChatGPTUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTUsagePoller.swift; sourceTree = "<group>"; };
@@ -475,6 +481,7 @@
 				28EC6D5B67D08C3107DCBD35 /* DailyBudget.swift */,
 				FA55668290D2300298B0BC29 /* DailyBudgetBarsView.swift */,
 				9B702888EEE669BE5E778C5F /* DailyQuotaDeltaStore.swift */,
+				E7C582643621B5DD8EF291CE /* DayKey.swift */,
 				4F4D47682593A1EE79DD6A0C /* Domain.swift */,
 				B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */,
 				39384E817EE6D493EC3E52DB /* Format.swift */,
@@ -554,12 +561,14 @@
 				7F8A22FFDA52059B9779F01E /* ColorPaletteTests.swift */,
 				141D34791C2397365FD55D01 /* CredentialStoreTests.swift */,
 				B06D2986FD8F4702604E852D /* DailyQuotaDeltaStoreTests.swift */,
+				9F8D3207CDB9227384B61C7C /* DayKeyTests.swift */,
 				AB38678DE2EC99D7178876D6 /* FormatTests.swift */,
 				A37FC6F12B3E19C5C9A8C445 /* HistoryStoreTests.swift */,
 				BDF40560D85850DB0EC7F326 /* HourlyDeltaActivityStoreTests.swift */,
 				BF58255DAC5BC7E940010E74 /* JSONTests.swift */,
 				41A0263B3A90E6BB4AA603FF /* LegacyCacheCleanupTests.swift */,
 				67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */,
+				5BEE7864A3B0A15E32C518F1 /* MonthlyDailyBudgetBarsViewTests.swift */,
 				C5C1861DCD5AEE4983F95305 /* PollerSessionGuardTests.swift */,
 				5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */,
 				585A7CA4EC26E9EC85F11B08 /* ProviderAuthSessionTests.swift */,
@@ -924,6 +933,7 @@
 				F343F1F69EF51F172B713978 /* DailyBudgetTests.swift in Sources */,
 				87EEDFECA4E7A373F5900EED /* DailyBudgetWeekOffsetTests.swift in Sources */,
 				3F4D8F82AFD4D3993B37CC29 /* DailyQuotaDeltaStoreTests.swift in Sources */,
+				EAEF9A7F3D915D484F7D4917 /* DayKeyTests.swift in Sources */,
 				74281CAC0D8F8FAC72694DCE /* FormatTests.swift in Sources */,
 				1960684B1A04A75FF1BF9896 /* GrokPollerGatingTests.swift in Sources */,
 				ABC92522313BCD71A9704805 /* GrokbotUsageClientTests.swift in Sources */,
@@ -933,6 +943,7 @@
 				0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */,
 				70B8F579AAC97A9BA03B16D8 /* LegacyCacheCleanupTests.swift in Sources */,
 				6DA992476A20077DDFBA00CE /* MenuBarStatusRendererTests.swift in Sources */,
+				C5CDCE2F8DC50809BAA5A2E1 /* MonthlyDailyBudgetBarsViewTests.swift in Sources */,
 				962BB066A9FDA634D3F391D9 /* OpenCodeConsoleClientTests.swift in Sources */,
 				EF49B233A16AD76A1BA97FCC /* OpenCodeLocalScanTests.swift in Sources */,
 				9DCEB68072E2C4DBE5B6C3EC /* OpenCodeModelNameTests.swift in Sources */,
@@ -1002,6 +1013,7 @@
 				70049333F63FC283B5DC7866 /* DailyQuotaDeltaStore.swift in Sources */,
 				931FB5A88F596D1285DE6C5B /* DailyUsageBuilder.swift in Sources */,
 				71063F6D995FF528DD8A778E /* DailyUsageChartView.swift in Sources */,
+				0B901B77AB21BE9D1BFD2922 /* DayKey.swift in Sources */,
 				48F5B17A873190A817646FEF /* Domain.swift in Sources */,
 				076A8034DCB0D156E353E9D6 /* ExportService.swift in Sources */,
 				404713A354B6A8F71295AF31 /* FileBackedStringStore.swift in Sources */,

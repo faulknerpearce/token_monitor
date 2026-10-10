@@ -7,6 +7,11 @@ import Foundation
 ///
 /// A drop in the raw `usedPercent` means a quota window reset; the post-reset
 /// value is attributed as the current hour's growth in the new window.
+///
+/// The day is persisted as a ``DayKey`` so it keeps its calendar date across
+/// time-zone changes. The utilization baseline carries over midnight, so growth
+/// between the last sample of one day and the first of the next is credited to
+/// the new day's first hour.
 @MainActor
 final class HourlyDeltaActivityStore: ObservableObject {
     @Published private(set) var hourWeights: [Double]
@@ -14,11 +19,18 @@ final class HourlyDeltaActivityStore: ObservableObject {
 
     private let store: FileBackedStringStore
     private let storageKey: String
+    private let calendar: Calendar
     private var lastUsedPercent: Double?
+    /// `DayKey` of the day `hourWeights` belongs to.
+    private var dayKey: String
+    private var timeZoneObserver: NSObjectProtocol?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    /// `dayKey` names the day. `dayStart` is kept for readers of the older
+    /// format, which named the day by its start-of-day instant only.
     private struct Payload: Codable, Equatable {
+        var dayKey: String?
         var dayStart: Date
         var hourWeights: [Double]
         var lastUsedPercent: Double?
@@ -31,14 +43,43 @@ final class HourlyDeltaActivityStore: ObservableObject {
         self.init(store: FileBackedStringStore(filenamePrefix: "activity_"), storageKey: storageKey)
     }
 
-    init(store: FileBackedStringStore, storageKey: String) {
+    /// - Parameters:
+    ///   - calendar: Calendar whose days and hours bucket the series. The
+    ///     default follows system time-zone changes.
+    ///   - now: The moment the store loads at (tests inject a fixed one).
+    init(
+        store: FileBackedStringStore,
+        storageKey: String,
+        calendar: Calendar = .autoupdatingCurrent,
+        now: Date = Date()
+    ) {
         self.store = store
         self.storageKey = storageKey
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        self.dayStart = today
+        self.calendar = calendar
+        self.dayStart = calendar.startOfDay(for: now)
+        self.dayKey = DayKey.key(for: now, calendar: calendar)
         self.hourWeights = Array(repeating: 0, count: 24)
-        loadOrReset(for: today)
+        loadOrReset(at: now)
+        timeZoneObserver = NotificationCenter.default.addObserver(
+            forName: .NSSystemTimeZoneDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshDayStart() }
+        }
+    }
+
+    deinit {
+        if let timeZoneObserver {
+            NotificationCenter.default.removeObserver(timeZoneObserver)
+        }
+    }
+
+    /// Re-derives `dayStart` from `dayKey` in the current zone of `calendar`.
+    private func refreshDayStart() {
+        if let start = DayKey.startOfDay(for: dayKey, calendar: calendar), start != dayStart {
+            dayStart = start
+        }
     }
 
     /// Records a new `usedPercent` snapshot. Growth since the last sample is
@@ -46,12 +87,11 @@ final class HourlyDeltaActivityStore: ObservableObject {
     /// reset credits the new value to this hour, while a small downward tick is
     /// treated as rounding noise and ignored.
     func record(usedPercent: Double, at date: Date = Date()) {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: date)
-        if start != dayStart {
-            dayStart = start
+        let key = DayKey.key(for: date, calendar: calendar)
+        if key != dayKey {
+            dayKey = key
+            dayStart = calendar.startOfDay(for: date)
             hourWeights = Array(repeating: 0, count: 24)
-            lastUsedPercent = nil
         }
 
         defer {
@@ -85,9 +125,9 @@ final class HourlyDeltaActivityStore: ObservableObject {
 
     /// Drops the accumulated series and utilization baseline (e.g. on sign-out
     /// or account switch).
-    func clear() {
-        let today = Calendar.current.startOfDay(for: Date())
-        dayStart = today
+    func clear(at date: Date = Date()) {
+        dayKey = DayKey.key(for: date, calendar: calendar)
+        dayStart = calendar.startOfDay(for: date)
         hourWeights = Array(repeating: 0, count: 24)
         lastUsedPercent = nil
         persist()
@@ -107,7 +147,7 @@ final class HourlyDeltaActivityStore: ObservableObject {
         persist()
     }
 
-    private func loadOrReset(for today: Date) {
+    private func loadOrReset(at now: Date) {
         let raw = store.value(forKey: storageKey)
         guard let raw,
               let data = raw.data(using: .utf8),
@@ -118,21 +158,24 @@ final class HourlyDeltaActivityStore: ObservableObject {
         }
         persisted = payload
 
-        if Calendar.current.isDate(payload.dayStart, inSameDayAs: today),
-           payload.hourWeights.count == 24 {
-            dayStart = Calendar.current.startOfDay(for: payload.dayStart)
+        let storedKey = payload.dayKey ?? DayKey.key(
+            forStoredStartOfDay: payload.dayStart,
+            preferredOffset: calendar.timeZone.secondsFromGMT(for: payload.dayStart)
+        )
+        if storedKey == dayKey, payload.hourWeights.count == 24 {
             hourWeights = payload.hourWeights
             lastUsedPercent = payload.lastUsedPercent
         } else {
-            dayStart = today
             hourWeights = Array(repeating: 0, count: 24)
             lastUsedPercent = nil
-            persist()
         }
+        // An older-format payload is rewritten once with its `dayKey`.
+        persist()
     }
 
     private func persist() {
         let payload = Payload(
+            dayKey: dayKey,
             dayStart: dayStart,
             hourWeights: hourWeights,
             lastUsedPercent: lastUsedPercent

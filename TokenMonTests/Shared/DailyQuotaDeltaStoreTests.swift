@@ -85,8 +85,8 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        store.record(windowUsedPercent: 5, at: date(dayOffset: -40, hour: 9))
-        store.record(windowUsedPercent: 9, at: date(dayOffset: -40, hour: 10))
+        store.record(windowUsedPercent: 5, at: date(dayOffset: -41, hour: 9))
+        store.record(windowUsedPercent: 9, at: date(dayOffset: -41, hour: 10))
         store.record(windowUsedPercent: 10, at: date(dayOffset: 0, hour: 9))
         store.record(windowUsedPercent: 20, at: date(dayOffset: 0, hour: 10))
 
@@ -434,5 +434,110 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
 
         store.record(windowUsedPercent: 14, at: date(dayOffset: 0, hour: 11))
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
+    }
+
+    // MARK: - Day keys, retention, and older payloads
+
+    private func denver() throws -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Denver"))
+        return calendar
+    }
+
+    private func makeBacking() throws -> (FileBackedStringStore, URL) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (FileBackedStringStore(directory: dir, filenamePrefix: "activity_"), dir)
+    }
+
+    private func referenceDate(_ seconds: TimeInterval) -> Date {
+        Date(timeIntervalSinceReferenceDate: seconds)
+    }
+
+    /// The older payload shape (days as a flat `[instant, value, …]` array) loads
+    /// with every day on its own calendar date and is rewritten with day keys.
+    func testOlderPayloadWithDayInstantsLoadsAndIsRewritten() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        backing.set(
+            #"{"lastUsedPercent":35,"days":[811144800,4,811058400,7,811231200,24]}"#,
+            forKey: "claude_daily_usage"
+        )
+        let calendar = try denver()
+        let now = referenceDate(811_231_200 + 15 * 3_600)
+
+        let store = DailyQuotaDeltaStore(store: backing, storageKey: "claude_daily_usage", calendar: calendar, now: { now })
+
+        XCTAssertEqual(store.lastUsedPercent ?? 0, 35, accuracy: 0.001)
+        XCTAssertEqual(store.spentByDay[referenceDate(811_058_400)] ?? 0, 7, accuracy: 0.001)
+        XCTAssertEqual(store.spentByDay[referenceDate(811_144_800)] ?? 0, 4, accuracy: 0.001)
+        XCTAssertEqual(store.spentByDay[referenceDate(811_231_200)] ?? 0, 24, accuracy: 0.001)
+        let rewritten = try XCTUnwrap(backing.value(forKey: "claude_daily_usage"))
+        XCTAssertTrue(rewritten.contains("\"2026-09-14\":7"), rewritten)
+        XCTAssertFalse(rewritten.contains("\"days\""), rewritten)
+
+        let reloaded = DailyQuotaDeltaStore(store: backing, storageKey: "claude_daily_usage", calendar: calendar, now: { now })
+        XCTAssertEqual(reloaded.spentByDay, store.spentByDay)
+    }
+
+    /// The older payload with window metadata keeps every window field.
+    func testOlderPayloadWithWindowMetadataLoads() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        backing.set(
+            #"{"days":[812527200,3.88],"lastUsedPercent":68.78,"windowStart":813093922.556,"# +
+                #""observedStart":813093922.556,"windowResetsAt":813698722.556}"#,
+            forKey: "cursor_daily_usage"
+        )
+        let now = referenceDate(813_304_800 + 10 * 3_600)
+
+        let store = DailyQuotaDeltaStore(store: backing, storageKey: "cursor_daily_usage", calendar: try denver(), now: { now })
+
+        XCTAssertEqual(store.spentByDay[referenceDate(812_527_200)] ?? 0, 3.88, accuracy: 0.001)
+        XCTAssertEqual(store.lastUsedPercent ?? 0, 68.78, accuracy: 0.001)
+        XCTAssertEqual(store.windowStart, referenceDate(813_093_922.556))
+        XCTAssertEqual(store.observedStart, referenceDate(813_093_922.556))
+        XCTAssertEqual(store.windowResetsAt, referenceDate(813_698_722.556))
+        XCTAssertNil(store.interruptedWindowStart)
+    }
+
+    /// Days recorded in one zone keep their calendar dates when the store is
+    /// read in another zone.
+    func testDaysKeepTheirDatesAfterATimeZoneChange() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let calendar = try denver()
+        let sample = referenceDate(811_144_800 + 20 * 3_600)
+        let store = DailyQuotaDeltaStore(store: backing, storageKey: "tz", calendar: calendar, now: { sample })
+        store.record(windowUsedPercent: 10, at: sample)
+        store.record(windowUsedPercent: 16, at: sample.addingTimeInterval(600))
+
+        var tokyo = Calendar(identifier: .gregorian)
+        tokyo.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let moved = DailyQuotaDeltaStore(store: backing, storageKey: "tz", calendar: tokyo, now: { sample })
+        let tokyoDay = try XCTUnwrap(DayKey.startOfDay(for: "2026-09-15", calendar: tokyo))
+        XCTAssertEqual(moved.spentByDay[tokyoDay] ?? 0, 6, accuracy: 0.001)
+        XCTAssertEqual(moved.spentByDay.count, 1)
+    }
+
+    /// Day 1 of a 31-day cycle survives until the cycle's reset-day bar; days
+    /// older than the retention are dropped, counted in the injected calendar.
+    func testPruneKeepsFortyDaysInTheInjectedCalendar() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let calendar = try denver()
+        let start = referenceDate(811_144_800 + 12 * 3_600)
+        let store = DailyQuotaDeltaStore(store: backing, storageKey: "prune", calendar: calendar, now: { start })
+        store.record(windowUsedPercent: 1, at: start)
+        store.record(windowUsedPercent: 5, at: start.addingTimeInterval(600))
+
+        let dayAfterCycle = try XCTUnwrap(calendar.date(byAdding: .day, value: 31, to: start))
+        store.record(windowUsedPercent: 6, at: dayAfterCycle)
+        XCTAssertEqual(store.spentByDay[calendar.startOfDay(for: start)] ?? 0, 4, accuracy: 0.001)
+
+        let beyond = try XCTUnwrap(calendar.date(byAdding: .day, value: 41, to: start))
+        store.record(windowUsedPercent: 8, at: beyond)
+        XCTAssertNil(store.spentByDay[calendar.startOfDay(for: start)])
+        XCTAssertEqual(store.spentByDay[calendar.startOfDay(for: beyond)] ?? 0, 2, accuracy: 0.001)
     }
 }
