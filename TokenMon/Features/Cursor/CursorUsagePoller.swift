@@ -12,7 +12,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
     @Published private(set) var dataSourceLabel: String?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: CursorAuthSession
@@ -40,13 +42,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         var referenceNow: Date
     }
 
-    /// Reuse the last refreshed result when a rapid consecutive poll lands within
-    /// this window, avoiding redundant full-cycle event paging on every poll step.
-    private let eventCacheTTL: TimeInterval = 4
+    /// Event aggregates kept between polls by the live client, so usage events
+    /// are paged at most every `CursorUsageClient.eventsRefreshInterval`.
+    private let eventCache: CursorEventCache
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -58,25 +60,24 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         self.settings = settings
         self.auth = auth
         self.daily = daily
+        let eventCache = CursorEventCache()
+        self.eventCache = eventCache
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader in
-            try await CursorUsageClient(cookieHeader: cookieHeader).fetchSnapshot()
+            try await CursorUsageClient(cookieHeader: cookieHeader, eventCache: eventCache).fetchSnapshot()
         }
-        // Drop the Cursor snapshot as soon as this shared session signs out.
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // Drop the Cursor snapshot and daily history as soon as this shared
+        // session signs out or changes account; an expired session keeps them.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -88,12 +89,18 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
+        eventCache.clear()
         daily.clear()
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsCursorPolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.cursor) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -102,30 +109,32 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             if snapshot == nil {
                 lastError = "Sign in to Cursor to load usage."
             }
-            return
-        }
-
-        // Rapid consecutive polls (e.g. while the menu is open) can reuse the
-        // last result instead of re-paginating the full event history.
-        if let lastRefreshedAt,
-           snapshot != nil,
-           Date().timeIntervalSince(lastRefreshedAt) < eventCacheTTL {
-            auth.needsSignIn = false
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
-            let (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
-            snapshot = snap
-            dayHourlyUsage = hourly
-            if let email = snap.accountEmail {
+            var (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
+            // A different account fires `accountReset`, which clears the previous
+            // account's figures before this poll publishes.
+            if let email = snap.accountEmail, email != auth.accountEmail {
                 auth.saveAccountEmail(email)
             }
+            // No event aggregates this poll (events fetch failed): keep the
+            // previous event-derived figures for the same billing cycle.
+            if snap.costStats == nil, let previous = snapshot,
+               previous.billingCycleStart == snap.billingCycleStart {
+                snap.costStats = previous.costStats
+                hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
+                estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
+            }
+            snapshot = snap
+            dayHourlyUsage = hourly
+            auth.recordAuthSuccess()
             // The daily bars prefer the real day-over-day growth of the reported
-            // pool %, falling back to a list-price estimate for days this build
-            // never observed (see `buildDailyBudgetDays`).
+            // pool %, falling back to a list-price estimate for unobserved
+            // days (see `buildDailyBudgetDays`).
             if let cycleEnd = snap.billingCycleEnd {
                 billingCycleEnd = cycleEnd
             }
@@ -161,33 +170,44 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             logger.info(
                 "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
             )
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let cursorError as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session (sign-out → sign in as another
-            // account while this fetch was in flight).
-            guard auth.isCurrent(generation) else { return }
+            // Only a request made under the current credential state tears down
+            // the session; a stale one (sign-out → sign in as another account
+            // while this fetch was in flight) is skipped.
+            guard auth.isCurrent(generation) else { return .skipped }
             let usageError = cursorError.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: cursorError.localizedDescription)
+                auth.recordAuthFailure(reason: cursorError.localizedDescription)
             default:
                 break
             }
-            if snapshot == nil {
-                lastError = cursorError.localizedDescription
-            }
+            lastError = cursorError.localizedDescription
             logger.error("Cursor refresh failed: \(cursorError.localizedDescription, privacy: .public)")
+            return PollOutcome(error: cursorError)
         } catch {
-            guard auth.isCurrent(generation) else { return }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            guard auth.isCurrent(generation) else { return .skipped }
+            lastError = error.localizedDescription
             logger.error("Cursor refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsCursorPolling)
+    }
+
+    /// `previous` when it covers the same calendar day as `fallback`, else `fallback`.
+    static func carriedHourly(
+        _ previous: CursorDayHourlyUsage?,
+        fallback: CursorDayHourlyUsage,
+        calendar: Calendar = .current
+    ) -> CursorDayHourlyUsage {
+        guard let previous, calendar.isDate(previous.dayStart, inSameDayAs: fallback.dayStart) else { return fallback }
+        return previous
     }
 
     /// Billing-cycle length in days for rollover detection; 30 when either end is unknown.
@@ -202,14 +222,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// reported pool % (`observedByDay`). Days it did not observe are back-filled
     /// from a per-day pool-estimate weight (`estimatedWeightByDay`), scaled so the
     /// whole cycle still sums to `usedPercent`. If tracked deltas exceed the live
-    /// pool %, they are rescaled down to match instead of overshooting. Returns
-    /// nil when the subscription month cannot be resolved (a calendar month is
-    /// never substituted).
+    /// pool %, they are rescaled down to match. Returns nil when the subscription
+    /// month cannot be resolved.
     ///
     /// After an early provider reset, `interruptedWindowStart` marks the cycle
     /// that was cut short: its observed days that fall before the new cycle start
-    /// are shown (dimmed) as history in the displayed Monday–Sunday week, but
-    /// never count toward the new cycle's pool math.
+    /// are shown (dimmed) as history in the displayed Monday–Sunday week and
+    /// stay outside the new cycle's pool math.
     static func buildDailyBudgetDays(
         observedByDay: [Date: Double],
         interruptedWindowStart: Date? = nil,
@@ -232,8 +251,8 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         let estimated = estimatedWeightByDay.filter { $0.key >= cycleStartDay && $0.key < bounds.end }
 
         // The first day the app tracked is only partially observed (tracking began
-        // mid-day), so estimate it rather than paint a misleading sliver. Later
-        // days are covered fully and use their measured delta.
+        // mid-day), so it uses the estimate. Later days are covered fully and
+        // use their measured delta.
         var effectiveObserved = observed
         if let firstTrackedDay = observed.keys.min() {
             effectiveObserved.removeValue(forKey: firstTrackedDay)
@@ -246,7 +265,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         if tracked > usedPercent + 0.001, tracked > 0 {
             // Pool % fell below the sum of tracked daily deltas (downward tick,
             // API rebase, or drift past the reset floor). Rescale so bars still
-            // sum to the live headline usedPercent instead of overshooting it.
+            // sum to the live headline usedPercent.
             let scale = usedPercent / tracked
             for (day, value) in effectiveObserved {
                 blended[day] = value * scale

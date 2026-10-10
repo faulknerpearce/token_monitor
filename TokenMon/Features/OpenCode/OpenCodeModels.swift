@@ -37,7 +37,7 @@ struct OpenCodeWindowUsage: Identifiable, Hashable, Sendable {
         Self.clampedPercent(usedUSD: usedUSD, limitUSD: limitUSD)
     }
 
-    /// Spend as percent of limit; returns `0` when `limitUSD` is not positive.
+    /// Spend as percent of limit; returns `0` when `limitUSD` is zero or negative.
     static func clampedPercent(usedUSD: Double, limitUSD: Double) -> Double {
         guard limitUSD > 0 else { return 0 }
         return Percent.clamp(usedUSD / limitUSD * 100)
@@ -138,7 +138,7 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
         maxHourUSD <= 0 && hours.allSatisfy { $0.messageCount == 0 }
     }
 
-    /// Overview weights: keep Go and Zen separate; xAI/Grok-via-harness → Grok;
+    /// Overview weights: Go and Zen stay separate; xAI/Grok-via-harness → Grok;
     /// other BYOK providers are excluded.
     func overviewProviderHourWeights() -> (
         openCodeGo: [Double],
@@ -289,8 +289,8 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     var primaryUsedPercent: Double { monthlyUsedPercent }
 
     /// True when the local session DB contributed model/token/spend stats. The
-    /// console snapshot alone carries none, so the Stats card is omitted rather
-    /// than rendered as `$0.00 / 0 tokens`.
+    /// console snapshot alone carries none, so the Stats card is shown only when
+    /// this is true.
     var hasLocalStats: Bool {
         !models.isEmpty || monthlyTokens > 0 || monthlyEstimatedUSD > 0
     }
@@ -369,5 +369,55 @@ enum ModelPalette {
         case "opencode": return purple
         default: return sRGB(for: seed)
         }
+    }
+}
+
+/// Human-readable names for OpenCode model ids (`gpt-5.4-mini` → "GPT-5.4 Mini").
+enum OpenCodeModelName {
+    /// Brand spellings that title-casing would get wrong.
+    private static let brands: [String: String] = [
+        "gpt": "GPT",
+        "glm": "GLM",
+        "minimax": "MiniMax",
+        "deepseek": "DeepSeek",
+        "mimo": "MiMo",
+        "hy3": "HY3"
+    ]
+
+    /// Brands written with a hyphen before the version (`GPT-5.4`, `GLM-5.1`).
+    private static let hyphenatedBrands: Set<String> = ["GPT", "GLM"]
+
+    /// Display name for `modelID`: brand casing, the first letter of every
+    /// other word upper-cased (the rest kept, so `k2.6` reads `K2.6`), and
+    /// consecutive bare integers joined as a version (`4-5` → `4.5`).
+    static func display(_ modelID: String) -> String {
+        let lower = modelID.lowercased()
+        if lower.contains("muse-spark") { return "Muse Spark" }
+        var words: [String] = []
+        for part in modelID.split(separator: "-").map(String.init) where !part.isEmpty {
+            if let last = words.last, isInteger(part), isVersionTail(last) {
+                words[words.count - 1] = "\(last).\(part)"
+                continue
+            }
+            if let last = words.last, hyphenatedBrands.contains(last), part.first?.isNumber == true {
+                words[words.count - 1] = "\(last)-\(part)"
+                continue
+            }
+            words.append(brands[part.lowercased()] ?? capitalizedFirst(part))
+        }
+        return words.isEmpty ? modelID : words.joined(separator: " ")
+    }
+
+    private static func isInteger(_ word: String) -> Bool {
+        !word.isEmpty && word.allSatisfy(\.isNumber)
+    }
+
+    /// True for a bare number (or number.number) that a following integer extends.
+    private static func isVersionTail(_ word: String) -> Bool {
+        !word.isEmpty && word.allSatisfy { $0.isNumber || $0 == "." }
+    }
+
+    private static func capitalizedFirst(_ word: String) -> String {
+        word.prefix(1).uppercased() + word.dropFirst()
     }
 }

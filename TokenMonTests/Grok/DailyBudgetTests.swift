@@ -70,7 +70,7 @@ final class DailyBudgetTests: XCTestCase {
     }
 
     func testLast7AtPeriodStartPadsForward() {
-        // Period starts today: only one real day exists; window must still be 7 bars.
+        // Period starts today: only one real day exists; the window is still 7 bars.
         let today = date(2026, 8, 1)
         let all = DailyBudget.buildDays(
             periodStart: today,
@@ -87,7 +87,7 @@ final class DailyBudgetTests: XCTestCase {
     // MARK: buildWeeklyWindowDays
 
     /// August 2026: Aug 27 is a Thursday. The window anchors to the reset
-    /// instant itself — not a hardcoded weekday.
+    /// instant itself.
     func testWeeklyWindowAnchorsToResetMidPeriod() {
         // Running period that resets Thu Aug 27 11:00 → bars run Thu Aug 20…Wed Aug 26.
         let tuesday = date(2026, 8, 25, hour: 15)
@@ -135,7 +135,7 @@ final class DailyBudgetTests: XCTestCase {
 
     func testWeeklyWindowRollsForwardAtResetInstant() {
         // At/after the reset instant the whole window rolls to the new period
-        // starting today — never two partial periods in one chart.
+        // starting today, so one chart holds a single period.
         let atReset = date(2026, 8, 27, hour: 11)
         let staleSpent: [Date: Double] = [calendar.startOfDay(for: date(2026, 8, 21)): 40]
         let days = DailyBudget.buildWeeklyWindowDays(
@@ -155,7 +155,7 @@ final class DailyBudgetTests: XCTestCase {
         }
     }
 
-    /// A payload lagging several periods must still produce a window that
+    /// A payload lagging several periods still produces a window that
     /// contains today — the advance loop rolls whole weeks.
     func testWeeklyWindowAdvancesWeeksStaleReset() {
         let now = date(2026, 8, 25, hour: 15)
@@ -185,7 +185,7 @@ final class DailyBudgetTests: XCTestCase {
             let day = calendar.date(byAdding: .day, value: offset - 2, to: today)!
             return DailyBudgetDay(
                 date: calendar.startOfDay(for: day),
-                spentUSD: 99, // bar spends must be ignored
+                spentUSD: 99, // bar spends are ignored
                 budgetUSD: 3
             )
         }
@@ -271,7 +271,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertNil(DailyBudget.paceHeadroom(days: [], periodConsumed: 10, now: date(2026, 8, 25), calendar: calendar))
     }
 
-    /// Monthly 7-bar slice: elapsed days must come from the full period, not the window.
+    /// Monthly 7-bar slice: elapsed days come from the full period.
     func testPaceHeadroomUsesElapsedDaysForFullPeriod() throws {
         let today = date(2026, 8, 25)
         // Visible bars are only the last 7 days, each ~3.226% of a 31-day month.
@@ -395,7 +395,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(calendar.isDate(start!, inSameDayAs: date(2026, 8, 20)))
     }
 
-    /// Stale billing-cycle dates must pace against the running month, not the closed one.
+    /// Stale billing-cycle dates pace against the running month.
     func testMonthlyPacePeriodStartAdvancesStaleCycle() throws {
         let today = date(2026, 8, 25)
         let daily = 100.0 / 31.0
@@ -469,7 +469,7 @@ final class DailyBudgetTests: XCTestCase {
     }
 
     /// On the reset calendar day *before* the instant the running period still
-    /// owns today — the monthly grid must include it (same rule as weekly).
+    /// owns today — the monthly grid includes it (same rule as weekly).
     func testMonthlyLast7IncludesTodayOnResetMorning() throws {
         let morning = date(2026, 8, 16, hour: 9)
         let built = try XCTUnwrap(
@@ -488,7 +488,7 @@ final class DailyBudgetTests: XCTestCase {
     }
 
     /// A stale (already-ended) monthly cycle advances to the running anniversary
-    /// month instead of painting the closed month's suffix.
+    /// month.
     func testSubscriptionMonthAdvancesStaleCycle() throws {
         let bounds = try XCTUnwrap(
             DailyBudget.subscriptionMonth(
@@ -500,6 +500,57 @@ final class DailyBudgetTests: XCTestCase {
         )
         XCTAssertTrue(calendar.isDate(bounds.start, inSameDayAs: date(2026, 8, 16)))
         XCTAssertTrue(calendar.isDate(bounds.end, inSameDayAs: date(2026, 9, 16)))
+    }
+
+    /// Later cycles are counted from the anchor day, so a month-end anchor
+    /// returns to the 31st after a short month.
+    func testSubscriptionMonthAdvanceKeepsAnchorDayAfterShortMonth() throws {
+        let fromStart = try XCTUnwrap(
+            DailyBudget.subscriptionMonth(
+                knownStart: date(2026, 1, 31),
+                now: date(2026, 3, 10),
+                calendar: calendar
+            )
+        )
+        XCTAssertTrue(calendar.isDate(fromStart.start, inSameDayAs: date(2026, 2, 28)))
+        XCTAssertTrue(calendar.isDate(fromStart.end, inSameDayAs: date(2026, 3, 31)))
+
+        let fromReset = try XCTUnwrap(
+            DailyBudget.subscriptionMonth(
+                resetsAt: date(2026, 1, 31),
+                now: date(2026, 4, 2),
+                calendar: calendar
+            )
+        )
+        XCTAssertTrue(calendar.isDate(fromReset.start, inSameDayAs: date(2026, 3, 31)))
+        XCTAssertTrue(calendar.isDate(fromReset.end, inSameDayAs: date(2026, 4, 30)))
+    }
+
+    /// On the reset day before the reset instant the extra bar is shown, but the
+    /// daily share stays at the period's 31 days.
+    func testBuildDaysKeepsDailyShareOnFinalMorning() {
+        let start = date(2026, 7, 16, hour: 12)
+        let end = date(2026, 8, 16, hour: 12)
+        let before = DailyBudget.buildDays(
+            periodStart: start,
+            periodEnd: end,
+            limitUSD: 100,
+            spentByDay: [:],
+            now: date(2026, 8, 15, hour: 9),
+            calendar: calendar
+        )
+        let finalMorning = DailyBudget.buildDays(
+            periodStart: start,
+            periodEnd: end,
+            limitUSD: 100,
+            spentByDay: [:],
+            now: date(2026, 8, 16, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(before.count, 31)
+        XCTAssertEqual(finalMorning.count, 32)
+        XCTAssertEqual(before.first?.budgetUSD ?? 0, 100.0 / 31.0, accuracy: 1e-9)
+        XCTAssertEqual(finalMorning.first?.budgetUSD ?? 0, 100.0 / 31.0, accuracy: 1e-9)
     }
 
     func testStaleMonthlyEndDoesNotPaintClosedSuffix() throws {
@@ -630,7 +681,7 @@ final class DailyBudgetTests: XCTestCase {
     }
 
     /// Over pace is measured against the day-based allowance and the caption
-    /// reports only the overrun — never the raw used amount.
+    /// reports only the overrun.
     func testOverPaceCaptionOmitsUsedAmount() throws {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 12))!
         let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 18, minute: 57))!
@@ -650,9 +701,9 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(caption.hasPrefix("Usage 7.1% over today's allowance"), "got: \(caption)")
     }
 
-    /// Regression (Grokbot, first day of a fresh period): the allowance is one
-    /// whole day's share, so 7% used on day 1 of a weekly pool leaves ~7.3% — not
-    /// the fractional-time value, and never a false over-pace.
+    /// Grokbot, first day of a fresh period: the allowance is one
+    /// whole day's share, so 7% used on day 1 of a weekly pool leaves ~7.3% and
+    /// reads as within pace.
     func testFirstDayRemainingIsWholeDayShare() throws {
         // Wed Sep 23 20:00, reset Wed Sep 30 19:00 → period started today.
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 20))!
@@ -676,7 +727,7 @@ final class DailyBudgetTests: XCTestCase {
     /// Final day of the window with the reset still to come (Grok: Wednesday's
     /// last bar, Thursday-evening reset): the day-based allowance has credited the
     /// whole pool, so the unspent pool is paced against the time actually left —
-    /// 91% used reads as over pace, not "9% left today".
+    /// 91% used reads as over pace.
     func testFinalWindowDayAccountsForTimeUntilReset() throws {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 20))!
         let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 18, minute: 57))!
@@ -697,7 +748,7 @@ final class DailyBudgetTests: XCTestCase {
 
     /// Without a reset instant the wording is the same; the caption still omits
     /// the used amount for an overrun.
-    func testLegacyCaptionUnchangedWithoutReset() throws {
+    func testCaptionWithoutResetInstant() throws {
         let wed = calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 12))!
         let days = weeklyDays(ending: calendar.startOfDay(for: wed))
         let pace = try XCTUnwrap(DailyBudget.paceHeadroom(
@@ -743,7 +794,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertFalse(caption.contains("over pace"), "got: \(caption)")
     }
 
-    /// Monthly pool burned early: flags over pace, not "usage left".
+    /// Monthly pool burned early: flags over pace.
     func testMonthlyBurnedEarlyFlagsOverPace() throws {
         let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 6, hour: 12))!
         let reset = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1))!
@@ -826,7 +877,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(pace.headroomToday, daily * 2 - 5, accuracy: 1e-9)
     }
 
-    /// Without an early-reset window start nothing changes: bars follow `resetsAt`.
+    /// Without an early-reset window start, bars follow `resetsAt`.
     func testWeeklyWindowWithoutWindowStartIsUnchanged() {
         let days = DailyBudget.buildWeeklyWindowDays(
             limitUSD: 100,

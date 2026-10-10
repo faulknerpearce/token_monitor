@@ -84,3 +84,70 @@ final class OpenCodeConsoleClientTests: XCTestCase {
         )
     }
 }
+
+/// Workspace selection and error mapping for the console client.
+final class OpenCodeConsoleWorkspaceTests: XCTestCase {
+    private static let seated = Data(#"{"access": {"meters": {"month": {"limitMicroCents": 6000000000, "usedMicroCents": 600000000}}}}"#.utf8)
+    private static let unseated = Data(#"{"access": {}}"#.utf8)
+
+    func testPreferredWorkspaceWithSeatIsUsedWithoutListing() async throws {
+        let recorder = PathRecorder()
+        let client = OpenCodeConsoleClient { path, orgID in
+            await recorder.record(path, orgID)
+            return Self.seated
+        }
+        let (_, org) = try await client.fetchGoUsageSnapshot(knownOrgID: "wrk_redirect")
+        XCTAssertEqual(org, "wrk_redirect")
+        let paths = await recorder.paths
+        XCTAssertFalse(paths.contains("/console/api/orgs"))
+    }
+
+    func testOtherWorkspacesAreTriedForAGoSeat() async throws {
+        let client = OpenCodeConsoleClient { path, orgID in
+            if path == "/console/api/orgs" {
+                return Data(#"[{"id": "wrk_first"}, {"id": "wrk_redirect"}, {"id": "wrk_go"}]"#.utf8)
+            }
+            return orgID == "wrk_go" ? Self.seated : Self.unseated
+        }
+        let (snap, org) = try await client.fetchGoUsageSnapshot(knownOrgID: "wrk_redirect")
+        XCTAssertEqual(org, "wrk_go")
+        XCTAssertEqual(snap.monthlyUsedPercent, 10, accuracy: 0.001)
+    }
+
+    func testForbiddenEverywhereReportsDeniedWorkspace() async {
+        let client = OpenCodeConsoleClient { path, _ in
+            if path == "/console/api/orgs" { return Data(#"[{"id": "wrk_a"}]"#.utf8) }
+            throw OpenCodeConsoleError.orgForbidden
+        }
+        do {
+            _ = try await client.fetchGoUsageSnapshot(knownOrgID: "wrk_a")
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual(error as? ProviderError, .badResponse(.openCode, "The OpenCode console denied access to this workspace."))
+        }
+    }
+
+    func testResolveOrgIDKeepsPreferredWorkspace() async throws {
+        let client = OpenCodeConsoleClient { _, _ in Data(#"[{"id": "wrk_first"}]"#.utf8) }
+        let preferred = try await client.resolveOrgID(preferred: "wrk_redirect")
+        XCTAssertEqual(preferred, "wrk_redirect")
+        let listed = try await client.resolveOrgID(preferred: nil)
+        XCTAssertEqual(listed, "wrk_first")
+    }
+
+    func testServerErrorMessageCarriesNoBodyBytes() throws {
+        let url = try XCTUnwrap(URL(string: "https://opencode.ai/console/api/go/status"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil))
+        XCTAssertThrowsError(try OpenCodeConsoleClient.check(response, data: Data("secret-token".utf8), orgID: nil)) { error in
+            XCTAssertEqual(error as? ProviderError, .badResponse(.openCode, "HTTP 500"))
+        }
+    }
+}
+
+private actor PathRecorder {
+    private(set) var paths: [String] = []
+
+    func record(_ path: String, _: String?) {
+        paths.append(path)
+    }
+}

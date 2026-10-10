@@ -62,6 +62,14 @@ enum OpenRouterBudgetSource: String, Sendable {
         case .keyLimit: return "Key limit"
         }
     }
+
+    /// Stats-grid title for the budget denominator.
+    var statTitle: String {
+        switch self {
+        case .accountCredits: return "Credits purchased"
+        case .keyLimit: return "Key spending limit"
+        }
+    }
 }
 
 /// One OpenRouter poll result.
@@ -103,6 +111,16 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         return Percent.clamp(usedUSD / budgetUSD * 100)
     }
 
+    /// Stats-grid title for the budget figure, named after its source.
+    var budgetStatTitle: String {
+        budgetSource?.statTitle ?? "Credit limit"
+    }
+
+    /// Stats-grid value for the budget figure; "None" when the key is unlimited.
+    var budgetStatValue: String {
+        budgetUSD.map { Format.usd($0) } ?? "None"
+    }
+
     /// Builds a snapshot preferring account credits, then key limit, then spend only.
     static func build(
         key: OpenRouterKeyData,
@@ -137,9 +155,9 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         } else if let limit = key.limit, limit > 0 {
             snapshot.budgetSource = .keyLimit
             snapshot.budgetUSD = limit
-            // Window selection follows the provider's `limit_reset`, not the local
-            // calendar: inside a reset window the bar shows spend against the current
-            // window; without one, `/key` usage is all-time.
+            // Window selection follows the provider's `limit_reset`: inside a reset
+            // window the bar shows spend against the current window; without one,
+            // `/key` usage is all-time.
             let windowUsage = key.limitReset.flatMap { reset in
                 key.limitRemaining.map { max(0, limit - $0) }
                     ?? Self.windowUsage(key: key, reset: reset.lowercased())
@@ -152,7 +170,7 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
 
         snapshot.models = OpenRouterModelUsage.models(from: activity ?? [])
 
-        // Negative balances (overdraft) clamp so the bar never underfills.
+        // Negative usage (overdraft) clamps to zero.
         snapshot.usedUSD = max(0, snapshot.usedUSD)
         return snapshot
     }

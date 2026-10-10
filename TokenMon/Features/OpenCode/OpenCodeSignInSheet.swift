@@ -11,7 +11,7 @@ struct OpenCodeSignInView: View {
             config: ProviderSignInConfig(
                 title: "Sign in to OpenCode",
                 subtitle: "Sign in to the OpenCode console. This window finishes on its own once the console loads.",
-                startURL: URL(string: "https://opencode.ai/console/login")!,
+                startURL: URL(staticString: "https://opencode.ai/console/login"),
                 isAuthHost: { host, path in
                     host.contains("auth.opencode.ai")
                         || path.contains("/auth/authorize")
@@ -23,7 +23,7 @@ struct OpenCodeSignInView: View {
                           !host.contains("auth.") else { return false }
                     let path = url.path
                     if path.hasPrefix("/console") {
-                        // Console landing page after sign-in, not the login form itself.
+                        // Console landing page after sign-in (past the login form).
                         return !path.hasPrefix("/console/login")
                     }
                     return path.contains("/workspace")
@@ -39,7 +39,9 @@ struct OpenCodeSignInView: View {
             afterCapture: {
                 guard let cookie = auth.cookieHeader() else { return }
                 let client = OpenCodeConsoleClient(cookieHeader: cookie)
-                if let id = try? await client.resolveOrgID() {
+                // Keep the workspace from the sign-in redirect; list the
+                // account's workspaces only when the redirect carried none.
+                if let id = try? await client.resolveOrgID(preferred: auth.workspaceID) {
                     auth.saveWorkspaceID(id)
                 }
                 if let email = await client.fetchAccountEmail() {

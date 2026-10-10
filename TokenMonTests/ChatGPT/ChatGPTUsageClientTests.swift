@@ -40,7 +40,7 @@ final class ChatGPTUsageClientTests: XCTestCase {
         XCTAssertEqual(response.secondary?.windowSeconds, 604800)
     }
 
-    func testParseLegacyFieldNames() throws {
+    func testParseAlternateFieldNames() throws {
         let data = Data(#"{"five_hour": {"used_percent": 30}, "weekly": {"utilization": 40}}"#.utf8)
         let response = try ChatGPTUsageResponse.parse(data)
         XCTAssertEqual(response.primary?.usedPercent, 30)
@@ -71,8 +71,8 @@ final class ChatGPTUsageClientTests: XCTestCase {
         XCTAssertThrowsError(try ChatGPTUsageClient.parseSessionToken(Data("{}".utf8)))
     }
 
-    /// An HTML body is an edge challenge, not proof the stored session is dead;
-    /// mapping it to `.unauthorized` would delete the credential.
+    /// An HTML body is an edge challenge, not proof the stored session is dead,
+    /// so it stays transient and the credential is kept.
     func testSessionTokenHTMLIsTransientNotUnauthorized() {
         let html = Data("<!DOCTYPE html><html><body>Just a moment...</body></html>".utf8)
         XCTAssertThrowsError(try ChatGPTUsageClient.parseSessionToken(html)) { error in

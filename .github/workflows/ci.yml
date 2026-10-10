@@ -5,67 +5,92 @@ on:
     branches: [main, master]
   pull_request:
   workflow_dispatch:
+  # release.yml runs every gate below against the tagged commit before it
+  # publishes anything.
+  workflow_call:
 
 permissions:
   contents: read
 
+# Superseded pull-request runs are cancelled; pushes to master and release
+# gates always run to completion.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Every third-party action is pinned to a full commit SHA (version in the
+# trailing comment). Every downloaded tool is pinned to a version and checked
+# against its SHA-256 before it runs.
+#
 # macos-26 ships Xcode 26.x — the same major toolchain used for local
 # development — so the full hosted XCTest suite (`make test`) runs there.
-# The macos-26 jobs use the runner's selected Xcode rather than pinning an
-# exact point release (Xcode_26.6.app), so an image bump does not break them.
+# The macos-26 job uses the runner's selected Xcode, so it keeps working when
+# the image moves to a new point release.
 jobs:
-  lint:
-    name: SwiftLint (strict)
+  static-checks:
+    name: Lint, format, and XcodeGen drift
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       SWIFTLINT_VERSION: "0.59.1"
+      SWIFTLINT_SHA256: "58f9be8a4677900c945e2c618168223f4dd620a0cc65c9ccc5ea0f70433e89c1"
+      SWIFTFORMAT_VERSION: "0.62.1"
+      SWIFTFORMAT_SHA256: "7cb1cb1fae04932047c7015441c543848e8e60e1572d808d080e0a1f1661114a"
+      XCODEGEN_VERSION: "2.46.0"
+      XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install SwiftLint (pinned)
+      - name: Install SwiftLint, SwiftFormat, and XcodeGen (pinned, checksummed)
         run: |
           set -euo pipefail
-          curl -sSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" -o /tmp/swiftlint.zip
+          fetch() {
+            # fetch <url> <sha256> <output>
+            curl -fsSL --retry 3 "$1" -o "$3"
+            echo "$2  $3" | shasum -a 256 -c -
+          }
+          fetch "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" \
+            "$SWIFTLINT_SHA256" /tmp/swiftlint.zip
+          fetch "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" \
+            "$SWIFTFORMAT_SHA256" /tmp/swiftformat.zip
+          fetch "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" \
+            "$XCODEGEN_SHA256" /tmp/xcodegen.zip
+
           unzip -q -o /tmp/swiftlint.zip -d /tmp/swiftlint
+          unzip -q -o /tmp/swiftformat.zip -d /tmp/swiftformat
+          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
           sudo install "$(find /tmp/swiftlint -type f -name swiftlint | head -1)" /usr/local/bin/swiftlint
-          # The macos-15 image ships a SwiftLint in /opt/homebrew/bin that
-          # precedes /usr/local/bin on PATH. Prepend the pinned copy so both the
-          # version check and `make lint` use SWIFTLINT_VERSION.
+          sudo install "$(find /tmp/swiftformat -type f -name swiftformat | head -1)" /usr/local/bin/swiftformat
+          # The macos-15 image ships SwiftLint and SwiftFormat in
+          # /opt/homebrew/bin, which precedes /usr/local/bin on PATH. Prepend
+          # the pinned copies so the version checks and `make` use them.
           echo "/usr/local/bin" >> "$GITHUB_PATH"
           test "$(/usr/local/bin/swiftlint version)" = "$SWIFTLINT_VERSION"
+          test "$(/usr/local/bin/swiftformat --version)" = "$SWIFTFORMAT_VERSION"
+          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
 
       - name: Lint
         run: make lint
 
-  format:
-    name: SwiftFormat
-    runs-on: macos-15
-    timeout-minutes: 10
-    env:
-      SWIFTFORMAT_VERSION: "0.62.1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install SwiftFormat (pinned)
-        run: |
-          set -euo pipefail
-          curl -fsSL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o /tmp/swiftformat.zip
-          unzip -q -o /tmp/swiftformat.zip -d /tmp/swiftformat
-          BIN="$(find /tmp/swiftformat -type f -name swiftformat | head -1)"
-          sudo install "$BIN" /usr/local/bin/swiftformat
-          # The macos-15 image ships a newer SwiftFormat in /opt/homebrew/bin,
-          # which precedes /usr/local/bin on PATH. Prepend the pinned copy so
-          # both the version check and `make format` use SWIFTFORMAT_VERSION.
-          echo "/usr/local/bin" >> "$GITHUB_PATH"
-          test "$(/usr/local/bin/swiftformat --version)" = "$SWIFTFORMAT_VERSION"
-
       - name: Format check
         run: make format
+
+      - name: Regenerate project and fail on drift
+        run: |
+          set -euo pipefail
+          /tmp/xcodegen/xcodegen/bin/xcodegen generate
+          # `git status --porcelain` covers untracked generated files too (e.g. a
+          # new .xcscheme), unlike `git diff --exit-code`. The
+          # entitlements file is generated from project.yml too.
+          paths=(TokenMon.xcodeproj TokenMon/Resources/TokenMon.entitlements)
+          if [ -n "$(git status --porcelain "${paths[@]}")" ]; then
+            echo "XcodeGen drift detected; run 'make project' and commit the result:"
+            git status --porcelain "${paths[@]}"
+            git diff -- "${paths[@]}"
+            exit 1
+          fi
 
   secrets:
     name: Secret scan (gitleaks)
@@ -73,16 +98,21 @@ jobs:
     timeout-minutes: 10
     env:
       GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
     steps:
       # Full history so `gitleaks dir` + `detect --all` see every commit.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install gitleaks (pinned)
+      - name: Install gitleaks (pinned, checksummed)
         run: |
           set -euo pipefail
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tgz
+          curl -fsSL --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tgz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
           sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
           test "$(gitleaks version)" = "$GITLEAKS_VERSION"
 
@@ -93,116 +123,54 @@ jobs:
       - name: Scan full history
         run: gitleaks detect --no-banner --redact -v --log-opts="--all"
 
-  xcodegen-drift:
-    name: XcodeGen drift check
-    runs-on: macos-15
-    timeout-minutes: 10
-    env:
-      XCODEGEN_VERSION: "2.46.0"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install XcodeGen (pinned)
-        run: |
-          set -euo pipefail
-          curl -sSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o /tmp/xcodegen.zip
-          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
-          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
-
-      - name: Regenerate project and fail on drift
-        run: |
-          set -euo pipefail
-          /tmp/xcodegen/xcodegen/bin/xcodegen generate
-          # `git status --porcelain` also sees untracked generated files (e.g. a
-          # new .xcscheme), which `git diff --exit-code` would miss.
-          if [ -n "$(git status --porcelain TokenMon.xcodeproj)" ]; then
-            echo "XcodeGen drift detected in TokenMon.xcodeproj:"
-            git status --porcelain TokenMon.xcodeproj
-            git diff -- TokenMon.xcodeproj
-            exit 1
-          fi
-
-  core-tests:
-    name: Core parser tests
+  build-and-test:
+    name: Build, test, and Release build
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 45
+    # The committed TokenMon.xcodeproj is used as-is; static-checks fails the
+    # run when it differs from what project.yml generates. The job runs
+    # uncached: the project has no Swift packages, and a fresh checkout's
+    # timestamps invalidate DerivedData.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: `make release` numbers the build by commit count.
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Show toolchain
         run: |
           xcode-select -p
-          xcrun --find swiftc
+          xcodebuild -version
           swift --version
 
+      # Compiles the host-free core sources on their own, outside the app
+      # target that the app-hosted suite builds them in.
       - name: Core parser tests
         run: make test-core
-
-  unit-tests:
-    name: Build & unit tests
-    runs-on: macos-26
-    timeout-minutes: 30
-    env:
-      XCODEGEN_VERSION: "2.46.0"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install XcodeGen (pinned)
-        run: |
-          set -euo pipefail
-          curl -sSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o /tmp/xcodegen.zip
-          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
-          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
-          sudo ln -sf /tmp/xcodegen/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
-
-      - name: Regenerate Xcode project
-        run: make project
 
       - name: Build & run unit tests with coverage
         run: make test
 
-      - name: Convert coverage for Codecov
+      - name: Convert coverage to LCOV (app target only)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
-          xcrun xccov view --report build/DerivedData/Logs/Test/*.xcresult > coverage.txt
+          set -euo pipefail
+          result="$(find build/DerivedData/Logs/Test -maxdepth 1 -name '*.xcresult' | head -1)"
+          python3 -I Scripts/xccov_to_lcov.py "$result" "$GITHUB_WORKSPACE" > coverage.lcov
 
-      - uses: codecov/codecov-action@v4
+      - name: Upload coverage
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.txt
-          # Non-blocking until a CODECOV_TOKEN is configured; coverage is
+          files: coverage.lcov
+          disable_search: true
+          # Fails the job only when a CODECOV_TOKEN is configured; coverage is
           # informational (codecov.yml).
           fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 
-  build-release:
-    name: Release build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    # Do not build/upload release artifacts from a red master: every gate must
-    # pass first.
-    needs: [lint, format, secrets, xcodegen-drift, core-tests, unit-tests]
-    runs-on: macos-26
-    timeout-minutes: 30
-    env:
-      XCODEGEN_VERSION: "2.46.0"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install XcodeGen (pinned)
-        run: |
-          set -euo pipefail
-          curl -sSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o /tmp/xcodegen.zip
-          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
-          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
-          sudo ln -sf /tmp/xcodegen/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
-
-      - name: Regenerate Xcode project
-        run: make project
-
-      - name: Build Release .app + pkg + zip
+      # Compiles the Release configuration and runs the packaging steps
+      # (component plist, pkg, zip, dSYM) that `release.yml` depends on.
+      - name: Release build and packaging
         run: make release
-
-      - name: Upload dist artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          if-no-files-found: error

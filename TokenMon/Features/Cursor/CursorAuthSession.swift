@@ -1,7 +1,7 @@
 import Foundation
 
 /// Session for cursor.com (`WorkosCursorSessionToken`).
-/// Separate cookie store from Grok / OpenCode so providers do not clobber each other.
+/// Uses its own cookie store, isolated from the Grok / OpenCode sessions.
 @MainActor
 final class CursorAuthSession: ProviderAuthSession {
     private static let cursorHosts = [
@@ -43,13 +43,9 @@ final class CursorAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(config: Self.cursorConfig())
-    }
-
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
-        super.init(config: Self.cursorConfig(), directory: directory)
+    /// Live store by default; tests isolate it to `directory` or pass `store`.
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        super.init(config: Self.cursorConfig(), directory: directory, store: store)
     }
 
     nonisolated static func isCursorDomain(_ domain: String) -> Bool {

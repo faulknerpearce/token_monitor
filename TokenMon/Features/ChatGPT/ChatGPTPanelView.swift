@@ -19,7 +19,7 @@ struct ChatGPTPanelView: View {
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
                     SlimUsageTrack(
-                        label: "5-Hour Window",
+                        label: snapshot.primary?.label(fallback: "5-Hour Window") ?? "5-Hour Window",
                         percent: snapshot.primary?.usedPercent ?? 0,
                         color: ProviderColors.chatgptColor,
                         caption: snapshot.limitReached
@@ -27,7 +27,7 @@ struct ChatGPTPanelView: View {
                             : snapshot.primary?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
-                        label: "Weekly",
+                        label: snapshot.secondary?.label(fallback: "Weekly") ?? "Weekly",
                         percent: snapshot.secondary?.usedPercent ?? 0,
                         color: ProviderColors.chatgptColor,
                         caption: snapshot.secondary?.resetsAt.map { Format.resetCaption($0) }

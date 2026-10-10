@@ -1,6 +1,5 @@
 # gitleaks configuration — extends the default ruleset.
-# Allowlist covers build output and generated artifacts only; real secrets
-# should never be committed (see SECURITY.md).
+# Allowlist covers build output and generated artifacts only (see SECURITY.md).
 [extend]
 useDefault = true
 
@@ -13,9 +12,9 @@ paths = [
     '''(^|/)DerivedData/''',
 ]
 
-# Provider session cookies are not matched by the default ruleset. Require a
-# plausible value length so short test fixtures (e.g. `sessionKey=sk-ant-sid01-xyz`)
-# do not trip the scan while a real committed jar would.
+# These rules match provider session cookies, which the default ruleset misses.
+# They require a plausible value length, so a real committed jar trips the scan
+# while short test fixtures (e.g. `sessionKey=sk-ant-sid01-xyz`) pass.
 
 [[rules]]
 id = "provider-session-cookie-header"
@@ -28,3 +27,13 @@ id = "provider-session-cookie-value"
 description = "Raw provider session cookie assignment"
 regex = '''(?i)\b(__Host-console_session|__Secure-next-auth\.session-token|WorkosCursorSessionToken|sessionKey)=[A-Za-z0-9._%+/-]{20,}'''
 tags = ["cookie", "session"]
+
+# OpenRouter API keys can spend account credit. Real keys are `sk-or-v1-`
+# followed by 64 hex characters; the rule requires the full length, so short
+# test fixtures pass.
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key"
+regex = '''\bsk-or-v1-[0-9a-f]{64}\b'''
+keywords = ["sk-or-v1-"]
+tags = ["key", "openrouter"]

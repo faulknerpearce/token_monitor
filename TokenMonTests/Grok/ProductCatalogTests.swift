@@ -39,7 +39,7 @@ final class ProductCatalogTests: XCTestCase {
     }
 
     /// A breakdown-less snapshot arrives as a synthesized "other" slice carrying
-    /// the full used%; the panel must show it so the bar is not empty.
+    /// the full used%; the panel shows it so the bar carries that usage.
     func testPanelProductsKeepsSynthesizedOtherSlice() {
         let synthesized = UsageClient.synthesizeProducts(usedPercent: 64)
         let result = ProductCatalog.panelProducts(synthesized, visible: Set(ProductCatalog.knownIDs))

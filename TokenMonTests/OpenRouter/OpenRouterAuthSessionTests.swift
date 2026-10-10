@@ -65,8 +65,8 @@ final class OpenRouterAuthSessionTests: XCTestCase {
         XCTAssertNotNil(auth.lastAuthError)
     }
 
-    /// A rejected key must not be considered current, so the poller stops probing
-    /// until a new key is saved (audit: OpenRouter invalidation contract).
+    /// A rejected key is not current, so the poller stops probing
+    /// until a new key is saved.
     func testRejectedKeyIsNotCurrentUntilReplaced() {
         let (auth, dir) = makeSession()
         defer { cleanup(dir) }
@@ -76,7 +76,7 @@ final class OpenRouterAuthSessionTests: XCTestCase {
 
         auth.markSessionInvalid(reason: "401")
         XCTAssertFalse(auth.isCurrent(generation))
-        // The key stays on disk for the replace-key field, but polls must stop.
+        // The key stays on disk for the replace-key field, but polls stop.
         XCTAssertEqual(auth.apiKey(), "sk-or-v1-abc")
 
         XCTAssertTrue(auth.saveAPIKey("sk-or-v1-new"))

@@ -4,7 +4,7 @@ import Foundation
 
 /// TokenMon mascot on a full-bleed off-white square — visible in Spotlight / Finder
 /// (pure black-on-white is stored as Monochrome and IconServices mounts a gray plate).
-/// macOS applies the squircle mask; do not inset or pre-round the canvas.
+/// macOS applies the squircle mask, so the canvas is full-bleed with square corners.
 
 func sourceImageURL() -> URL {
     let besideScript = URL(fileURLWithPath: #file)
@@ -107,7 +107,7 @@ func drawIcon(size: Int, source: NSImage, path: String) {
         return
     }
 
-    // Flatten to opaque RGB PNG (no alpha channel) for IconServices.
+    // Flattens to an opaque RGB PNG for IconServices.
     guard let rgbCtx = CGContext(
         data: nil,
         width: size,

@@ -22,10 +22,10 @@ struct ClaudePanelView: View {
                         caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
-                        label: "Weekly",
+                        label: snapshot.weeklyLabel,
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
                         color: ProviderColors.claudeColor,
-                        caption: snapshot.sevenDay?.resetsAt.map { Format.resetCaption($0) }
+                        caption: poller.weeklyResetsAt().map { Format.resetCaption($0) }
                     )
                 }
 
@@ -33,23 +33,19 @@ struct ClaudePanelView: View {
                     style: .weekly,
                     accent: ProviderColors.claudeColor,
                     periodUsedPercent: snapshot.sevenDay?.usedPercent,
-                    resetsAt: snapshot.sevenDay?.resetsAt,
+                    resetsAt: poller.weeklyResetsAt(),
                     daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
                 )
 
-                if auth.needsSignIn || poller.lastError != nil {
-                    if let err = poller.lastError {
-                        Text(err)
-                            .font(PanelTypography.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                    }
-                    ProviderSignInButton(
-                        provider: .claude,
-                        title: auth.needsSignIn ? "Sign In to Claude…" : "Sign In Again…",
-                        action: openSignIn
-                    )
-                    .padding(.top, 8)
+                if let err = poller.lastError {
+                    StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
+                        .padding(.top, 8)
+                }
+                // Only a rejected session needs a new sign-in; network and
+                // server errors clear on a later refresh.
+                if auth.needsSignIn {
+                    ProviderSignInButton(provider: .claude, title: "Sign In Again…", action: openSignIn)
+                        .padding(.top, 8)
                 }
 
                 ProviderSignOutButton(provider: .claude) {

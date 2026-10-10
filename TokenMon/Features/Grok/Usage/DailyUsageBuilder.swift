@@ -10,7 +10,9 @@ enum DailyUsageBuilder {
 
     /// Caches the week/day formatter pair per calendar to avoid per-call construction.
     private static let formatterCacheLock = NSLock()
-    private static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
+    // SwiftLint versions disagree on where `nonisolated(unsafe)` goes; SwiftFormat sets this order.
+    // swiftlint:disable:next modifier_order superfluous_disable_command
+    private nonisolated(unsafe) static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
 
     private static func makeDateFormatters(
         calendar: Calendar
@@ -44,8 +46,7 @@ enum DailyUsageBuilder {
     }
 
     /// Billing-period week for the SuperGrok pool. Returns nil when no
-    /// provider-supplied `resetsAt` exists — a calendar Mon–Sun week is never
-    /// invented as a substitute.
+    /// provider-supplied `resetsAt` exists.
     static func week(
         history: [WeeklyUsageSnapshot],
         current: WeeklyUsageSnapshot?,
@@ -128,13 +129,13 @@ enum DailyUsageBuilder {
 
         let (weekdayFormatter, dayOfMonthFormatter) = Self.makeDateFormatters(calendar: cal)
 
-        // Samples through this period’s last day. Prior-period days stay out via anchor filter.
+        // Samples through this period’s last day. The anchor filter excludes prior-period days.
         let samplesThroughWeekEnd = sortedDays.filter { $0 <= weekEnd }
         let samplesInWeek = samplesThroughWeekEnd.filter { $0 >= weekStart }
 
-        // Anchor to the billing period of the *displayed* week — not always the live snapshot.
-        // After a weekly rollover, current.resetsAt is the new period; past weeks (weekOffset < 0)
-        // must keep last period’s samples so the left-chevron history still paints.
+        // Anchor to the billing period of the *displayed* week. After a weekly rollover,
+        // current.resetsAt is the new period; past weeks (weekOffset < 0) keep the earlier
+        // period’s samples so the left-chevron history paints.
         let anchorResets = periodAnchorResets(
             weekOffset: weekOffset,
             weekStart: weekStart,
@@ -218,7 +219,7 @@ enum DailyUsageBuilder {
                     }
                 } else if dayCumulative > 0.05, isTrackingStart || isPeriodStart {
                     // Period-start day (e.g. new-week Thursday) or mid-period rebase:
-                    // show period-to-date so day 1 is not blank after rollover.
+                    // show period-to-date so day 1 has a bar after rollover.
                     if isTrackingStart { isAfterReset = true }
                     if let priorAny = sortedDays.last(where: { $0 < dayStart }),
                        isBillingPeriodAdvanced(from: endOfDay[priorAny]?.resetsAt, to: dayResets) {
@@ -232,13 +233,13 @@ enum DailyUsageBuilder {
                           let priorSnap = endOfDay[priorAny],
                           isBillingPeriodAdvanced(from: priorSnap.resetsAt, to: dayResets) {
                     // Rollover observed between two days already in this period window:
-                    // paint post-reset week-to-date only (never merge prior-period usage).
+                    // paint post-reset week-to-date only, excluding prior-period usage.
                     isAfterReset = true
                     segments.append(
                         contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative)
                     )
                 }
-                // First sample mid-period (not period start): leave empty until a second day.
+                // First sample mid-period: the bar stays empty until a second day.
             }
 
             days.append(
@@ -383,10 +384,13 @@ enum DailyUsageBuilder {
 
     // MARK: - Billing period week
 
-    /// Exactly **7** calendar days for the active SuperGrok billing period: before
+    /// Calendar days for the active SuperGrok billing period (7, or 8 on the
+    /// reset day as described below): before
     /// `resetsAt`, the previous reset day through the day before reset; once it fires,
-    /// the window rolls to the new period starting that day. Returns nil when
-    /// `resetsAt` is unknown — never falls back to a calendar week.
+    /// the window rolls to the new period starting that day. On the reset day itself,
+    /// before the reset instant, the running period still owns today, so the current
+    /// window (`weekOffset == 0`) runs through the reset day as an eighth bar. Returns
+    /// nil when `resetsAt` is unknown.
     static func billingPeriodWeekBounds(
         resetsAt: Date?,
         weekOffset: Int,
@@ -398,15 +402,14 @@ enum DailyUsageBuilder {
         guard let resetsAt else { return nil }
         let resetDay = cal.startOfDay(for: resetsAt)
         // Active period start: 7 days before the reset day while still in period, or
-        // the reset day itself once `resetsAt` has passed and the API has not advanced it.
+        // the reset day itself once `resetsAt` has passed and the API still reports it.
         var baseStart: Date
         if now >= resetsAt {
             baseStart = resetDay
-            // The API may not have advanced `resetsAt` for more than one period,
-            // which would leave the window entirely in the past. Roll forward by
-            // whole periods until the window contains today. (Before the reset
-            // fires we deliberately keep the prior period, so this roll is only
-            // applied on the post-reset branch.)
+            // The API can lag `resetsAt` by more than one period, leaving the
+            // window entirely in the past. Roll forward by whole periods until the
+            // window contains today. Before the reset fires the prior period is
+            // kept, so this roll applies only on the post-reset branch.
             let today = cal.startOfDay(for: now)
             var guardIter = 0
             while guardIter < 520 {
@@ -421,6 +424,9 @@ enum DailyUsageBuilder {
         }
         let shiftedStart = cal.date(byAdding: .day, value: weekOffset * 7, to: baseStart) ?? baseStart
         let shiftedEnd = cal.date(byAdding: .day, value: 6, to: shiftedStart) ?? shiftedStart
+        if weekOffset == 0, now < resetsAt, cal.isDate(now, inSameDayAs: resetDay) {
+            return (shiftedStart, resetDay)
+        }
         return (shiftedStart, shiftedEnd)
     }
 
@@ -580,7 +586,7 @@ enum DailyUsageBuilder {
         return current.timeIntervalSince(previous) > 12 * 3600
     }
 
-    /// Same SuperGrok pool period (neither side’s `resetsAt` advanced past the other).
+    /// Same SuperGrok pool period (both `resetsAt` values within the rollover threshold).
     private static func isSameBillingPeriod(_ from: Date?, _ to: Date?) -> Bool {
         !isBillingPeriodAdvanced(from: from, to: to) && !isBillingPeriodAdvanced(from: to, to: from)
     }
@@ -630,7 +636,7 @@ enum DailyUsageBuilder {
         return []
     }
 
-    /// Day-over-day growth per product — omits products that did not increase.
+    /// Day-over-day growth per product, for the products that increased.
     private static func productDeltaSegments(
         from previous: [ProductUsage],
         to current: [ProductUsage]
@@ -666,8 +672,8 @@ enum DailyUsageBuilder {
 
     /// Proportional split of a total when product-level deltas are unavailable.
     ///
-    /// Uses the current product mix only as weights for the *delta*, not as absolute
-    /// week-to-date amounts. When no products exist, label as "other" (never Build).
+    /// Uses the current product mix as weights for the *delta* only. When no
+    /// products exist, labels the delta "other".
     private static func distribute(total: Double, products: [ProductUsage]) -> [DailyUsageSegment] {
         let visible = products.filter { $0.percentOfPool > 0.05 }
         let sum = visible.reduce(0.0) { $0 + $1.percentOfPool }

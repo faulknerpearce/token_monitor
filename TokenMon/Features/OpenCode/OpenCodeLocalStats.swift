@@ -23,14 +23,20 @@ enum OpenCodeLocalStatsError: LocalizedError {
 enum OpenCodeLocalStats {
     static let rolling5hSeconds: TimeInterval = 5 * 3600
 
-    /// Real user home, not the sandbox container home (`NSHomeDirectory` would
-    /// resolve to the app container).
-    static var realHomeDirectory: URL {
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+    /// Real user home outside the sandbox container (`NSHomeDirectory` resolves
+    /// to the app container). Resolved once with the reentrant `getpwuid_r`, so
+    /// detached readers avoid sharing `getpwuid`'s static buffer.
+    static let realHomeDirectory: URL = {
+        var record = passwd()
+        var result: UnsafeMutablePointer<passwd>?
+        let suggested = sysconf(Int32(_SC_GETPW_R_SIZE_MAX))
+        var buffer = [CChar](repeating: 0, count: suggested > 0 ? suggested : 4096)
+        if getpwuid_r(getuid(), &record, &buffer, buffer.count, &result) == 0,
+           result != nil, let dir = record.pw_dir {
             return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
         }
         return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-    }
+    }()
 
     static var databaseDirectory: URL {
         realHomeDirectory
@@ -41,8 +47,8 @@ enum OpenCodeLocalStats {
         databaseDirectory.appendingPathComponent("opencode.db")
     }
 
-    /// OpenCode Go subscription usage only (`opencode-go`). Zen (`opencode`)
-    /// and direct provider keys do not count toward Go $12 / $30 / $60 limits.
+    /// OpenCode Go subscription usage only (`opencode-go`); only these count
+    /// toward the Go $12 / $30 / $60 limits.
     static func goEligibleProvider(_ providerID: String) -> Bool {
         providerID.lowercased() == "opencode-go"
     }
@@ -53,7 +59,7 @@ enum OpenCodeLocalStats {
         OpenCodeZenCostEstimate.isPlanProvider(providerID)
     }
 
-    /// Grok used through the OpenCode harness (counts toward Overview Grok, not OpenCode).
+    /// Grok used through the OpenCode harness (counts toward Overview Grok).
     static func grokViaOpenCode(providerID: String, modelID: String = "") -> Bool {
         let provider = providerID.lowercased()
         if provider == "xai" { return true }
@@ -118,7 +124,7 @@ enum OpenCodeLocalStats {
         return (start, end)
     }
 
-    /// One local usage row from `session` or assistant `message` records.
+    /// One assistant `message` record: the per-turn model, cost, and tokens.
     struct SessionRow: Sendable {
         var timeCreatedMS: Int64
         var costUSD: Double
@@ -128,8 +134,58 @@ enum OpenCodeLocalStats {
         var cacheWriteTokens: Int64
         var providerID: String
         var modelID: String
-        /// Present for message-level rows; empty for session-table rows.
         var sessionID: String = ""
+
+        var date: Date { Date(timeIntervalSince1970: TimeInterval(timeCreatedMS) / 1000) }
+
+        var totalTokens: Int64 { inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens }
+
+        /// Recorded cost, or a token-based estimate for a `$0` plan row.
+        var billable: (cost: Double, isEstimated: Bool) {
+            OpenCodeZenCostEstimate.billableCostUSD(
+                providerID: providerID,
+                modelID: modelID,
+                recordedCostUSD: costUSD,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
+                cacheReadTokens: cacheReadTokens,
+                cacheWriteTokens: cacheWriteTokens
+            )
+        }
+    }
+
+    /// Shared cache of the last database read (see ``OpenCodeLocalScanCache``).
+    static let scanCache = OpenCodeLocalScanCache()
+
+    /// Days of messages one scan covers: the longest subscription month plus
+    /// the four weeks of history the daily-budget arrows browse, with slack.
+    static let scanLookbackDays = 62
+
+    /// Earliest message instant the standard scan for `now` reads.
+    static func scanStart(now: Date) -> Date {
+        now.addingTimeInterval(-TimeInterval(scanLookbackDays) * 86400)
+    }
+
+    /// Assistant messages since `since` plus the first Go session, from the
+    /// cache when the database and its WAL are unchanged and the cached scan
+    /// reaches back far enough; otherwise one read on one connection.
+    static func loadScan(
+        dbURL: URL,
+        since: Date,
+        cache: OpenCodeLocalScanCache = scanCache
+    ) throws -> OpenCodeLocalScan {
+        guard FileManager.default.fileExists(atPath: dbURL.path) else {
+            throw OpenCodeLocalStatsError.databaseMissing(dbURL)
+        }
+        return try cache.scan(dbURL: dbURL, since: since) {
+            let db = try openConnection(at: dbURL)
+            defer { sqlite3_close(db) }
+            return try OpenCodeLocalScan(
+                since: since,
+                subscribedAt: earliestGoSessionDate(db: db),
+                rows: readAssistantMessageRows(from: db, startMS: milliseconds(since))
+            )
+        }
     }
 
     static func fetchSnapshot(now: Date = Date()) throws -> OpenCodeSnapshot {
@@ -138,77 +194,47 @@ enum OpenCodeLocalStats {
 
     /// Builds rolling, weekly, and monthly usage from `opencode.db`.
     static func fetchSnapshot(dbURL: URL, now: Date = Date()) throws -> OpenCodeSnapshot {
-        guard FileManager.default.fileExists(atPath: dbURL.path) else {
-            throw OpenCodeLocalStatsError.databaseMissing(dbURL)
-        }
-        // Open the DB once and share the connection across the session + two
-        // message scans.
-        let db = try openConnection(at: dbURL)
-        defer { sqlite3_close(db) }
+        try snapshot(from: loadScan(dbURL: dbURL, since: scanStart(now: now)), now: now)
+    }
 
-        let rows = try readRows(db: db)
-
+    /// Rolling, weekly, and monthly Go usage, the weekly model breakdown, and
+    /// monthly plan totals, all bucketed by message time.
+    ///
+    /// The monthly figures come from the month's own messages only, so total
+    /// tokens always equal input + output + cache tokens.
+    static func snapshot(from scan: OpenCodeLocalScan, now: Date) -> OpenCodeSnapshot {
         let rollingStart = now.addingTimeInterval(-rolling5hSeconds)
-        let rollingStartMS = Int64(rollingStart.timeIntervalSince1970 * 1000)
         let week = weeklyBounds(now: now)
-        let subscribedAt = earliestGoSessionDate(in: rows) ?? now
-        let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
+        let month = monthlyBounds(now: now, subscribedAt: scan.subscribedAt ?? now)
 
-        // Single pass: bucket each session row into the windows it belongs to.
         var rollingRows: [SessionRow] = []
         var weekRows: [SessionRow] = []
         var monthRows: [SessionRow] = []
-        for row in rows {
-            if row.timeCreatedMS >= rollingStartMS { rollingRows.append(row) }
-            if inWindow(row, start: week.start, end: week.end) { weekRows.append(row) }
-            if inWindow(row, start: month.start, end: month.end) { monthRows.append(row) }
+        for row in scan.rows {
+            let date = row.date
+            if date >= rollingStart { rollingRows.append(row) }
+            if date >= week.start, date < week.end { weekRows.append(row) }
+            if date >= month.start, date < month.end { monthRows.append(row) }
         }
 
-        let rollingUsage = windowUsage(
-            kind: .rolling5h,
-            rows: rollingRows,
-            limitUSD: OpenCodeWindowKind.rolling5h.defaultLimitUSD,
-            resetsAt: rollingReset(rows: rollingRows, now: now)
-        )
-        let weekUsage = windowUsage(kind: .weekly, rows: weekRows, limitUSD: OpenCodeWindowKind.weekly.defaultLimitUSD, resetsAt: week.end)
-        let monthUsage = windowUsage(kind: .monthly, rows: monthRows, limitUSD: OpenCodeWindowKind.monthly.defaultLimitUSD, resetsAt: month.end)
-
-        // Model breakdown from assistant messages so mid-session model switches are counted.
-        let rawWeekEvents = try readAssistantMessageRows(
-            from: db,
-            startMS: Int64(week.start.timeIntervalSince1970 * 1000),
-            endMS: Int64(week.end.timeIntervalSince1970 * 1000)
-        ).filter { planEligibleProvider($0.providerID) }
-        let models = modelUsage(rows: rawWeekEvents)
-
-        let monthEvents = try readAssistantMessageRows(
-            from: db,
-            startMS: Int64(month.start.timeIntervalSince1970 * 1000),
-            endMS: Int64(month.end.timeIntervalSince1970 * 1000)
-        ).filter { planEligibleProvider($0.providerID) }
-        let monthTotals = tokenTotals(rows: monthEvents)
-        let monthEstimated = estimatedCostUSD(rows: monthEvents)
-        // Ensure monthly stats never appear smaller than the weekly models total at cycle start
-        // (the week can include a day before the billing month).
-        let weeklyModelsCost = models.reduce(0) { $0 + $1.costUSD }
-        let modelsTokensSum = models.reduce(0) { $0 + $1.inputTokens + $1.outputTokens + $1.cacheReadTokens + $1.cacheWriteTokens }
-        let modelsInputSum = models.reduce(0) { $0 + $1.inputTokens }
-        let modelsOutputSum = models.reduce(0) { $0 + $1.outputTokens }
-        let monthlyTokensSum = monthTotals.input + monthTotals.output + monthTotals.cacheRead + monthTotals.cacheWrite
-        let displayMonthlyTokens = max(monthlyTokensSum, modelsTokensSum)
-        let displayMonthlyUSD = max(monthEstimated, weeklyModelsCost)
-        let displayMonthlyInput = max(monthTotals.input, modelsInputSum)
-        let displayMonthlyOutput = max(monthTotals.output, modelsOutputSum)
+        let windows = [
+            windowUsage(kind: .rolling5h, rows: rollingRows, resetsAt: rollingReset(rows: rollingRows)),
+            windowUsage(kind: .weekly, rows: weekRows, resetsAt: week.end),
+            windowUsage(kind: .monthly, rows: monthRows, resetsAt: month.end)
+        ]
+        let models = modelUsage(rows: weekRows.filter { planEligibleProvider($0.providerID) })
+        let monthPlanRows = monthRows.filter { planEligibleProvider($0.providerID) }
+        let monthTotals = tokenTotals(rows: monthPlanRows)
 
         return OpenCodeSnapshot(
             fetchedAt: now,
-            windows: [rollingUsage, weekUsage, monthUsage],
+            windows: windows,
             models: models,
             isEstimated: true,
-            monthlyTokens: displayMonthlyTokens,
-            monthlyEstimatedUSD: displayMonthlyUSD,
-            monthlyInputTokens: displayMonthlyInput,
-            monthlyOutputTokens: displayMonthlyOutput
+            monthlyTokens: monthTotals.input + monthTotals.output + monthTotals.cacheRead + monthTotals.cacheWrite,
+            monthlyEstimatedUSD: monthPlanRows.reduce(0) { $0 + $1.billable.cost },
+            monthlyInputTokens: monthTotals.input,
+            monthlyOutputTokens: monthTotals.output
         )
     }
 
@@ -218,21 +244,7 @@ enum OpenCodeLocalStats {
 
     /// Builds today's 24 hourly model-cost stacks from `opencode.db`.
     static func fetchDayHourlyUsage(dbURL: URL, now: Date = Date()) throws -> OpenCodeDayHourlyUsage {
-        guard FileManager.default.fileExists(atPath: dbURL.path) else {
-            throw OpenCodeLocalStatsError.databaseMissing(dbURL)
-        }
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: now)
-        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
-        // Per-message model/cost — session.model only stores one model and misses switches (e.g. ChatGPT).
-        let db = try openConnection(at: dbURL)
-        defer { sqlite3_close(db) }
-        let rows = try readAssistantMessageRows(
-            from: db,
-            startMS: Int64(dayStart.timeIntervalSince1970 * 1000),
-            endMS: Int64(dayEnd.timeIntervalSince1970 * 1000)
-        )
-        return buildDayHourlyUsage(rows: rows, now: now)
+        try buildDayHourlyUsage(rows: loadScan(dbURL: dbURL, since: scanStart(now: now)).rows, now: now)
     }
 
     /// Local-calendar day, 24 hourly stacks of model cost (all providers).
@@ -285,15 +297,7 @@ enum OpenCodeLocalStats {
             var hourMap = byHour[hour] ?? [:]
             var entry = hourMap[key] ?? HourlyBucket(providerID: row.providerID, modelID: row.modelID)
             entry.cost += row.costUSD
-            entry.quotaCost += OpenCodeZenCostEstimate.billableCostUSD(
-                providerID: row.providerID,
-                modelID: row.modelID,
-                recordedCostUSD: row.costUSD,
-                inputTokens: row.inputTokens,
-                outputTokens: row.outputTokens,
-                cacheReadTokens: row.cacheReadTokens,
-                cacheWriteTokens: row.cacheWriteTokens
-            ).cost
+            entry.quotaCost += row.billable.cost
             entry.inputTokens += row.inputTokens
             entry.outputTokens += row.outputTokens
             entry.cacheReadTokens += row.cacheReadTokens
@@ -350,36 +354,47 @@ enum OpenCodeLocalStats {
         return OpenCodeDayHourlyUsage(dayStart: dayStart, hours: hours, legend: Array(legend))
     }
 
-    private static func earliestGoSessionDate(in rows: [SessionRow]) -> Date? {
-        rows
-            .filter { goEligibleProvider($0.providerID) }
-            .map { Date(timeIntervalSince1970: TimeInterval($0.timeCreatedMS) / 1000) }
-            .min()
-    }
-
     private static func inWindow(_ row: SessionRow, start: Date, end: Date) -> Bool {
-        let time = Date(timeIntervalSince1970: TimeInterval(row.timeCreatedMS) / 1000)
+        let time = row.date
         return time >= start && time < end
     }
 
-    private static func windowUsage(kind: OpenCodeWindowKind, rows: [SessionRow], limitUSD: Double, resetsAt: Date?) -> OpenCodeWindowUsage {
+    private static func milliseconds(_ date: Date) -> Int64 {
+        Int64(date.timeIntervalSince1970 * 1000)
+    }
+
+    /// Go usage in one window: billable cost (recorded, or estimated for a `$0`
+    /// row, matching the daily bars) and distinct sessions.
+    private static func windowUsage(kind: OpenCodeWindowKind, rows: [SessionRow], resetsAt: Date?) -> OpenCodeWindowUsage {
         let eligible = rows.filter { goEligibleProvider($0.providerID) }
-        let used = eligible.reduce(0) { $0 + $1.costUSD }
+        let used = eligible.reduce(0) { $0 + $1.billable.cost }
         return OpenCodeWindowUsage(
             kind: kind,
             usedUSD: used,
-            limitUSD: limitUSD,
+            limitUSD: kind.defaultLimitUSD,
             resetsAt: resetsAt,
-            sessionCount: eligible.count
+            sessionCount: sessionCount(eligible)
         )
     }
 
-    private static func rollingReset(rows: [SessionRow], now: Date) -> Date? {
-        let eligible = rows.filter { goEligibleProvider($0.providerID) }
-        // Match server-style reset: last Go activity in the window + rolling duration.
-        guard let last = eligible.map({ Date(timeIntervalSince1970: TimeInterval($0.timeCreatedMS) / 1000) }).max() else {
-            return nil
+    /// Distinct sessions among `rows`; a row without a session id counts alone.
+    private static func sessionCount(_ rows: [SessionRow]) -> Int {
+        var ids = Set<String>()
+        var anonymous = 0
+        for row in rows {
+            if row.sessionID.isEmpty {
+                anonymous += 1
+            } else {
+                ids.insert(row.sessionID)
+            }
         }
+        return ids.count + anonymous
+    }
+
+    /// Last Go message in the rolling window plus the rolling duration.
+    private static func rollingReset(rows: [SessionRow]) -> Date? {
+        let eligible = rows.filter { goEligibleProvider($0.providerID) }
+        guard let last = eligible.map(\.date).max() else { return nil }
         return last.addingTimeInterval(rolling5hSeconds)
     }
 
@@ -413,15 +428,7 @@ enum OpenCodeLocalStats {
             usage.cacheReadTokens += row.cacheReadTokens
             usage.cacheWriteTokens += row.cacheWriteTokens
 
-            let billable = OpenCodeZenCostEstimate.billableCostUSD(
-                providerID: row.providerID,
-                modelID: row.modelID,
-                recordedCostUSD: row.costUSD,
-                inputTokens: row.inputTokens,
-                outputTokens: row.outputTokens,
-                cacheReadTokens: row.cacheReadTokens,
-                cacheWriteTokens: row.cacheWriteTokens
-            )
+            let billable = row.billable
             usage.costUSD += billable.cost
             if billable.isEstimated {
                 usage.isCostEstimated = true
@@ -463,57 +470,6 @@ enum OpenCodeLocalStats {
         return (input, output, cacheRead, cacheWrite)
     }
 
-    private static func estimatedCostUSD(rows: [SessionRow]) -> Double {
-        rows.reduce(0) { sum, row in
-            sum + OpenCodeZenCostEstimate.billableCostUSD(
-                providerID: row.providerID,
-                modelID: row.modelID,
-                recordedCostUSD: row.costUSD,
-                inputTokens: row.inputTokens,
-                outputTokens: row.outputTokens,
-                cacheReadTokens: row.cacheReadTokens,
-                cacheWriteTokens: row.cacheWriteTokens
-            ).cost
-        }
-    }
-
-    private static func readRows(db: OpaquePointer) throws -> [SessionRow] {
-        let sql = """
-        SELECT time_created, cost, tokens_input, tokens_output, \
-        tokens_cache_read, tokens_cache_write, model \
-        FROM session WHERE time_archived IS NULL
-        """
-
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
-        }
-        defer { sqlite3_finalize(stmt) }
-
-        var rows: [SessionRow] = []
-        var step = sqlite3_step(stmt)
-        while step == SQLITE_ROW {
-            let (providerID, modelID) = modelParts(sqlite3_column_text(stmt, 6))
-            rows.append(SessionRow(
-                timeCreatedMS: sqlite3_column_int64(stmt, 0),
-                costUSD: sqlite3_column_double(stmt, 1),
-                inputTokens: sqlite3_column_int64(stmt, 2),
-                outputTokens: sqlite3_column_int64(stmt, 3),
-                cacheReadTokens: sqlite3_column_int64(stmt, 4),
-                cacheWriteTokens: sqlite3_column_int64(stmt, 5),
-                providerID: providerID,
-                modelID: modelID
-            ))
-            step = sqlite3_step(stmt)
-        }
-        // A terminal error (e.g. SQLITE_BUSY past the timeout, or a corrupt page)
-        // must not be reported as a successful partial read that undercounts.
-        guard step == SQLITE_DONE else {
-            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
-        }
-        return rows
-    }
-
     /// Opens a readonly connection. The plain path (no URI parsing) avoids a
     /// home directory containing `#`, `?`, or `%` truncating a `file:` URI;
     /// `SQLITE_OPEN_READONLY` already implies the `mode=ro` behavior.
@@ -528,17 +484,38 @@ enum OpenCodeLocalStats {
         return db!
     }
 
-    /// Assistant messages carry the real per-turn model + cost (sessions only store one model).
-    private static func readAssistantMessageRows(
-        from db: OpaquePointer,
-        startMS: Int64,
-        endMS: Int64
-    ) throws -> [SessionRow] {
+    /// First unarchived Go session: the subscription anchor for the monthly window.
+    private static func earliestGoSessionDate(db: OpaquePointer) throws -> Date? {
         let sql = """
-        SELECT time_created, session_id, data \
+        SELECT MIN(time_created) FROM session \
+        WHERE time_archived IS NULL \
+          AND lower(CASE WHEN json_valid(model) THEN json_extract(model, '$.providerID') END) = 'opencode-go'
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        guard sqlite3_column_type(stmt, 0) != SQLITE_NULL else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 0)) / 1000)
+    }
+
+    /// Assistant messages created at or after `startMS`. Assistant messages carry
+    /// the real per-turn model and cost (a session stores only one model), and
+    /// SQLite extracts just the needed JSON fields.
+    private static func readAssistantMessageRows(from db: OpaquePointer, startMS: Int64) throws -> [SessionRow] {
+        let sql = """
+        SELECT time_created, session_id, \
+          json_extract(data, '$.providerID'), json_extract(data, '$.modelID'), \
+          json_extract(data, '$.cost'), \
+          json_extract(data, '$.tokens.input'), json_extract(data, '$.tokens.output'), \
+          json_extract(data, '$.tokens.cache.read'), json_extract(data, '$.tokens.cache.write') \
         FROM message \
-        WHERE time_created >= ? AND time_created < ? \
-          AND json_extract(data, '$.role') = 'assistant'
+        WHERE time_created >= ? \
+          AND (CASE WHEN json_valid(data) THEN json_extract(data, '$.role') END) = 'assistant'
         """
 
         var stmt: OpaquePointer?
@@ -546,70 +523,40 @@ enum OpenCodeLocalStats {
             throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
         defer { sqlite3_finalize(stmt) }
-
         sqlite3_bind_int64(stmt, 1, startMS)
-        sqlite3_bind_int64(stmt, 2, endMS)
+
+        func text(_ column: Int32) -> String {
+            sqlite3_column_text(stmt, column)
+                .map { String(cString: $0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+        }
 
         var rows: [SessionRow] = []
         var step = sqlite3_step(stmt)
         while step == SQLITE_ROW {
-            // `defer` advances the cursor even on the `continue` paths below, so
-            // a skipped row cannot leave the loop stepping forever.
+            // `defer` advances the cursor even on the `continue` path below, so
+            // a skipped row still moves the loop forward.
             defer { step = sqlite3_step(stmt) }
-            guard let dataText = sqlite3_column_text(stmt, 2),
-                  let data = String(cString: dataText).data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { continue }
-
-            let providerID = (json["providerID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let modelID = (json["modelID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let providerID, !providerID.isEmpty, let modelID, !modelID.isEmpty else { continue }
-
-            let tokens = json["tokens"] as? [String: Any]
-            let cache = tokens?["cache"] as? [String: Any]
-            let sessionID = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
-
+            let providerID = text(2)
+            let modelID = text(3)
+            guard !providerID.isEmpty, !modelID.isEmpty else { continue }
             rows.append(SessionRow(
                 timeCreatedMS: sqlite3_column_int64(stmt, 0),
-                costUSD: (json["cost"] as? Double) ?? (json["cost"] as? NSNumber)?.doubleValue ?? 0,
-                inputTokens: int64Value(tokens?["input"]),
-                outputTokens: int64Value(tokens?["output"]),
-                cacheReadTokens: int64Value(cache?["read"]),
-                cacheWriteTokens: int64Value(cache?["write"]),
+                costUSD: sqlite3_column_double(stmt, 4),
+                inputTokens: sqlite3_column_int64(stmt, 5),
+                outputTokens: sqlite3_column_int64(stmt, 6),
+                cacheReadTokens: sqlite3_column_int64(stmt, 7),
+                cacheWriteTokens: sqlite3_column_int64(stmt, 8),
                 providerID: providerID,
                 modelID: modelID,
-                sessionID: sessionID
+                sessionID: text(1)
             ))
         }
+        // A terminal error (e.g. SQLITE_BUSY past the timeout, or a corrupt page)
+        // throws, so a partial read that undercounts surfaces as a failure.
         guard step == SQLITE_DONE else {
             throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
         return rows
-    }
-
-    private static func int64Value(_ value: Any?) -> Int64 {
-        if let n = value as? Int64 { return n }
-        if let n = value as? Int { return Int64(n) }
-        if let n = value as? Double {
-            guard n.isFinite else { return 0 }
-            if n >= Double(Int64.max) { return Int64.max }
-            if n <= Double(Int64.min) { return Int64.min }
-            return Int64(n)
-        }
-        if let n = value as? NSNumber { return n.int64Value }
-        return 0
-    }
-
-    private static func modelParts(_ text: UnsafePointer<UInt8>?) -> (providerID: String, modelID: String) {
-        guard let text,
-              let data = String(cString: text).data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            return ("other", "unknown")
-        }
-        let modelID = json["id"] as? String ?? "unknown"
-        let providerID = json["providerID"] as? String ?? "other"
-        return (providerID, modelID)
     }
 
     // MARK: - Daily budget
@@ -623,20 +570,11 @@ enum OpenCodeLocalStats {
 
     /// Daily Go spend for the subscription-anchored month from `opencode.db`.
     static func fetchMonthDailySpends(dbURL: URL, now: Date) throws -> [Date: Double] {
-        guard FileManager.default.fileExists(atPath: dbURL.path) else {
-            throw OpenCodeLocalStatsError.databaseMissing(dbURL)
-        }
-        let db = try openConnection(at: dbURL)
-        defer { sqlite3_close(db) }
-        let rows = try readRows(db: db)
-        let subscribedAt = earliestGoSessionDate(in: rows) ?? now
-        let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
-        let monthRows = try readAssistantMessageRows(
-            from: db,
-            startMS: Int64(month.start.timeIntervalSince1970 * 1000),
-            endMS: Int64(month.end.timeIntervalSince1970 * 1000)
-        ).filter { goEligibleProvider($0.providerID) }
-        return dailySpendsByDay(rows: monthRows)
+        let scan = try loadScan(dbURL: dbURL, since: scanStart(now: now))
+        let month = monthlyBounds(now: now, subscribedAt: scan.subscribedAt ?? now)
+        return dailySpendsByDay(rows: scan.rows.filter {
+            goEligibleProvider($0.providerID) && inWindow($0, start: month.start, end: month.end)
+        })
     }
 
     /// Go-plan USD spend per calendar day within an explicit window, so the
@@ -647,33 +585,20 @@ enum OpenCodeLocalStats {
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
     ) -> [Date: Double] {
-        guard FileManager.default.fileExists(atPath: dbURL.path),
-              let db = try? openConnection(at: dbURL) else { return [:] }
-        defer { sqlite3_close(db) }
-        guard let rows = try? readAssistantMessageRows(
-            from: db,
-            startMS: Int64(start.timeIntervalSince1970 * 1000),
-            endMS: Int64(end.timeIntervalSince1970 * 1000)
-        ) else { return [:] }
-        return dailySpendsByDay(rows: rows.filter { goEligibleProvider($0.providerID) }, calendar: calendar)
+        guard let scan = try? loadScan(dbURL: dbURL, since: start) else { return [:] }
+        return dailySpendsByDay(
+            rows: scan.rows.filter { goEligibleProvider($0.providerID) && inWindow($0, start: start, end: end) },
+            calendar: calendar
+        )
     }
 
     /// Sums billable Go spend per calendar day, skipping `$0` rows.
     static func dailySpendsByDay(rows: [SessionRow], calendar: Calendar = .current) -> [Date: Double] {
         var byDay: [Date: Double] = [:]
         for row in rows {
-            let billable = OpenCodeZenCostEstimate.billableCostUSD(
-                providerID: row.providerID,
-                modelID: row.modelID,
-                recordedCostUSD: row.costUSD,
-                inputTokens: row.inputTokens,
-                outputTokens: row.outputTokens,
-                cacheReadTokens: row.cacheReadTokens,
-                cacheWriteTokens: row.cacheWriteTokens
-            ).cost
+            let billable = row.billable.cost
             guard billable > 0 else { continue }
-            let date = Date(timeIntervalSince1970: TimeInterval(row.timeCreatedMS) / 1000)
-            let dayKey = calendar.startOfDay(for: date)
+            let dayKey = calendar.startOfDay(for: row.date)
             byDay[dayKey, default: 0] += billable
         }
         return byDay
@@ -686,7 +611,7 @@ enum OpenCodeLocalStats {
         var periodStart: Date
         /// Percent of the monthly pool, scaled so in-period days sum to the headline used %.
         var spentPercentByDay: [Date: Double]
-        /// Percent of the monthly limit for days before the period. Not scaled into the headline.
+        /// Percent of the monthly limit for days before the period, unscaled.
         var historyPercentByDay: [Date: Double]
         var knownStart: Date?
         var resetsAt: Date?
@@ -701,7 +626,7 @@ enum OpenCodeLocalStats {
     /// signal exists.
     ///
     /// `weekOffset` selects an earlier Monday week. Days before the billing
-    /// period come from local history and are not mixed into the headline scale.
+    /// period come from local history and stay outside the headline scale.
     static func monthDailyBudgetDays(
         limitUSD: Double,
         usedPercent: Double = 0,
@@ -712,10 +637,9 @@ enum OpenCodeLocalStats {
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
     ) -> OpenCodeMonthBudget? {
-        // Prefer the console billing window when we have it. The per-day shares
-        // must cover exactly the days the monthly percent was measured over, or
-        // the rescale below spreads the console total across days outside the
-        // window and dilutes the days that are actually in it.
+        // Prefer the console billing window when present. The per-day shares
+        // cover exactly the days the monthly percent was measured over, so the
+        // rescale below spreads the console total only across days in the window.
         let consoleBounds = DailyBudget.subscriptionMonth(
             knownStart: nil,
             resetsAt: periodResetsAt,
@@ -748,8 +672,7 @@ enum OpenCodeLocalStats {
         var anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
         // No local rows for the console window (OpenCode not installed here, DB
         // path changed, or usage not flushed yet): spread the console total over
-        // the elapsed days so the bars do not read zero against a non-zero
-        // headline caption.
+        // the elapsed days so the bars match the headline caption.
         if anchoredPercent.isEmpty, usedPercent > 0, let consoleBounds {
             let elapsed = max(1, (calendar.dateComponents(
                 [.day],
@@ -796,25 +719,19 @@ enum OpenCodeLocalStats {
             return packaged(knownStart: nil, resetsAt: periodResetsAt, historyUSD: historyUSD)
         }
 
-        if FileManager.default.fileExists(atPath: dbURL.path),
-           let db = try? openConnection(at: dbURL) {
-            defer { sqlite3_close(db) }
-            if let rows = try? readRows(db: db),
-               let subscribedAt = earliestGoSessionDate(in: rows) {
-                let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
-                if spentByDay == nil, historyUSD.isEmpty {
-                    historyUSD = spendHistory(
-                        periodStart: month.start,
-                        periodEnd: month.end,
-                        dbURL: dbURL,
-                        calendar: calendar
-                    ).history
-                }
-                return packaged(knownStart: month.start, resetsAt: month.end, historyUSD: historyUSD)
-            }
+        guard let subscribedAt = (try? loadScan(dbURL: dbURL, since: scanStart(now: now)))?.subscribedAt else {
+            return nil
         }
-
-        return nil
+        let month = monthlyBounds(now: now, subscribedAt: subscribedAt)
+        if spentByDay == nil, historyUSD.isEmpty {
+            historyUSD = spendHistory(
+                periodStart: month.start,
+                periodEnd: month.end,
+                dbURL: dbURL,
+                calendar: calendar
+            ).history
+        }
+        return packaged(knownStart: month.start, resetsAt: month.end, historyUSD: historyUSD)
     }
 
     /// Days of local Go spend kept so the daily-budget arrows can show weeks
@@ -822,8 +739,8 @@ enum OpenCodeLocalStats {
     /// horizon closely enough for four earlier weeks.
     private static let priorWeekHistoryDays = 28
 
-    /// Period spends stay inside the billing window so the headline percent is
-    /// not diluted. Earlier days are returned separately for week browsing.
+    /// Period spends stay inside the billing window so the headline percent
+    /// covers only that window. Earlier days are returned separately for week browsing.
     private static func spendHistory(
         periodStart: Date,
         periodEnd: Date,
@@ -849,5 +766,61 @@ enum OpenCodeLocalStats {
         guard total > 0, usedPercent > 0 else { return spendsPercent }
         let scale = usedPercent / total
         return spendsPercent.mapValues { $0 * scale }
+    }
+}
+
+/// One read of `opencode.db`: assistant messages since `since` and the first
+/// unarchived Go session (the subscription anchor).
+struct OpenCodeLocalScan: Sendable {
+    var since: Date
+    var subscribedAt: Date?
+    var rows: [OpenCodeLocalStats.SessionRow]
+}
+
+/// Last ``OpenCodeLocalScan`` per database, reused while the database file and
+/// its WAL keep the same modification time and size.
+///
+/// Every local figure in a poll (snapshot, hourly chart, daily bars) derives
+/// from one scan, and an idle database is read only once.
+final class OpenCodeLocalScanCache: @unchecked Sendable {
+    /// Modification time and size of the database and its `-wal` file.
+    struct Fingerprint: Equatable {
+        var databaseModified: Date?
+        var databaseSize: Int64?
+        var walModified: Date?
+        var walSize: Int64?
+
+        init(dbURL: URL) {
+            let manager = FileManager.default
+            let database = try? manager.attributesOfItem(atPath: dbURL.path)
+            let wal = try? manager.attributesOfItem(atPath: dbURL.path + "-wal")
+            databaseModified = database?[.modificationDate] as? Date
+            databaseSize = (database?[.size] as? NSNumber)?.int64Value
+            walModified = wal?[.modificationDate] as? Date
+            walSize = (wal?[.size] as? NSNumber)?.int64Value
+        }
+    }
+
+    private let lock = NSLock()
+    private var entry: (path: String, fingerprint: Fingerprint, scan: OpenCodeLocalScan)?
+
+    /// The cached scan when it is for `dbURL`, unchanged on disk, and reaches
+    /// back to `since`; otherwise the result of `load`, which replaces it.
+    func scan(dbURL: URL, since: Date, load: () throws -> OpenCodeLocalScan) rethrows -> OpenCodeLocalScan {
+        lock.lock()
+        defer { lock.unlock() }
+        let fingerprint = Fingerprint(dbURL: dbURL)
+        if let entry, entry.path == dbURL.path, entry.fingerprint == fingerprint, entry.scan.since <= since {
+            return entry.scan
+        }
+        let scan = try load()
+        entry = (dbURL.path, fingerprint, scan)
+        return scan
+    }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        entry = nil
     }
 }

@@ -40,8 +40,8 @@ struct OpenCodePanelView: View {
                     }
                 }
 
-                // Only show Stats when the local session DB supplied data; a
-                // console-only snapshot would otherwise render $0.00 / 0 tokens.
+                // Stats shows only when the local session DB supplied data, since a
+                // console-only snapshot carries no model/token/spend figures.
                 if snapshot.hasLocalStats {
                     OpenCodeStatsRow(
                         monthlySpendUSD: snapshot.monthlyEstimatedUSD,
@@ -160,7 +160,7 @@ private enum ModelCompany {
 
     static func forModelID(_ id: String) -> Self {
         let lower = id.lowercased()
-        // Muse Spark is actually Meta — check before generic "muse"
+        // Muse Spark is Meta, so it is checked before generic "muse".
         if lower.contains("muse-spark") || lower.contains("muse_spark") { return .meta }
         if lower.contains("kimi") { return .kimi }
         if lower.contains("qwen") { return .qwen }
@@ -278,12 +278,7 @@ struct OpenCodeModelWeekRow: View {
     }
 
     private var displayModelName: String {
-        // Use catalog display but prefer short "Kimi K2.6" style; fall back to raw id.
-        let lower = model.modelID.lowercased()
-        if lower.contains("muse-spark") { return "Muse Spark" }
-        // Turn "kimi-k2.6" → "Kimi K2.6", "qwen3.6-plus" → "Qwen3.6 Plus"
-        let base = model.modelID.replacingOccurrences(of: "-", with: " ").capitalized
-        return base
+        OpenCodeModelName.display(model.modelID)
     }
 
     var body: some View {

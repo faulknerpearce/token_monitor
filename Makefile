@@ -1,12 +1,10 @@
 # Makefile — TokenMon (macOS Swift / Xcode)
 .PHONY: default help tasks build release run install uninstall clean test test-core lint lint-fix format format-fix secrets \
-	project icon check open archive export pkg notarize distclean
+	project icon check open archive export pkg notarize distclean _release-app _stage-dist _zip _dsym
 
 default: help
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Configuration
-# ----------------------------------------------------------------------------------------------------------------------
 
 PROJECT        := TokenMon.xcodeproj
 SCHEME         := TokenMon
@@ -26,11 +24,16 @@ EXPORT_DIR     := $(BUILD_DIR)/export
 VERSION ?= $(shell sed -n 's/.*MARKETING_VERSION: *"\([^"]*\)".*/\1/p' project.yml 2>/dev/null | head -1)
 VERSION := $(if $(VERSION),$(VERSION),1.0.0)
 
+# CFBundleVersion for release builds: the commit count, which only grows on a
+# linear master. Falls back to project.yml's CURRENT_PROJECT_VERSION outside git.
+BUILD_NUMBER ?= $(shell git rev-list --count HEAD 2>/dev/null)
+BUILD_NUMBER_FLAG := $(if $(BUILD_NUMBER),CURRENT_PROJECT_VERSION=$(BUILD_NUMBER),)
+
 # Destination for local install
 INSTALL_DIR    ?= /Applications
 
 # Auto-detect Developer ID identities (empty → ad-hoc / unsigned packaging).
-# Works for any developer who has certs in their keychain — nothing hardcoded.
+# Picks up whichever certs are in the current developer's keychain.
 DEVELOPER_ID_APP ?= $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
 DEVELOPER_ID_INSTALLER ?= $(shell security find-identity -v 2>/dev/null | sed -n 's/.*"\(Developer ID Installer:[^"]*\)".*/\1/p' | head -1)
 # Team ID is the (XXXXXXXXXX) suffix on the identity string, when present.
@@ -66,19 +69,18 @@ XCODEBUILD := xcodebuild \
 	-destination 'platform=macOS' \
 	-derivedDataPath "$(DERIVED_DATA)"
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Paths to built products
-# ----------------------------------------------------------------------------------------------------------------------
 
 DEBUG_APP   := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION_DEBUG)/$(APP_NAME).app
 RELEASE_APP := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION_RELEASE)/$(APP_NAME).app
 DIST_APP    := $(DIST_DIR)/$(APP_NAME).app
 DIST_PKG    := $(DIST_DIR)/TokenMon-$(VERSION).pkg
 DIST_ZIP    := $(DIST_DIR)/TokenMon-$(VERSION).zip
+DIST_DSYM   := $(DIST_DIR)/TokenMon-$(VERSION)-dSYM.zip
+RELEASE_DSYM := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION_RELEASE)/$(APP_NAME).app.dSYM
+PKG_COMPONENT_PLIST := $(BUILD_DIR)/TokenMon-component.plist
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Help
-# ----------------------------------------------------------------------------------------------------------------------
 
 help tasks: ## Show this help message
 	@printf "\n$(BOLD)TokenMon$(RESET) — macOS menu bar usage monitor\n"
@@ -102,13 +104,11 @@ help tasks: ## Show this help message
 	@printf "  make build          # Debug .app\n"
 	@printf "  make run            # Build Debug and launch\n"
 	@printf "  make install        # Release → /Applications\n"
-	@printf "  make release        # dist/: .app + .pkg + .zip\n"
+	@printf "  make release        # dist/: .app + .pkg + .zip + dSYM zip\n"
 	@printf "  make release NOTARY=1   # also notarize (needs notarytool profile)\n"
 	@printf "\n"
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Build
-# ----------------------------------------------------------------------------------------------------------------------
 
 build: ## Build Debug configuration (ad-hoc signed)
 	$(call say,Building $(APP_NAME) [$(CONFIGURATION_DEBUG)]…)
@@ -121,9 +121,7 @@ build: ## Build Debug configuration (ad-hoc signed)
 	$(call ok,Debug build ready)
 	@printf "   $(DEBUG_APP)\n"
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Run
-# ----------------------------------------------------------------------------------------------------------------------
 
 run: build ## Build Debug and launch the app
 	$(call say,Launching $(APP_NAME)…)
@@ -140,9 +138,7 @@ run: build ## Build Debug and launch the app
 	}
 	$(call ok,Launched (menu bar — no Dock icon))
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Install / Uninstall
-# ----------------------------------------------------------------------------------------------------------------------
 
 install: ## Build Release and install to /Applications
 	$(call say,Building Release for install…)
@@ -160,16 +156,15 @@ uninstall: ## Remove app from /Applications
 	@rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
 	$(call ok,Uninstalled)
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Release (.app + .pkg + .zip)
-# ----------------------------------------------------------------------------------------------------------------------
 
-release: ## Full release: Release .app, .pkg, and .zip into dist/
-	@printf "\n$(BOLD)🚀 Release $(APP_NAME) v$(VERSION)$(RESET)\n\n"
+release: ## Full release: Release .app, .pkg, .zip, and dSYM zip into dist/
+	@printf "\n$(BOLD)🚀 Release $(APP_NAME) v$(VERSION) ($(BUILD_NUMBER))$(RESET)\n\n"
 	@$(MAKE) --no-print-directory _release-app
 	@$(MAKE) --no-print-directory _stage-dist
 	@$(MAKE) --no-print-directory pkg
 	@$(MAKE) --no-print-directory _zip
+	@$(MAKE) --no-print-directory _dsym
 	@if [ "$(NOTARY)" = "1" ]; then \
 		$(MAKE) --no-print-directory notarize; \
 	fi
@@ -177,7 +172,8 @@ release: ## Full release: Release .app, .pkg, and .zip into dist/
 	@printf "   App:  $(DIST_APP)\n"
 	@printf "   Pkg:  $(DIST_PKG)\n"
 	@printf "   Zip:  $(DIST_ZIP)\n"
-	@shasum -a 256 "$(DIST_APP)/Contents/MacOS/$(APP_NAME)" "$(DIST_PKG)" "$(DIST_ZIP)" 2>/dev/null | sed 's|^|   SHA: |' || true
+	@printf "   dSYM: $(DIST_DSYM)\n"
+	@shasum -a 256 "$(DIST_APP)/Contents/MacOS/$(APP_NAME)" "$(DIST_PKG)" "$(DIST_ZIP)" "$(DIST_DSYM)" 2>/dev/null | sed 's|^|   SHA: |' || true
 	@printf "\n"
 
 # Internal: Release xcodebuild (Developer ID when available)
@@ -191,12 +187,14 @@ _release-app:
 			CODE_SIGN_STYLE=Manual \
 			$(if $(DEVELOPMENT_TEAM),DEVELOPMENT_TEAM=$(DEVELOPMENT_TEAM),) \
 			OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
+			$(BUILD_NUMBER_FLAG) \
 			build; \
 	else \
 		printf "   $(YELL)No Developer ID — ad-hoc signing$(RESET)\n"; \
 		$(XCODEBUILD) \
 			-configuration $(CONFIGURATION_RELEASE) \
 			CODE_SIGN_IDENTITY="-" \
+			$(BUILD_NUMBER_FLAG) \
 			build; \
 	fi
 	@test -d "$(RELEASE_APP)" || { printf "$(RED)🚨 Build product missing: $(RELEASE_APP)$(RESET)\n"; exit 1; }
@@ -207,6 +205,7 @@ _stage-dist:
 	@rm -rf "$(DIST_DIR)"
 	@mkdir -p "$(DIST_DIR)"
 	@ditto "$(RELEASE_APP)" "$(DIST_APP)"
+	@test -f "$(DIST_APP)/Contents/Resources/PrivacyInfo.xcprivacy" || { printf "$(RED)🚨 PrivacyInfo.xcprivacy missing from $(DIST_APP)$(RESET)\n"; exit 1; }
 	$(call ok,Staged $(DIST_APP))
 
 pkg: ## Build installer .pkg from dist/ (or Release product)
@@ -215,13 +214,18 @@ pkg: ## Build installer .pkg from dist/ (or Release product)
 		$(MAKE) --no-print-directory _stage-dist; \
 	fi
 	$(call say,Creating installer package…)
-	@# component-plist free path: stage under a fake root
 	@rm -rf "$(BUILD_DIR)/pkgroot"
 	@mkdir -p "$(BUILD_DIR)/pkgroot/Applications"
 	@ditto "$(DIST_APP)" "$(BUILD_DIR)/pkgroot/Applications/$(APP_NAME).app"
+	@# Non-relocatable: the installer always writes /Applications/TokenMon.app,
+	@# even when a copy exists elsewhere (DerivedData, Downloads).
+	@pkgbuild --analyze --root "$(BUILD_DIR)/pkgroot" "$(PKG_COMPONENT_PLIST)" >/dev/null
+	@plutil -replace 0.BundleIsRelocatable -bool NO "$(PKG_COMPONENT_PLIST)"
+	@test "$$(plutil -extract 0.BundleIsRelocatable raw -o - "$(PKG_COMPONENT_PLIST)")" = "false"
 	@if [ -n "$(DEVELOPER_ID_INSTALLER)" ]; then \
 		pkgbuild \
 			--root "$(BUILD_DIR)/pkgroot" \
+			--component-plist "$(PKG_COMPONENT_PLIST)" \
 			--identifier "$(BUNDLE_ID)" \
 			--version "$(VERSION)" \
 			--install-location "/" \
@@ -230,6 +234,7 @@ pkg: ## Build installer .pkg from dist/ (or Release product)
 	else \
 		pkgbuild \
 			--root "$(BUILD_DIR)/pkgroot" \
+			--component-plist "$(PKG_COMPONENT_PLIST)" \
 			--identifier "$(BUNDLE_ID)" \
 			--version "$(VERSION)" \
 			--install-location "/" \
@@ -245,9 +250,14 @@ _zip:
 	@ditto -c -k --keepParent "$(DIST_APP)" "$(DIST_ZIP)"
 	$(call ok,Zip → $(DIST_ZIP))
 
-# ----------------------------------------------------------------------------------------------------------------------
+_dsym:
+	$(call say,Zipping dSYM…)
+	@test -d "$(RELEASE_DSYM)" || { printf "$(RED)🚨 dSYM missing: $(RELEASE_DSYM)$(RESET)\n"; exit 1; }
+	@rm -f "$(DIST_DSYM)"
+	@ditto -c -k --keepParent "$(RELEASE_DSYM)" "$(DIST_DSYM)"
+	$(call ok,dSYM → $(DIST_DSYM))
+
 # Archive / Notarize (optional distribution path)
-# ----------------------------------------------------------------------------------------------------------------------
 
 archive: ## Create an .xcarchive (Xcode Organizer-compatible)
 	$(call say,Archiving…)
@@ -262,6 +272,7 @@ archive: ## Create an .xcarchive (Xcode Organizer-compatible)
 			CODE_SIGN_STYLE=Manual \
 			$(if $(DEVELOPMENT_TEAM),DEVELOPMENT_TEAM=$(DEVELOPMENT_TEAM),) \
 			OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
+			$(BUILD_NUMBER_FLAG) \
 			archive; \
 	else \
 		xcodebuild \
@@ -270,6 +281,7 @@ archive: ## Create an .xcarchive (Xcode Organizer-compatible)
 			-configuration $(CONFIGURATION_RELEASE) \
 			-archivePath "$(ARCHIVE_PATH)" \
 			CODE_SIGN_IDENTITY="-" \
+			$(BUILD_NUMBER_FLAG) \
 			archive; \
 	fi
 	$(call ok,Archive → $(ARCHIVE_PATH))
@@ -287,22 +299,27 @@ export: ## Export a Developer ID .app from the archive into build/export
 		-exportOptionsPlist Scripts/ExportOptions.plist
 	$(call ok,Exported → $(EXPORT_DIR))
 
-notarize: ## Notarize dist app (requires: xcrun notarytool store-credentials)
+notarize: ## Notarize + staple the dist app, then rebuild, notarize + staple the zip and pkg
 	@if [ ! -d "$(DIST_APP)" ]; then \
 		printf "$(RED)🚨 No dist app. Run: make release$(RESET)\n"; exit 1; \
 	fi
-	$(call say,Notarizing via profile '$(NOTARY_PROFILE)'…)
+	@if [ -z "$(DEVELOPER_ID_APP)" ]; then \
+		printf "$(RED)🚨 Notarization needs a Developer ID Application identity; this build is ad-hoc signed.$(RESET)\n"; exit 1; \
+	fi
+	$(call say,Notarizing app via profile '$(NOTARY_PROFILE)'…)
 	@./Scripts/notarize.sh "$(DIST_APP)" "$(NOTARY_PROFILE)"
-	$(call say,Re-zipping stapled app…)
-	@rm -f "$(DIST_ZIP)"
-	@ditto -c -k --keepParent "$(DIST_APP)" "$(DIST_ZIP)"
-	@# Rebuild pkg from stapled app so the installer carries the stapled binary
+	@# Rebuild the zip and pkg from the stapled app so both carry the ticket.
+	@$(MAKE) --no-print-directory _zip
 	@$(MAKE) --no-print-directory pkg
+	@if [ -n "$(DEVELOPER_ID_INSTALLER)" ]; then \
+		printf "$(CYAN)→$(RESET) Notarizing pkg…\n"; \
+		./Scripts/notarize.sh "$(DIST_PKG)" "$(NOTARY_PROFILE)"; \
+	else \
+		printf "$(YELL)⚠️  Pkg not notarized: it needs a Developer ID Installer signature$(RESET)\n"; \
+	fi
 	$(call ok,Notarized + stapled)
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Test
-# ----------------------------------------------------------------------------------------------------------------------
 
 test: ## Run full Xcode unit test suite (with code coverage)
 	$(call say,Running Xcode tests…)
@@ -318,11 +335,9 @@ test-core: ## Run CLT-only core parser tests (no app host)
 	@./Scripts/run_core_tests.sh
 	$(call ok,Core tests passed)
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Lint gate
-# ----------------------------------------------------------------------------------------------------------------------
 
-lint: ## SwiftLint strict gate — every warning is an error, blocks handoff/PR
+lint: ## SwiftLint strict gate — every warning is an error, required for a PR
 	$(call say,Running SwiftLint (strict)…)
 	@command -v swiftlint >/dev/null || { printf "$(RED)🚨 swiftlint not installed. brew install swiftlint$(RESET)\n"; exit 1; }
 	@swiftlint lint --strict --reporter github-actions-logging
@@ -352,9 +367,7 @@ secrets: ## Secret scan gate — working tree and full git history
 	@gitleaks detect --no-banner --log-opts="--all"
 	$(call ok,No secrets found)
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Project maintenance
-# ----------------------------------------------------------------------------------------------------------------------
 
 project: ## Regenerate Xcode project with xcodegen
 	$(call say,Running xcodegen…)
@@ -380,9 +393,7 @@ check: ## Verify Xcode CLI is pointed at Xcode.app
 open: ## Open the project in Xcode
 	@open "$(PROJECT)"
 
-# ----------------------------------------------------------------------------------------------------------------------
 # Clean
-# ----------------------------------------------------------------------------------------------------------------------
 
 clean: ## Remove build/ and local DerivedData
 	$(call say,Cleaning build artifacts…)

@@ -12,7 +12,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Daily bars for the current weekly window, anchored to the pool's actual
     /// `resets_at`: % of the weekly pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: ClaudeAuthSession
@@ -23,16 +25,16 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let logger = Logger(category: "Claude")
     private var cancellables = Set<AnyCancellable>()
 
-    /// Last observed `seven_day.resets_at`; anchors the chart when a later payload
-    /// omits the reset time. A forward move does not clear accumulated day deltas.
+    /// Last observed weekly `resets_at`; anchors the chart when a later payload
+    /// omits the reset time. Accumulated day deltas survive a forward move.
     private var weeklyResetsAt: Date?
     /// Instant the current bars were built against, so earlier weeks shift from
     /// the same window.
     private var budgetReferenceNow: Date?
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -49,21 +51,19 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchUsage = fetchUsage ?? { cookieHeader in
             try await ClaudeUsageClient(cookieHeader: cookieHeader).fetchUsage()
         }
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // The persisted hourly and daily history is wiped only on sign-out or
+        // an account change; an expired session keeps it.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -77,9 +77,14 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         daily.clear()
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsClaudePolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.claude) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -88,13 +93,13 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             if snapshot == nil {
                 lastError = "Sign in to Claude to load usage."
             }
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
             let (response, fetchedAt) = try await fetchUsage(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,
@@ -104,6 +109,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             lastError = nil
             lastRefreshedAt = Date()
             auth.needsSignIn = false
+            auth.recordAuthSuccess()
             if let percent = response.fiveHour?.usedPercent {
                 hourly.record(usedPercent: percent, at: fetchedAt)
                 logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")
@@ -122,19 +128,22 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             budgetReferenceNow = fetchedAt
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
-                resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
+                resetsAt: weeklyResetsAt(now: fetchedAt),
                 windowStart: daily.windowStart,
                 interruptedWindowStart: daily.interruptedWindowStart,
                 now: fetchedAt
             )
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
-            guard auth.isCurrent(generation) else { return }
+            // Only a request made under the current credential state tears down
+            // the session; a stale one is skipped.
+            guard auth.isCurrent(generation) else { return .skipped }
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }
@@ -142,25 +151,27 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 lastError = error.localizedDescription
             }
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         } catch {
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsClaudePolling)
     }
 
-    /// Tracks the latest observed `seven_day.resets_at` to anchor the chart when a
+    /// Tracks the latest observed weekly `resets_at` to anchor the chart when a
     /// later payload omits the reset time.
     ///
-    /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
-    /// weekly pool is a rolling window whose reset time advances with usage, so a
-    /// forward move is not necessarily a fresh period. Old-period days fall outside
+    /// Keeps accumulated day deltas when `resets_at` moves forward: the
+    /// reported reset time can move while the used % holds, so a forward
+    /// move alone continues the current period. Old-period days fall outside
     /// the anchored window and are hidden. A true reset is recognized by
     /// `DailyQuotaDeltaStore` only when the used % also drops (rollover, or an
     /// early provider reset); it then keeps earlier days as prior-window history.
@@ -170,9 +181,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// Daily bars for the current weekly window, anchored to the pool's actual reset
-    /// time; returns [] when no provider reset has been observed (a rolling 7-day
-    /// window is never substituted). The pool is split evenly across the period's
-    /// days, so each day's budget is 1/7th.
+    /// time; returns [] when no provider reset has ever been observed. The pool is
+    /// split evenly across the period's days, so each day's budget is 1/7th.
     ///
     /// `windowStart` / `interruptedWindowStart` come from the daily store after a
     /// rollover or early reset (see `DailyBudget.buildWeeklyWindowDays`).
@@ -205,13 +215,37 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Reads the live daily store so the panel can browse earlier weeks without
     /// a new poll. `0` matches ``dailyBudgetDays``.
     func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay] {
-        Self.buildDailyBudgetDays(
+        let now = budgetReferenceNow ?? Date()
+        return Self.buildDailyBudgetDays(
             spentByDay: daily.spentByDay,
-            resetsAt: snapshot?.sevenDay?.resetsAt ?? weeklyResetsAt,
+            resetsAt: weeklyResetsAt(now: now),
             windowStart: daily.windowStart,
             interruptedWindowStart: daily.interruptedWindowStart,
             weekOffset: weekOffset,
-            now: budgetReferenceNow ?? Date()
+            now: now
         )
+    }
+
+    /// Weekly reset instant the bars and the reset caption anchor to.
+    ///
+    /// Uses the latest payload's `resets_at`, else the last one seen this run,
+    /// else the one the daily store persisted on an earlier run. A remembered
+    /// instant that has already passed is carried forward by whole weeks, so a
+    /// payload that omits `resets_at` still yields an estimate of the current
+    /// window.
+    func weeklyResetsAt(now: Date = Date()) -> Date? {
+        if let live = snapshot?.sevenDay?.resetsAt {
+            return live
+        }
+        return Self.projectWeeklyReset(weeklyResetsAt ?? daily.windowResetsAt, now: now)
+    }
+
+    /// Advances `resetsAt` by whole weeks until it is after `now`.
+    static func projectWeeklyReset(_ resetsAt: Date?, now: Date) -> Date? {
+        guard let resetsAt else { return nil }
+        guard resetsAt <= now else { return resetsAt }
+        let week: TimeInterval = 7 * 86_400
+        let weeks = (now.timeIntervalSince(resetsAt) / week).rounded(.down) + 1
+        return resetsAt.addingTimeInterval(weeks * week)
     }
 }

@@ -19,8 +19,8 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 
     /// Drops Overview and unknowns, de-duplicates, then appends any usage
-    /// providers the saved list does not yet know about so new providers appear
-    /// without wiping a user's order.
+    /// providers missing from the saved list, so new providers appear while
+    /// the user's order is kept.
     static func normalizedOrder(_ raw: [MonitorProvider]) -> [MonitorProvider] {
         var seen = Set<MonitorProvider>()
         var result: [MonitorProvider] = []
@@ -56,7 +56,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         self == .overview ? "All" : displayName
     }
 
-    /// Whether this mode should refresh `provider` (its own tab, or Overview).
+    /// Whether this mode refreshes `provider` (its own tab, or Overview).
     func polls(_ provider: MonitorProvider) -> Bool {
         self == provider || self == .overview
     }

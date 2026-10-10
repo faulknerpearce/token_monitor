@@ -23,7 +23,7 @@ struct GrokPanelView: View {
                 Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "Signed in — waiting for usage data."))
                     .font(PanelTypography.body)
                     .foregroundStyle(.secondary)
-                if poller.lastError != nil {
+                if auth.needsSignIn {
                     ProviderSignInButton(provider: .grok, title: "Sign In Again…", action: openSignIn)
                 }
             }
@@ -109,7 +109,7 @@ struct GrokPanelView: View {
                 }
             }
 
-            // No provider reset → no billing window exists; refuse to paint one.
+            // The chart renders only when a provider reset defines a billing window.
             if let week {
                 PanelCard {
                     DailyUsageChartView(
@@ -124,9 +124,7 @@ struct GrokPanelView: View {
             }
 
             if let error = poller.lastError {
-                Text(error)
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.red)
+                StaleDataCaption(message: error, lastRefreshedAt: poller.lastRefreshedAt)
                     .padding(.top, 2)
             }
 

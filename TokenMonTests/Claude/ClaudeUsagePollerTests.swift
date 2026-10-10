@@ -117,4 +117,70 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertEqual(days[1].spentUSD, 6, accuracy: 0.001)
         XCTAssertFalse(days.contains(where: \.isPriorWindow))
     }
+
+    // MARK: - Weekly reset fallback
+
+    func testProjectWeeklyResetCarriesPastInstantForwardByWholeWeeks() {
+        let reset = date(2026, 9, 13, hour: 8)
+        let projected = ClaudeUsagePoller.projectWeeklyReset(reset, now: date(2026, 10, 10, hour: 9))
+        XCTAssertEqual(projected, date(2026, 10, 11, hour: 8))
+        let future = date(2026, 10, 12, hour: 8)
+        XCTAssertEqual(ClaudeUsagePoller.projectWeeklyReset(future, now: date(2026, 10, 10)), future)
+        XCTAssertNil(ClaudeUsagePoller.projectWeeklyReset(nil, now: date(2026, 10, 10)))
+    }
+
+    /// `seven_day: null` with the weekly pool in `limits` records the daily
+    /// store and publishes seven bars.
+    func testRefreshBuildsBarsFromWeeklyLimitWhenSevenDayIsNull() async throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let payload = Data("""
+        {"five_hour": {"utilization": 14}, "seven_day": null,
+         "limits": [{"group": "weekly", "percent": 3, "resets_at": "2099-01-04T08:00:00+00:00",
+                     "scope": {"model": {"display_name": "Fable"}}}]}
+        """.utf8)
+        let poller = try makePoller(daily: store, dir: dir) { _ in
+            try (ClaudeUsageResponse.parse(payload), Date())
+        }
+        await poller.refreshNow()
+        XCTAssertEqual(poller.dailyBudgetDays?.count, 7)
+        XCTAssertEqual(store.lastUsedPercent ?? -1, 3, accuracy: 0.001)
+        XCTAssertNotNil(store.windowResetsAt)
+    }
+
+    /// A weekly pool without `resets_at` reuses the reset the store persisted on
+    /// an earlier run, carried forward to the current week.
+    func testRefreshWithoutResetTimeReusesPersistedReset() async throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let earlier = Date().addingTimeInterval(-10 * 86_400)
+        store.record(windowUsedPercent: 5, at: earlier, window: QuotaWindow(start: nil, resetsAt: earlier.addingTimeInterval(86_400)))
+        let poller = try makePoller(daily: store, dir: dir) { _ in
+            (ClaudeUsageResponse(fiveHour: nil, sevenDay: ClaudeUsageWindow(usedPercent: 9, resetsAt: nil)), Date())
+        }
+        await poller.refreshNow()
+        XCTAssertEqual(poller.dailyBudgetDays?.count, 7)
+        let reset = try XCTUnwrap(poller.weeklyResetsAt())
+        XCTAssertGreaterThan(reset, Date())
+        XCTAssertLessThanOrEqual(reset.timeIntervalSinceNow, 7 * 86_400)
+    }
+
+    private func makePoller(
+        daily: DailyQuotaDeltaStore,
+        dir: URL,
+        fetch: @escaping (String) async throws -> (ClaudeUsageResponse, Date)
+    ) throws -> ClaudeUsagePoller {
+        let suite = "ClaudePoller-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.selectedProvider = .claude
+        let auth = ClaudeAuthSession(directory: dir)
+        auth.save(cookieHeader: "sessionKey=test; lastActiveOrg=org")
+        let hourly = HourlyDeltaActivityStore(
+            store: FileBackedStringStore(directory: dir, filenamePrefix: "hourly_"),
+            storageKey: "claude_hourly"
+        )
+        return ClaudeUsagePoller(settings: settings, auth: auth, hourly: hourly, daily: daily, fetchUsage: fetch)
+    }
 }

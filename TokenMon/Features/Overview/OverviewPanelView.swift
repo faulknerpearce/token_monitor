@@ -59,14 +59,28 @@ struct OverviewPanelView: View {
 
             PanelCard {
                 PanelSectionHeader(title: "Usage Today")
-                OverviewHourlyUsageChart(usage: providerHourlyUsage)
+                // Re-evaluates at each local midnight so a panel left open
+                // across the day boundary switches to the new day. The schedule
+                // starts at today's midnight, so the first render shows today.
+                TimelineView(.explicit(Self.midnightSchedule(from: Date()))) { context in
+                    OverviewHourlyUsageChart(usage: providerHourlyUsage(now: context.date))
+                }
             }
         }
     }
 
-    private var providerHourlyUsage: ProviderDayHourlyUsage? {
+    /// Local midnights from the start of `date`'s day through the next week.
+    ///
+    /// `TimelineView` renders the latest entry at or before the current time,
+    /// so the first entry is today's midnight and the first render shows today.
+    static func midnightSchedule(from date: Date, calendar: Calendar = .current) -> [Date] {
+        let today = calendar.startOfDay(for: date)
+        return (0...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+    }
+
+    private func providerHourlyUsage(now: Date) -> ProviderDayHourlyUsage? {
         let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: now)
 
         let openCodeWeights: (openCodeGo: [Double], openCodeZen: [Double]) = {
             guard settings.enabledProviderIDs.contains(.opencode),
@@ -82,20 +96,6 @@ struct OverviewPanelView: View {
                 .first { $0.kind == .monthly }?.limitUSD
                 ?? OpenCodeWindowKind.monthly.defaultLimitUSD
             return hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimit)
-        }()
-
-        let openCodeCostWeights: (openCodeGo: [Double], openCodeZen: [Double]) = {
-            guard settings.enabledProviderIDs.contains(.opencode),
-                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
-                  let hourly = openCodePoller.dayHourlyUsage,
-                  calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-                  hourly.hours.count == 24
-            else {
-                let empty = Array(repeating: 0.0, count: 24)
-                return (empty, empty)
-            }
-            let raw = hourly.overviewProviderHourWeights()
-            return (raw.openCodeGo, raw.openCodeZen)
         }()
 
         let openCodeTokenWeights: (openCodeGo: [Int64], openCodeZen: [Int64]) = {
@@ -172,10 +172,6 @@ struct OverviewPanelView: View {
             return hourly.hourTokenWeights
         }()
 
-        // Official Grok pool deltas plus OpenCode plan quota deltas.
-        // Direct BYOK Grok-through-OpenCode usage has no shared quota denominator.
-        let hourCostUSD = zip(openCodeCostWeights.openCodeGo, openCodeCostWeights.openCodeZen).map(+)
-
         let built = ProviderDayHourlyUsage.build(
             dayStart: dayStart,
             grokHourWeights: grokPollWeights,
@@ -184,7 +180,6 @@ struct OverviewPanelView: View {
             cursorHourWeights: cursorWeights,
             claudeHourWeights: claudeWeights,
             grokbotHourWeights: grokbotWeights,
-            hourCostUSD: hourCostUSD,
             openCodeGoHourTokens: openCodeTokenWeights.openCodeGo,
             openCodeZenHourTokens: openCodeTokenWeights.openCodeZen,
             cursorHourTokens: cursorTokenWeights

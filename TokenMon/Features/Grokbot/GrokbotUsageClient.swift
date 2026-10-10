@@ -21,7 +21,7 @@ import Foundation
 /// with a SuperGrok subscription, the SuperGrok plan fields are populated and
 /// the rest of the payload is identical.
 struct GrokbotUsageClient: Sendable {
-    static let baseURL = URL(string: "https://cursor.com")!
+    static let baseURL = URL(staticString: "https://cursor.com")
     static let usageStatusPath = "/api/dashboard/get-sand-usage-status"
 
     private let cookieHeader: String
@@ -47,18 +47,18 @@ struct GrokbotUsageClient: Sendable {
         fetchedAt: Date
     ) throws -> GrokbotSnapshot {
         // An expired session redirects to WorkOS and lands on an HTML page, so a
-        // non-JSON body here means "signed out", not "malformed".
+        // non-JSON body here means "signed out".
         let root = try ProviderHTTP.jsonObject(data, context: .grokbot)
         if let error = JSON.string(root["error"]), ProviderHTTP.isUnauthorizedMessage(error) {
             throw ProviderError.unauthorized(.grokbot)
         }
 
-        // protobuf-es emits camelCase over JSON; accept the proto field names too
-        // so a transport switch does not silently blank the panel.
+        // protobuf-es emits camelCase over JSON; the proto field names are accepted
+        // too so either transport encoding parses.
         //
         // proto3 JSON omits default-valued fields, so a period with no Bot usage
-        // arrives without `usage_percent` — that is 0%, not "no access". Only a
-        // payload with no allowance fields at all means no Bot entitlement.
+        // arrives without `usage_percent`, which reads as 0%. Only a payload with
+        // no allowance fields at all means no Bot entitlement.
         let percent: Double
         if let reported = JSON.firstDouble(root, keys: ["usagePercent", "usage_percent"]) {
             percent = reported
@@ -84,8 +84,7 @@ struct GrokbotUsageClient: Sendable {
     }
 
     /// Fields that only appear once the account actually has a Bot allowance.
-    /// Their presence lets a missing `usage_percent` be read as 0% rather than
-    /// as "no entitlement".
+    /// Their presence lets a missing `usage_percent` be read as 0%.
     private static func hasAllowanceFields(_ root: [String: Any]) -> Bool {
         let keys = [
             "currentPeriodStart", "current_period_start",
@@ -118,8 +117,8 @@ struct GrokbotUsageClient: Sendable {
             }
             if let dict = root[key] as? [String: Any],
                let seconds = JSON.number(dict["seconds"]), seconds > 0 {
-                // An unset protobuf Timestamp arrives as {seconds: 0}; treat it
-                // as missing rather than anchoring the window to 1970.
+                // An unset protobuf Timestamp arrives as {seconds: 0}, which reads
+                // as missing.
                 return Date(timeIntervalSince1970: seconds + (JSON.number(dict["nanos"]) ?? 0) / 1_000_000_000)
             }
         }

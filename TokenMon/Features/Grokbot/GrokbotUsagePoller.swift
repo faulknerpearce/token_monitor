@@ -12,11 +12,13 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Daily bars for the current allowance period, anchored to the provider's
     /// own `next_reset_timestamp_utc`: % of the pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     /// Grok Bot authenticates against the Cursor account, so this borrows the
-    /// existing Cursor session rather than owning a second cookie store.
+    /// existing Cursor session and its cookie store.
     private let auth: CursorAuthSession
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
@@ -32,9 +34,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// the same window.
     private var budgetReferenceNow: Date?
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -51,23 +53,20 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader, accountEmail in
             try await GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchSnapshot()
         }
-        // The session is shared with Cursor. Signing out (or a 401) from either
-        // surface must drop this snapshot immediately, not on the next poll.
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // The session is shared with Cursor. Signing out or switching accounts
+        // from either surface drops this snapshot and its history immediately;
+        // an expired session keeps them.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -81,25 +80,30 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         daily.clear()
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsGrokbotPolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.grokbot) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
         guard let cookieHeader = auth.cookieHeader(), !cookieHeader.isEmpty else {
-            if snapshot != nil { clearSnapshot() }
             lastError = "Sign in to Cursor to load your Grokbot allowance."
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
             let fresh = try await fetchSnapshot(cookieHeader, auth.accountEmail)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             snapshot = fresh
             lastError = nil
             lastRefreshedAt = Date()
+            auth.recordAuthSuccess()
             logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
             if let resetsAt = fresh.resetsAt {
@@ -130,35 +134,38 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
                 interruptedWindowStart: daily.interruptedWindowStart,
                 now: fresh.fetchedAt
             )
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
-            guard auth.isCurrent(generation) else { return }
+            // A request that began under a previous credential state leaves the
+            // current session intact.
+            guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                // Counts toward the shared Cursor session's rejection streak;
+                // a Bot-only 403 maps to `.custom` and takes a separate branch.
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            lastError = error.localizedDescription
             logger.error("Grokbot refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         } catch {
-            guard auth.isCurrent(generation) else { return }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            guard auth.isCurrent(generation) else { return .skipped }
+            lastError = error.localizedDescription
             logger.error("Grokbot refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsGrokbotPolling)
     }
 
-    /// True when `nextResetsAt` represents a genuinely new allowance period
-    /// rather than the same period's reset instant creeping forward. Forwards to
+    /// True when `nextResetsAt` represents a genuinely new allowance period;
+    /// the same period's reset instant creeping forward returns false. Forwards to
     /// the shared rule used by `DailyQuotaDeltaStore`.
     static func isNewWindow(
         previousResetsAt: Date?,
@@ -174,8 +181,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// Daily bars for the current allowance period, anchored to the provider's
-    /// actual reset instant. Returns `[]` when no reset has ever been observed —
-    /// a rolling window is never substituted for the real period.
+    /// actual reset instant. Returns `[]` when no reset has ever been observed.
     ///
     /// `daysInPeriod` comes from the payload's own
     /// `current_period_start` → `next_reset_timestamp_utc` span (see

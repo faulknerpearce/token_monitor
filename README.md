@@ -29,7 +29,7 @@ Adding a provider is a registry entry away: `ProviderRegistry` wires each `Monit
 | **OpenRouter** | Account credits (management key) or per-key spending cap with provider-declared reset window | — |
 | **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
 
-Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). TokenMon never substitutes a calendar-derived guess when a provider payload is incomplete — the affected section simply waits for the next complete refresh.
+Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). When a provider payload lacks that metadata, the affected section waits for the next complete refresh.
 
 ## Features
 
@@ -39,17 +39,18 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 | **Dropdown** | Per-provider panel headed by its usage pool (Weekly / Monthly / Mixed), plus used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
 | **Overview tab** | All connected providers at a glance with hourly multi-provider chart |
 | **Daily Budget** | Per-pool daily charts (weekly windows, subscription months) paced against the provider's own consumed % |
-| **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and sessions persist under Application Support |
-| **Polling** | Faster refresh while the menu is open; backoff on errors; sleep / wake aware |
+| **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and session credentials are kept in the macOS Keychain |
+| **Polling** | Faster refresh while the menu is open, slower when idle; failed refreshes are retried on later polls |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
 | **Alerts** | Optional threshold notifications |
 | **Preferences** | Menu bar toggles, poll intervals, provider order, visible products, launch at login |
+| **Updates** | Optional check for new GitHub releases; verified in-place install (see [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md#in-app-updates)) |
 | **Agent app** | No Dock icon by default (`LSUIElement`) |
 
 ## Requirements
 
 - macOS 14 Sonoma or later
-- [Xcode 15.3+](https://developer.apple.com/xcode/) (Swift 5.10; the full app — Command Line Tools alone are not enough)
+- [Xcode 16+](https://developer.apple.com/xcode/) (Swift 5.10 language mode; the full app — Command Line Tools alone are not enough)
 - A signed-in account for at least one supported provider
 
 ## Getting started
@@ -97,18 +98,18 @@ All targets are listed below (`make help` also shows your detected signing ident
 | `make run` | Build Debug and launch the app in the menu bar |
 | `make install` | Build **Release** and install into `/Applications` (default; override with `INSTALL_DIR=…`) |
 | `make uninstall` | Remove the app from `/Applications` |
-| `make release` | Full release into `dist/`: signed `.app` + `.pkg` + `.zip` |
+| `make release` | Full release into `dist/`: `.app` + `.pkg` + `.zip` + dSYM zip (Developer ID signed when a certificate is available, ad-hoc otherwise) |
 | `make pkg` | Build only the installer `.pkg` into `dist/` |
 | `make archive` | Create an `.xcarchive` (Xcode Organizer-compatible) |
 | `make export` | Export a Developer ID `.app` from the archive into `build/export` |
 | `make notarize` | Notarize the `dist/` app via `notarytool` profile |
 | `make test` | Run the full Xcode unit test suite |
 | `make test-core` | Run the CLT-only parser/builder tests (no app host) |
-| `make lint` | **SwiftLint strict gate** — every warning is an error; must be clean before handoff/PR |
+| `make lint` | **SwiftLint strict gate** — every warning is an error; must be clean before a PR |
 | `make lint-fix` | Auto-correct autocorrectable SwiftLint violations, then enforce the strict gate |
 | `make format` | **SwiftFormat gate** — fails on formatting drift (config: `.swiftformat`) |
 | `make format-fix` | Auto-format all Swift sources |
-| `make secrets` | **gitleaks secret scan** of the working tree **and** full git history — must be clean before handoff/PR |
+| `make secrets` | **gitleaks secret scan** of the working tree **and** full git history — must be clean before a PR |
 | `make project` | Regenerate `TokenMon.xcodeproj` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) |
 | `make icon` | Regenerate the app icon asset catalog |
 | `make check` | Verify the Xcode toolchain (`xcode-select`, versions) |
@@ -129,13 +130,13 @@ After adding or removing source files: `make project` (requires [XcodeGen](https
 ```bash
 make test        # full Xcode unit test suite
 make test-core   # CLT-only parsers/builders (no app host)
-make lint        # SwiftLint strict gate (must pass before handoff/PR)
+make lint        # SwiftLint strict gate (must pass before a PR)
 make lint-fix    # auto-fix issues, then re-run the strict gate
 make format      # SwiftFormat drift gate
 make secrets     # gitleaks secret scan (working tree + full history)
 ```
 
-`make lint` runs `swiftlint lint --strict`, so **every warning is treated as an error**. Configuration lives in `.swiftlint.yml`. Keep it green before opening a PR or handing off work.
+`make lint` runs `swiftlint lint --strict`, so **every warning is treated as an error**. Configuration lives in `.swiftlint.yml`. Keep it green before opening a PR.
 
 ## Project layout
 
@@ -150,24 +151,36 @@ TokenMon/
     Grokbot/     Grokbot weekly allowance and panel (borrows the Cursor session)
     OpenCode/    OpenCode auth, console/local usage, and panel
     OpenRouter/  OpenRouter key/credits usage and panel
-    Overview/    Multi-provider rings and hourly chart
+    Overview/    Multi-provider overview and hourly chart
     Provider/    Provider identity, registry, switching, and logos
-    Shared/      Credentials, HTTP/error helpers, cookie capture, sign-in shell, usage-pool + Daily Budget kernels, poll helpers
-    MenuBar/     Label renderer, dropdown, daily chart
+    Shared/
+      Auth/        Auth session, Keychain credential store, cookie capture, sign-in window
+      Networking/  Authenticated requests, error mapping, host matching
+      Polling/     Polling loop, backoff, system sleep/wake gate
+      Storage/     Application Support files, daily and hourly usage stores
+      UI/          Panel cards, typography, colors, Daily Budget bars
+      Usage/       Daily Budget math, usage pools, day keys, percent helpers
+      Utilities/   Formatting, JSON, ISO 8601, logging
+    MenuBar/     Status item controller, label renderer, dropdown, daily chart
     Settings/    Preferences, UserDefaults
+    Update/      GitHub release check and verified in-place install
   Resources/     Info.plist, entitlements, assets
 Docs/            Architecture, auth/endpoints, notarization
-Scripts/         Icon generator, core tests, notarize
-TokenMonTests/  XCTest suite
+Scripts/         Icon generator, core tests, notarize, coverage conversion
+TokenMonTests/   XCTest suite, mirroring the TokenMon/Features folders
 Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 ```
 
 ## Privacy
 
-- Session cookies and optional bearer tokens are stored as **user-only** files under Application Support (not Keychain — avoids access-dialog loops on ad-hoc debug builds).
-- The app is **not sandboxed**; the store path is:
-  `~/Library/Application Support/TokenMon/` (files `auth_*.dat`, mode `0600`)
-- Network access is limited to authenticated hosts of the connected providers (chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com/x.ai) for usage and auth.
+- **Credentials** (session cookies, OpenRouter API key) are stored in the **macOS login Keychain** (one item: service `com.modelmonitor.app.credentials`, account `vault`; this device only, never synced). The account email and OpenCode workspace id stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. Credentials still stored as files in that folder are moved into the Keychain at launch.
+- **Keychain prompts after updates.** Release builds are ad-hoc signed, so after each update macOS asks once whether the new TokenMon may read its Keychain item. Choose **Always Allow** to keep it from asking again until the next update.
+- **Network access** is limited to:
+  - the connected providers' own hosts, for usage and sign-in: chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com / x.ai (plus the identity pages a provider's sign-in redirects to);
+  - GitHub, for update checks and downloads: `api.github.com`, `github.com`, and its release-asset hosts `objects.githubusercontent.com` / `release-assets.githubusercontent.com`. Turn off automatic checks in Settings to stop these.
+- **Local files read:** for OpenCode, TokenMon reads `~/.local/share/opencode/opencode.db` **read-only** to estimate costs and activity. The data never leaves the Mac.
+- Provider responses are never cached to disk, and provider cookies never enter a shared cookie jar.
+- The app is **not sandboxed** (needed to read the OpenCode database).
 - History stays on this Mac (SwiftData). No third-party telemetry.
 
 ## Documentation
@@ -188,7 +201,7 @@ For a signed, notarized release build, see [Docs/NOTARIZATION.md](Docs/NOTARIZAT
 
 Each provider defines its own consumption pool: ChatGPT and Claude pair a 5-hour session with a weekly pool, Cursor uses a monthly billing cycle, Grokbot and SuperGrok anchor a rolling week to the provider's reset instant, OpenCode Go stacks 5-hour/weekly/monthly limits, and OpenRouter uses credits or a per-key cap with a declared reset period. Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
 
-TokenMon never invents a usage period. If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh rather than substituting a calendar-derived guess. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
+If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
 
 ## Contributing
 

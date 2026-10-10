@@ -13,9 +13,8 @@ final class UsageSnapshotRecord {
     var resetsAt: Date?
     var productsJSON: Data
     /// Stored as Double for SwiftData schema stability; domain model uses Decimal.
-    /// This is intentionally lossy (a display-only balance), so `4.10` may read
-    /// back as `4.0999…`. Persisting it as a string would require a SwiftData
-    /// schema migration for no user-visible benefit.
+    /// The conversion is lossy (a display-only balance), so `4.10` may read
+    /// back as `4.0999…`.
     var extraCredits: Double?
     var accountEmail: String?
 
@@ -53,10 +52,8 @@ final class UsageSnapshotRecord {
         accountEmail = snapshot.accountEmail
     }
 
-    /// `dailySeries` is deliberately not persisted: it is only ever non-empty
-    /// when the server supplies a per-day series, which the local-delta path
-    /// already supersedes, so round-tripping it would add schema weight for no
-    /// visible effect.
+    /// `dailySeries` is held in memory only: it is non-empty only when the
+    /// server supplies a per-day series, which the local-delta path supersedes.
     func toSnapshot() -> WeeklyUsageSnapshot {
         let products: [ProductUsage]
         if let decoded = try? Self.decoder.decode([ProductUsage].self, from: productsJSON) {
@@ -78,7 +75,8 @@ final class UsageSnapshotRecord {
     }
 }
 
-/// Persists one snapshot per calendar day and publishes the recent window.
+/// Persists one snapshot per calendar day and account, and publishes the
+/// recent window for the active account.
 @MainActor
 final class HistoryStore: ObservableObject {
     private static let logger = Logger(category: "HistoryStore")
@@ -88,11 +86,17 @@ final class HistoryStore: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private var dirty = false
 
+    /// Rows for `activeAccount`, newest first.
     @Published private(set) var recent: [WeeklyUsageSnapshot] = []
 
+    /// Account email whose rows `recent` holds and same-day collapsing
+    /// matches. Rows of other accounts stay on disk (and in exports) and feed
+    /// only their own account's chart. `nil` is the account whose email is unknown.
+    private(set) var activeAccount: String?
+
     /// True when the persistent store could not be opened. History then runs
-    /// session-only (in-memory) instead of silently no-oping forever; Settings
-    /// surfaces this so the user knows the data will not survive a relaunch.
+    /// session-only (in-memory); Settings surfaces this so the user knows the
+    /// data is lost on relaunch.
     @Published private(set) var storeFailed = false
 
     init(inMemory: Bool = false) {
@@ -132,9 +136,18 @@ final class HistoryStore: ObservableObject {
         AppSupport.directory().appendingPathComponent("history.store")
     }
 
-    /// Appends `snapshot`, collapsing same-day polls into one end-of-day row.
+    /// Switches `recent` to `account`'s rows.
+    func setActiveAccount(_ account: String?) {
+        guard account != activeAccount else { return }
+        activeAccount = account
+        reload()
+    }
+
+    /// Appends `snapshot`, collapsing same-day polls of the same account into
+    /// one end-of-day row, and makes its account the active one.
     func append(_ snapshot: WeeklyUsageSnapshot) {
         guard let context else { return }
+        setActiveAccount(snapshot.accountEmail)
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: snapshot.fetchedAt)
 
@@ -144,8 +157,15 @@ final class HistoryStore: ObservableObject {
            abs(last.fetchedAt.timeIntervalSince(snapshot.fetchedAt)) < 60 {
             return
         }
+        // An idle poll that reports the same usage as today's row leaves the
+        // row (and the disk) untouched.
+        if let last = recent.first,
+           cal.isDate(last.fetchedAt, inSameDayAs: snapshot.fetchedAt),
+           Self.hasSameUsage(last, snapshot) {
+            return
+        }
 
-        let sameDay = findRecords(on: dayStart, calendar: cal)
+        let sameDay = findRecords(on: dayStart, account: snapshot.accountEmail, calendar: cal)
         if let existing = sameDay.first {
             existing.apply(snapshot)
             // Collapse duplicates so each calendar day has one end-of-day row.
@@ -163,7 +183,18 @@ final class HistoryStore: ObservableObject {
         scheduleFlush()
     }
 
-    /// Synchronous save — call on terminate so the coalesced write cannot be lost.
+    /// True when `next` records nothing new over `current`: same usage (within
+    /// rounding), reset instant, product split, credits and account.
+    private static func hasSameUsage(_ current: WeeklyUsageSnapshot, _ next: WeeklyUsageSnapshot) -> Bool {
+        abs(current.usedPercent - next.usedPercent) < 0.05
+            && abs(current.remainingPercent - next.remainingPercent) < 0.05
+            && current.resetsAt == next.resetsAt
+            && current.products == next.products
+            && current.extraCreditsBalance == next.extraCreditsBalance
+            && current.accountEmail == next.accountEmail
+    }
+
+    /// Synchronous save, called on terminate so the coalesced write reaches disk.
     func flush() {
         flushIfNeeded()
         saveTask?.cancel()
@@ -190,13 +221,13 @@ final class HistoryStore: ObservableObject {
             try context.save()
             dirty = false
         } catch {
-            // Keep `dirty` set so the next append/poll or terminate-flush retries;
-            // clearing it here would silently drop the last snapshots.
+            // `dirty` stays set so the next append/poll or terminate-flush retries
+            // the save of the last snapshots.
             Self.logger.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// Keep `recent` in sync without re-fetching (and re-decoding) up to 200 rows.
+    /// Updates `recent` in place, skipping a re-fetch (and re-decode) of up to 200 rows.
     private func upsertRecent(_ snapshot: WeeklyUsageSnapshot, replacingID: UUID? = nil) {
         if let replacingID, let index = recent.firstIndex(where: { $0.id == replacingID }) {
             recent[index] = snapshot
@@ -209,9 +240,9 @@ final class HistoryStore: ObservableObject {
     }
 
     /// Replace the same-day entry in `recent` in place, or insert at the front when
-    /// no same-day entry exists. Matching by calendar day — not snapshot id — keeps
-    /// `recent` aligned with the single per-day disk row even though every poll
-    /// produces a fresh snapshot id.
+    /// no same-day entry exists. Matching by calendar day keeps `recent` aligned
+    /// with the single per-day disk row even though every poll produces a fresh
+    /// snapshot id.
     private func upsertRecentForDay(_ snapshot: WeeklyUsageSnapshot, calendar: Calendar) {
         if let index = recent.firstIndex(where: { calendar.isDate($0.fetchedAt, inSameDayAs: snapshot.fetchedAt) }) {
             recent[index] = snapshot
@@ -243,8 +274,9 @@ final class HistoryStore: ObservableObject {
         }
     }
 
-    /// Same-day lookup: fetch a window, then filter with `Calendar` (more reliable than exact predicate bounds).
-    private func findRecords(on dayStart: Date, calendar: Calendar) -> [UsageSnapshotRecord] {
+    /// Same-day lookup for one account: fetch a window, then filter with
+    /// `Calendar` (more reliable than exact predicate bounds).
+    private func findRecords(on dayStart: Date, account: String?, calendar: Calendar) -> [UsageSnapshotRecord] {
         guard let context else { return [] }
         let windowStart = calendar.date(byAdding: .day, value: -1, to: dayStart) ?? dayStart
         let windowEnd = calendar.date(byAdding: .day, value: 2, to: dayStart) ?? dayStart
@@ -255,16 +287,18 @@ final class HistoryStore: ObservableObject {
             sortBy: [SortDescriptor(\.fetchedAt, order: .reverse)]
         )
         let candidates = (try? context.fetch(descriptor)) ?? []
-        return candidates.filter { calendar.isDate($0.fetchedAt, inSameDayAs: dayStart) }
+        return candidates.filter { $0.accountEmail == account && calendar.isDate($0.fetchedAt, inSameDayAs: dayStart) }
     }
 
     private func reload() {
         guard let context else { return }
-        var descriptor = FetchDescriptor<UsageSnapshotRecord>(
+        let descriptor = FetchDescriptor<UsageSnapshotRecord>(
             sortBy: [SortDescriptor(\.fetchedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = 200
         let records = (try? context.fetch(descriptor)) ?? []
-        recent = records.map { $0.toSnapshot() }
+        recent = records.lazy
+            .filter { $0.accountEmail == self.activeAccount }
+            .prefix(200)
+            .map { $0.toSnapshot() }
     }
 }

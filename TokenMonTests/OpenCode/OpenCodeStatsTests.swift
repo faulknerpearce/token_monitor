@@ -168,7 +168,7 @@ final class OpenCodeStatsTests: XCTestCase {
             model: modelJSON(provider: "opencode-go", id: "minimax-m3")
         )
         insert(timeCreated: now.addingTimeInterval(-2 * 24 * 3600), cost: 90, input: 3_000_000, model: modelJSON(provider: "anthropic", id: "claude-4.5"))
-        // Zen free tier must not count toward Go limits
+        // Zen free tier does not count toward Go limits
         insert(timeCreated: rollingStart, cost: 3, input: 1_000_000, model: modelJSON(provider: "opencode", id: "deepseek-v4-flash-free"))
         insert(timeCreated: now.addingTimeInterval(-40 * 24 * 3600), cost: 500, input: 7_000_000, model: modelJSON(provider: "opencode-go", id: "kimi-k3"))
         insert(timeCreated: rollingStart, cost: 99, input: 9_000_000, model: modelJSON(provider: "opencode-go", id: "kimi-k3"), archived: true)
@@ -230,7 +230,7 @@ final class OpenCodeStatsTests: XCTestCase {
 
         insert(timeCreated: now.addingTimeInterval(-4 * 3600), cost: 1, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
         insert(timeCreated: last, cost: 1, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
-        // Zen activity should not drive the Go rolling reset clock
+        // Zen activity does not drive the Go rolling reset clock
         insert(timeCreated: now.addingTimeInterval(-600), cost: 5, input: 1, model: modelJSON(provider: "opencode", id: "free"))
 
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
@@ -299,7 +299,7 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(week.start.timeIntervalSince1970, 1_783_900_800, accuracy: 1) // 2026-07-13 00:00 UTC
         XCTAssertEqual(week.end.timeIntervalSince(week.start), 7 * 24 * 3600, accuracy: 1)
 
-        // Sunday should still roll back to prior Monday
+        // Sunday rolls back to the prior Monday
         let sunday = Date(timeIntervalSince1970: 1_784_462_400) // 2026-07-19 12:00 UTC (Sunday)
         let weekSun = OpenCodeLocalStats.weeklyBounds(now: sunday)
         XCTAssertEqual(weekSun.start.timeIntervalSince1970, 1_783_900_800, accuracy: 1)
@@ -311,7 +311,7 @@ final class OpenCodeStatsTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_785_596_400)
         let month = OpenCodeLocalStats.monthlyBounds(now: now, subscribedAt: subscribed)
 
-        // Period should be 2026-07-18 14:24:41 … 2026-08-18 14:24:41 (not calendar Aug 1)
+        // Period is 2026-07-18 14:24:41 … 2026-08-18 14:24:41 (not calendar Aug 1)
         XCTAssertEqual(month.start.timeIntervalSince1970, 1_784_384_681, accuracy: 2)
         XCTAssertEqual(month.end.timeIntervalSince1970, 1_787_063_081, accuracy: 2)
         XCTAssertLessThan(month.start, now)
@@ -335,7 +335,7 @@ final class OpenCodeStatsTests: XCTestCase {
         let month = try XCTUnwrap(snap.windows.first { $0.kind == .monthly })
         XCTAssertEqual(month.usedUSD, 10, accuracy: 0.001) // 7 + 3, not calendar-month $3
         XCTAssertEqual(month.sessionCount, 2)
-        // Must not reset at calendar month start (would leave only $3)
+        // The subscription month spans the calendar month start.
         XCTAssertNotEqual(month.usedUSD, 3, accuracy: 0.001)
     }
 
@@ -389,15 +389,15 @@ final class OpenCodeStatsTests: XCTestCase {
     }
 
     /// Console monthly reset wins over the local first-Go-session anniversary:
-    /// signed-in bars must agree with the console Monthly bar's window.
+    /// signed-in bars agree with the console Monthly bar's window.
     func testMonthDailyBudgetDaysPrefersConsoleResetsAtOverLocalAnniversary() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         func d(_ y: Int, _ month: Int, _ day: Int) -> Date {
             cal.date(from: DateComponents(year: y, month: month, day: day))!
         }
-        // A local Go session would set an Aug-1 anniversary if it were consulted;
-        // console says the subscription month resets Aug 20 instead.
+        // A local Go session on Aug 1 implies an Aug-1 anniversary; the console
+        // reset (Aug 20) takes precedence.
         insert(timeCreated: d(2026, 8, 1), cost: 0, input: 0, model: modelJSON(provider: "opencode-go", id: "m"))
         let now = d(2026, 8, 5).addingTimeInterval(12 * 3600)
         let budget = OpenCodeLocalStats.monthDailyBudgetDays(
@@ -413,7 +413,7 @@ final class OpenCodeStatsTests: XCTestCase {
             calendar: cal
         )
         let periodStart = try XCTUnwrap(budget?.periodStart)
-        // Anniversary month would be Aug 1; the console window is Jul 20 – Aug 20.
+        // The console window Jul 20 – Aug 20 wins over the Aug 1 anniversary month.
         XCTAssertTrue(cal.isDate(periodStart, inSameDayAs: d(2026, 7, 20)))
     }
 
@@ -442,7 +442,7 @@ final class OpenCodeStatsTests: XCTestCase {
         }
         // Go session anchors the billing month (Aug 1) and is the only spend counted.
         insert(timeCreated: d(2026, 8, 1), cost: 3, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
-        // Zen and direct-provider usage must NOT count toward Go daily spend.
+        // Zen and direct-provider usage does not count toward Go daily spend.
         insert(timeCreated: d(2026, 8, 2), cost: 5, input: 1, model: modelJSON(provider: "opencode", id: "m"))
         insert(timeCreated: d(2026, 8, 3), cost: 4, input: 1, model: modelJSON(provider: "deepseek", id: "m"))
 
@@ -651,7 +651,6 @@ final class OpenCodeStatsTests: XCTestCase {
             claudeSharePercent: 0,
             grokbotSharePercent: 0,
             activity: 10.1,
-            costUSD: 0,
             openCodeGoTokens: 0,
             openCodeZenTokens: 0,
             cursorTokens: 0
@@ -753,8 +752,8 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertFalse(recorded.isEstimated)
     }
 
-    /// Free Zen alias of the Go Muse Spark contributor model must carry the
-    /// paid-equivalent value instead of estimating to $0.
+    /// Free Zen alias of the Go Muse Spark contributor model carries the
+    /// paid-equivalent value.
     func testMuseSparkFreeAliasEstimatesPaidEquivalentValue() {
         let billable = OpenCodeZenCostEstimate.billableCostUSD(
             providerID: "opencode",
@@ -941,9 +940,8 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(spends.values.reduce(0, +), 12, accuracy: 0.001)
     }
 
-    /// With no local rows for the console window the bars must not read zero
-    /// while the headline reports usage: spread the console total over elapsed
-    /// days instead.
+    /// With no local rows for the console window, the console total is spread
+    /// over elapsed days so the bars match the headline usage.
     func testMonthlyDailyBudgetSpreadsWhenNoLocalSpends() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt

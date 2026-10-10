@@ -14,6 +14,7 @@ xcuserdata/
 # Auth / secrets
 auth_*.dat
 *.pem
+*.p8
 *.p12
 *.mobileprovision
 *.cer
@@ -25,5 +26,5 @@ auth.json
 *.provisionprofile
 /ExportOptions.plist
 
-# Local-only plan (never committed)
+# Local-only plan
 PLAN.md

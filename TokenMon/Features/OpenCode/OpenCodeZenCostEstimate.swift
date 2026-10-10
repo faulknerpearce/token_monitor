@@ -17,7 +17,7 @@ enum OpenCodeZenCostEstimate {
     /// (`https://openrouter.ai/api/v1/models`) for every model it lists. Free Zen
     /// models record `$0`, so these rates give their included usage a value.
     private static let ratesByModelID: [String: Rates] = [
-        // Free Zen models: paid-equivalent value, not an OpenCode charge.
+        // Free Zen models: paid-equivalent value of the included usage.
         "big-pickle": Rates(input: 0.30, output: 1.20, cacheRead: 0.06, cacheWrite: 0),
         "deepseek-v4-flash-free": Rates(input: 0.04872, output: 0.09744, cacheRead: 0.009744, cacheWrite: 0),
         "mimo-v2.5-free": Rates(input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0),
@@ -81,7 +81,7 @@ enum OpenCodeZenCostEstimate {
         "gpt-5.4-nano": Rates(input: 0.20, output: 1.25, cacheRead: 0.02, cacheWrite: 0),
         "gpt-5.5": Rates(input: 5.00, output: 30.00, cacheRead: 0.50, cacheWrite: 0),
         "gpt-5.6-luna": Rates(input: 0.20, output: 1.20, cacheRead: 0.02, cacheWrite: 0.25),
-        // Muse Spark (Muse Park) — Go secondary model, add value estimate when cost==0.
+        // Muse Spark (Muse Park) — Go secondary model, valued when cost==0.
         "muse-spark-1.3-contributor-free": Rates(input: 0.10, output: 0.20, cacheRead: 0.002, cacheWrite: 0),
         "muse-spark-1.2-contributor-free": Rates(input: 0.10, output: 0.20, cacheRead: 0.002, cacheWrite: 0),
         "muse-spark-1.2-contributor": Rates(input: 0.10, output: 0.20, cacheRead: 0.002, cacheWrite: 0),
@@ -89,8 +89,8 @@ enum OpenCodeZenCostEstimate {
     ]
 
     /// Rates for a model id, resolving Zen's `-free` / `-contributor` billing
-    /// aliases to their base model. Free Zen models record `$0`, so without a
-    /// base rate their included usage estimates to zero and never shows a value
+    /// aliases to their base model, so free Zen models, which record `$0`, get a
+    /// base rate for their included usage
     /// (e.g. `muse-spark-1.2-contributor-free` → `muse-spark-1.2-contributor`).
     private static func rates(for modelID: String) -> Rates? {
         var base = modelID.lowercased()
@@ -134,7 +134,7 @@ enum OpenCodeZenCostEstimate {
             cacheWriteTokens: cacheWriteTokens
         )
         // Any token-derived value is an estimate (recorded cost was zero), so it
-        // must carry the `~` prefix. A free model with no rate entry estimates to
+        // carries the `~` prefix. A free model with no rate entry estimates to
         // 0 and stays unmarked.
         return (value, value > 0)
     }

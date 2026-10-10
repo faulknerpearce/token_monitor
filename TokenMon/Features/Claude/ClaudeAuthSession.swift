@@ -35,16 +35,14 @@ final class ClaudeAuthSession: ProviderAuthSession {
             extraStoreKeys: [],
             signOutHosts: claudeHosts,
             capturePolicy: claudePolicy(),
-            isDomain: { domain in Domain.matches(domain, hosts: claudeHosts) }
+            isDomain: { domain in Domain.matches(domain, hosts: claudeHosts) },
+            // The org UUID identifies whose usage the stored history holds.
+            accountIdentityCookie: "lastactiveorg"
         )
     }
 
-    init() {
-        super.init(config: Self.claudeConfig())
-    }
-
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
-        super.init(config: Self.claudeConfig(), directory: directory)
+    /// Live store by default; tests isolate it to `directory` or pass `store`.
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        super.init(config: Self.claudeConfig(), directory: directory, store: store)
     }
 }

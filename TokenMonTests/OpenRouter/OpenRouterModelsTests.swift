@@ -47,6 +47,7 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.usedUSD, 30, accuracy: 0.001)
         XCTAssertEqual(snapshot.remainingUSD ?? -1, 90, accuracy: 0.001)
         XCTAssertEqual(snapshot.usedPercent ?? -1, 25, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatTitle, "Credits purchased")
     }
 
     /// Inference key without /credits access falls back to its own credit limit.
@@ -59,6 +60,8 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.usedUSD, 25, accuracy: 0.001)
         XCTAssertEqual(snapshot.remainingUSD ?? -1, 75, accuracy: 0.001)
         XCTAssertEqual(snapshot.usedPercent ?? -1, 25, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatTitle, "Key spending limit")
+        XCTAssertEqual(snapshot.budgetStatValue, Format.usd(100))
     }
 
     /// Unlimited key with no credits endpoint access has no denominator.
@@ -71,11 +74,12 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertNil(snapshot.remainingUSD)
         XCTAssertNil(snapshot.usedPercent)
         XCTAssertEqual(snapshot.usedUSD, 12.5, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatValue, "None")
     }
 
-    /// With a provider-declared reset window, the bar must reflect spend in the
-    /// *current window* (`limit - limit_remaining`) — not all-time usage — so the
-    /// bar and the "left" caption reconcile.
+    /// With a provider-declared reset window, the bar reflects spend in the
+    /// *current window* (`limit - limit_remaining`), so the bar and the "left"
+    /// caption reconcile.
     func testKeyLimitWindowUsesLimitRemainingWhenResetSet() {
         var key = Self.key(usage: 25, limit: 100)
         key.limitRemaining = 90 // only 10 spent in the current monthly window
@@ -84,7 +88,7 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.budgetSource, .keyLimit)
         XCTAssertEqual(snapshot.usedUSD, 10, accuracy: 0.001)
         XCTAssertEqual(snapshot.remainingUSD ?? -1, 90, accuracy: 0.001)
-        // Bar % must equal remaining-derived consumption exactly.
+        // Bar % equals remaining-derived consumption exactly.
         XCTAssertEqual(
             snapshot.usedPercent ?? -1,
             (100 - (snapshot.remainingUSD ?? 0)) / 100 * 100,
@@ -126,7 +130,7 @@ final class OpenRouterModelsTests: XCTestCase {
     }
 
     func testNegativeUsageClampsToZero() {
-        // Overdrawn accounts report negative balances; the bar must not underfill.
+        // Overdrawn accounts report negative balances; usage clamps to zero.
         let snapshot = OpenRouterSnapshot.build(
             key: Self.key(usage: 10, limit: 8),
             credits: .init(totalCredits: 8, totalUsage: -0.5)
@@ -235,7 +239,7 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(glm.percentOfWindow, 100, accuracy: 0.001)
     }
 
-    /// A free slug with no price entry stays at $0 rather than inventing value.
+    /// A free slug with no price entry stays at $0.
     func testUnpricedFreeSlugStaysZero() throws {
         let rows = [
             OpenRouterActivityRow(

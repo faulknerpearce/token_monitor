@@ -1,14 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// Renders the menu bar status as a single bitmap.
-/// MenuBarExtra drops GeometryReader / Circle SwiftUI, so drawing is explicit.
+/// Renders the menu bar status as a single bitmap for the `NSStatusItem` button.
 ///
-/// Composites enabled provider segments in `providerOrder`:
-/// Grok (always) + optional Cursor / OpenCode / Claude / Grokbot.
+/// Composites the enabled provider segments whose menu-bar graph is switched
+/// on, in `providerOrder`: Grok / Cursor / OpenCode / Claude / Grokbot.
 ///
-/// The mutable statics (image cache, cached appearance, observer) are isolated
-/// to the main actor since rendering drives off SwiftUI's main-actor label.
+/// Rendered images are cached by a key covering every input, including the
+/// menu-bar appearance, so a light/dark switch renders afresh. The mutable
+/// statics (image cache, appearance in effect while drawing) are isolated to
+/// the main actor, where the status item is updated.
 @MainActor
 enum MenuBarStatusRenderer {
     /// A provider's clickable span in the rendered status image, in image
@@ -23,6 +24,9 @@ enum MenuBarStatusRenderer {
     struct RenderedStatus {
         let image: NSImage
         let regions: [Region]
+        /// Cache key of the inputs this image was drawn from; equal keys mean
+        /// an identical image.
+        var key = ""
     }
 
     private final class CachedStatus: NSObject {
@@ -41,7 +45,13 @@ enum MenuBarStatusRenderer {
         return cache
     }()
 
-    private static var appearanceObserver: NSObjectProtocol?
+    /// Appearance the current `render` call draws against.
+    private static var renderAppearance: NSAppearance?
+
+    /// Drops every cached image (tests start from an empty cache).
+    static func resetCache() {
+        _cache.removeAllObjects()
+    }
 
     // Renders the status item plus the provider hit regions for the same layout,
     // so a status-item click maps back to the provider whose bar it landed on.
@@ -65,9 +75,11 @@ enum MenuBarStatusRenderer {
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>,
-        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders),
+        appearance: NSAppearance? = nil
     ) -> RenderedStatus {
-        ensureAppearanceObserver()
+        renderAppearance = appearance ?? menuBarAppearance()
+        defer { renderAppearance = nil }
 
         let grokProducts: [ProductUsage] = {
             guard let snapshot else { return [] }
@@ -97,7 +109,7 @@ enum MenuBarStatusRenderer {
             enabledProviders: enabledProviders
         )
         if let cached = _cache.object(forKey: cacheKey as NSString) {
-            return RenderedStatus(image: cached.image, regions: cached.regions)
+            return RenderedStatus(image: cached.image, regions: cached.regions, key: cacheKey)
         }
 
         let status = _render(
@@ -125,7 +137,7 @@ enum MenuBarStatusRenderer {
             CachedStatus(image: status.image, regions: status.regions),
             forKey: cacheKey as NSString
         )
-        return status
+        return RenderedStatus(image: status.image, regions: status.regions, key: cacheKey)
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -231,8 +243,8 @@ enum MenuBarStatusRenderer {
 
         var pieces: [CompositePiece] = []
         for provider in MonitorProvider.normalizedOrder(providerOrder) {
-            // A disabled provider must not leave a frozen "—/last %" segment:
-            // polling is gated, so its snapshot would never update.
+            // Disabled providers are skipped: their polling is gated, so their
+            // segment would show a frozen "—/last %" snapshot.
             guard enabledProviders.contains(provider) else { continue }
             switch provider {
             case .grok:
@@ -330,9 +342,9 @@ enum MenuBarStatusRenderer {
             .foregroundColor: textColor
         ]
 
-        // Fixed text slots. The status item width must not depend on the value,
-        // or the icon resizes (and drags the dropdown with it) whenever data
-        // changes, which shows up as the dropdown moving on a provider switch.
+        // Fixed text slots keep the status item width independent of the value.
+        // A value-dependent width resizes the icon (and drags the dropdown with
+        // it) whenever data changes, moving the dropdown on a provider switch.
         let percentSlotWidth = ceil("100%".size(withAttributes: usedAttrs).width)
         let grokTextSlot = ceil(max("Grok".size(withAttributes: usedAttrs).width, percentSlotWidth))
 
@@ -356,8 +368,8 @@ enum MenuBarStatusRenderer {
         }
 
         var grokBlockWidth = iconSize + gap + grokTextSlot
-        // Keep the bar slot even before the first snapshot / after sign-out so
-        // the status item width does not collapse.
+        // The bar slot is reserved even before the first snapshot / after
+        // sign-out so the status item width stays constant.
         if showGrokBar { grokBlockWidth += gap + barWidth }
         if grokSigned, showGrokCategories {
             for item in categoryLabels {
@@ -480,9 +492,8 @@ enum MenuBarStatusRenderer {
     /// The composite layout leaves a `segmentGap` between provider spans plus a
     /// couple points of trailing image padding, and a `variableLength` status
     /// item can add a few points of button padding around the bitmap. A click
-    /// landing in one of those dead zones should still select the adjacent
-    /// provider rather than keeping a stale tab. Far misses (beyond
-    /// `tolerance`) still return nil so stray clicks do not switch tabs.
+    /// landing in one of those dead zones selects the adjacent provider. Far
+    /// misses (beyond `tolerance`) return nil, so stray clicks keep the current tab.
     static func providerSnapped(atX x: CGFloat, in regions: [Region], tolerance: CGFloat = 8) -> MonitorProvider? {
         if let exact = provider(atX: x, in: regions) { return exact }
         var bestProvider: MonitorProvider?
@@ -507,8 +518,8 @@ enum MenuBarStatusRenderer {
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
     ///
-    /// All selections render through this template so the status item width never
-    /// changes and the dropdown keeps one x position when switching providers.
+    /// All selections render through this template so the status item width stays
+    /// constant and the dropdown keeps one x position when switching providers.
     /// Overview shows the TokenMon mark over an empty track. Grok category labels
     /// are composite-only because their variable widths would break the fixed anchor.
     private static func renderSelectedProvider(
@@ -578,8 +589,8 @@ enum MenuBarStatusRenderer {
         )
     }
 
-    /// Bake a bitmap via `NSBitmapImageRep`; `lockFocus` can produce an empty image
-    /// when MenuBarExtra has no focused graphics context.
+    /// Bakes a bitmap via `NSBitmapImageRep`, which draws reliably without a focused
+    /// graphics context (where `lockFocus` can produce an empty image).
     private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
         let scale: CGFloat = 2
         let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
@@ -634,8 +645,7 @@ enum MenuBarStatusRenderer {
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
-        // Keep a 2pt sliver at 0% so the brand fill never collapses to nothing
-        // after a weekly reset.
+        // A 2pt sliver at 0% keeps the brand fill visible after a weekly reset.
         let raw = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
         let fillWidth = max(2, raw)
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
@@ -659,7 +669,7 @@ enum MenuBarStatusRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(rect: drawRect).addClip()
         // `from: .zero` draws the full glyph; a destination-sized source rect
-        // cropped large SVGs (OpenCode 300×300, Cursor ~65×68) to empty corners.
+        // crops large SVGs (OpenCode 300×300, Cursor ~65×68) to empty corners.
         icon.draw(
             in: drawRect,
             from: .zero,
@@ -704,43 +714,32 @@ enum MenuBarStatusRenderer {
         token.sRGB.nsColor
     }
 
+    private static var currentAppearance: NSAppearance {
+        renderAppearance ?? menuBarAppearance()
+    }
+
     private static var chromeColor: NSColor {
         var cg: CGColor = .black
-        menuBarAppearance().performAsCurrentDrawingAppearance {
+        currentAppearance.performAsCurrentDrawingAppearance {
             cg = NSColor.labelColor.cgColor
         }
         return NSColor(cgColor: cg) ?? .labelColor
     }
 
     private static var menuBarAppearanceName: String {
-        let bestMatch = menuBarAppearance().bestMatch(from: [.darkAqua, .aqua])
-        return bestMatch?.rawValue ?? menuBarAppearance().name.rawValue
+        let appearance = currentAppearance
+        return appearance.bestMatch(from: [.darkAqua, .aqua])?.rawValue ?? appearance.name.rawValue
     }
 
+    /// Fallback when the caller passes no appearance: the status bar window's,
+    /// found by walking the app's windows.
     private static func menuBarAppearance() -> NSAppearance {
-        // Prefer the status item over the dropdown panel; matching "MenuBarExtra"
-        // first can pick up the panel appearance while the menu is open.
-        var extra: NSAppearance?
         for window in NSApp.windows {
             let name = window.className
             if name.contains("StatusBar") || name.contains("NSStatusItem") {
                 return window.effectiveAppearance
             }
-            if extra == nil, name.contains("MenuBarExtra") {
-                extra = window.effectiveAppearance
-            }
         }
-        return extra ?? NSApp.effectiveAppearance
-    }
-
-    private static func ensureAppearanceObserver() {
-        guard appearanceObserver == nil else { return }
-        appearanceObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { _ in
-            _cache.removeAllObjects()
-        }
+        return NSApp.effectiveAppearance
     }
 }

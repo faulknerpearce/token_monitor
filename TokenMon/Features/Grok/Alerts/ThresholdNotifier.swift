@@ -32,17 +32,33 @@ final class ThresholdNotifier: ObservableObject {
         }
     }
 
-    /// Records a threshold crossing for `account` and delivers once per threshold.
-    func evaluate(usedPercent: Double, settings: AppSettings, account: String?) {
+    /// Records a threshold crossing for `account` and delivers once per threshold
+    /// within a billing period. `resetsAt` names the period: when it moves to a
+    /// later period than the one the last alert was recorded in, the record is
+    /// cleared, so the new period alerts whether or not a poll saw usage drop.
+    func evaluate(usedPercent: Double, settings: AppSettings, account: String?, resetsAt: Date? = nil) {
         guard settings.thresholdEnabled else { return }
         let threshold = settings.thresholdPercent
-        // Persisted, account-scoped so a relaunch (or account switch) does not
-        // re-fire an alert the user already saw while still above the threshold.
+        // Persisted and account-scoped, so an alert the user already saw stays
+        // suppressed across relaunches and account switches while usage remains
+        // above the threshold.
         let key = Self.notifiedKey(account: account)
-        let last = defaults.object(forKey: key) as? Double
+        let periodKey = Self.notifiedPeriodKey(account: account)
+        var last = defaults.object(forKey: key) as? Double
+        if last != nil, let resetsAt {
+            let recordedReset = defaults.object(forKey: periodKey) as? Double
+            if let recordedReset, Self.isLaterPeriod(resetsAt, than: recordedReset) {
+                defaults.removeObject(forKey: key)
+                defaults.removeObject(forKey: periodKey)
+                last = nil
+            } else if recordedReset == nil {
+                defaults.set(resetsAt.timeIntervalSince1970, forKey: periodKey)
+            }
+        }
         guard usedPercent >= threshold else {
             if let last, usedPercent < last - 5 {
                 defaults.removeObject(forKey: key)
+                defaults.removeObject(forKey: periodKey)
             }
             return
         }
@@ -52,11 +68,24 @@ final class ThresholdNotifier: ObservableObject {
             lastNotifiedThreshold: last
         ) else { return }
         defaults.set(threshold, forKey: key)
+        if let resetsAt {
+            defaults.set(resetsAt.timeIntervalSince1970, forKey: periodKey)
+        }
         deliver(usedPercent, threshold)
     }
 
     static func notifiedKey(account: String?) -> String {
         "thresholdNotified.\(account ?? "default")"
+    }
+
+    static func notifiedPeriodKey(account: String?) -> String {
+        "thresholdNotifiedResetsAt.\(account ?? "default")"
+    }
+
+    /// True when `resetsAt` ends a later period than the recorded reset. An
+    /// hour of slack absorbs small shifts in the reported reset instant.
+    nonisolated static func isLaterPeriod(_ resetsAt: Date, than recordedReset: TimeInterval) -> Bool {
+        resetsAt.timeIntervalSince1970 > recordedReset + 3_600
     }
 
     /// Fires once per threshold crossing; re-arms only after usage drops 5+ points

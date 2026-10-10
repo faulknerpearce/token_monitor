@@ -2,8 +2,7 @@ import SQLite3
 @testable import TokenMon
 import XCTest
 
-/// Week-arrow coverage for the OpenCode month budget. Split from OpenCodeStatsTests
-/// so the length gates stay at the current maxima.
+/// Week-arrow coverage for the OpenCode month budget.
 final class OpenCodeMonthBudgetWeekTests: XCTestCase {
     private var dbURL: URL!
 
@@ -83,7 +82,7 @@ final class OpenCodeMonthBudgetWeekTests: XCTestCase {
         XCTAssertEqual(sqlite3_step(stmt), SQLITE_DONE)
     }
 
-    /// Spend before the console window must not dilute the current week's scale,
+    /// Spend before the console window leaves the current week's scale undiluted,
     /// and chevron-left still paints that earlier week from local history.
     func testMonthDailyBudgetWeekOffsetKeepsHistoryOutOfHeadlineScale() throws {
         var calendar = Calendar(identifier: .gregorian)
