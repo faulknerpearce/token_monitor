@@ -153,7 +153,7 @@ struct OpenCodeConsoleClient: Sendable {
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         if let orgID { request.setValue(orgID, forHTTPHeaderField: "x-org-id") }
 
-        let (data, response) = try await ProviderURLSession.shared.data(for: request)
+        let (data, response) = try await AuthenticatedRequest.data(for: request, session: ProviderURLSession.shared)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.openCode, "invalid response")
         }

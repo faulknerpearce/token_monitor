@@ -52,6 +52,19 @@ final class UsageClientTests: XCTestCase {
         return UsageClient(cookieHeader: "sso=x", accountEmail: nil, session: URLSession(configuration: configuration))
     }
 
+    /// A fetch cancelled mid-request surfaces as `CancellationError`.
+    func testCancelledFetchThrowsCancellationError() async {
+        let client = UsageClient(cookieHeader: "sso=x", accountEmail: nil, session: NeverRespondingURLProtocol.session())
+        let task = Task { try await client.fetchUsage() }
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "got \(error)")
+        }
+    }
+
     override func tearDown() {
         GrokStubProtocol.reset([:])
         super.tearDown()
