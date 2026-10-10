@@ -47,4 +47,12 @@ final class AppSupportTests: XCTestCase {
         XCTAssertFalse(fm.fileExists(atPath: current.appendingPathComponent("legacy.dat").path))
         try? fm.removeItem(at: parent)
     }
+
+    /// The OpenCode database path resolves to the account's home directory,
+    /// from any thread.
+    func testRealHomeDirectoryIsTheUserHome() async {
+        let expected = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
+        let fromDetached = await Task.detached { OpenCodeLocalStats.realHomeDirectory.standardizedFileURL.path }.value
+        XCTAssertEqual(fromDetached, expected)
+    }
 }

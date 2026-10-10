@@ -33,12 +33,8 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { apiKey in
             try await OpenRouterUsageClient(apiKey: apiKey).fetchSnapshot()
         }
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -82,6 +78,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             lastError = nil
             lastRefreshedAt = Date()
             auth.needsSignIn = false
+            auth.recordAuthSuccess()
             if let percent = snap.usedPercent {
                 logger.info("OpenRouter refresh: \(Int(percent.rounded()))% of credits used (\(Format.usd(snap.remainingUSD ?? 0), privacy: .public) left)")
             } else {
@@ -93,7 +90,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }

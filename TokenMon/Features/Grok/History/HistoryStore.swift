@@ -78,7 +78,8 @@ final class UsageSnapshotRecord {
     }
 }
 
-/// Persists one snapshot per calendar day and publishes the recent window.
+/// Persists one snapshot per calendar day and account, and publishes the
+/// recent window for the active account.
 @MainActor
 final class HistoryStore: ObservableObject {
     private static let logger = Logger(category: "HistoryStore")
@@ -88,7 +89,13 @@ final class HistoryStore: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private var dirty = false
 
+    /// Rows for `activeAccount`, newest first.
     @Published private(set) var recent: [WeeklyUsageSnapshot] = []
+
+    /// Account email whose rows `recent` holds and same-day collapsing
+    /// matches. Rows of other accounts stay on disk (and in exports) but never
+    /// feed this account's chart. `nil` is the account whose email is unknown.
+    private(set) var activeAccount: String?
 
     /// True when the persistent store could not be opened. History then runs
     /// session-only (in-memory) instead of silently no-oping forever; Settings
@@ -132,9 +139,18 @@ final class HistoryStore: ObservableObject {
         AppSupport.directory().appendingPathComponent("history.store")
     }
 
-    /// Appends `snapshot`, collapsing same-day polls into one end-of-day row.
+    /// Switches `recent` to `account`'s rows.
+    func setActiveAccount(_ account: String?) {
+        guard account != activeAccount else { return }
+        activeAccount = account
+        reload()
+    }
+
+    /// Appends `snapshot`, collapsing same-day polls of the same account into
+    /// one end-of-day row, and makes its account the active one.
     func append(_ snapshot: WeeklyUsageSnapshot) {
         guard let context else { return }
+        setActiveAccount(snapshot.accountEmail)
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: snapshot.fetchedAt)
 
@@ -145,7 +161,7 @@ final class HistoryStore: ObservableObject {
             return
         }
 
-        let sameDay = findRecords(on: dayStart, calendar: cal)
+        let sameDay = findRecords(on: dayStart, account: snapshot.accountEmail, calendar: cal)
         if let existing = sameDay.first {
             existing.apply(snapshot)
             // Collapse duplicates so each calendar day has one end-of-day row.
@@ -243,8 +259,9 @@ final class HistoryStore: ObservableObject {
         }
     }
 
-    /// Same-day lookup: fetch a window, then filter with `Calendar` (more reliable than exact predicate bounds).
-    private func findRecords(on dayStart: Date, calendar: Calendar) -> [UsageSnapshotRecord] {
+    /// Same-day lookup for one account: fetch a window, then filter with
+    /// `Calendar` (more reliable than exact predicate bounds).
+    private func findRecords(on dayStart: Date, account: String?, calendar: Calendar) -> [UsageSnapshotRecord] {
         guard let context else { return [] }
         let windowStart = calendar.date(byAdding: .day, value: -1, to: dayStart) ?? dayStart
         let windowEnd = calendar.date(byAdding: .day, value: 2, to: dayStart) ?? dayStart
@@ -255,16 +272,18 @@ final class HistoryStore: ObservableObject {
             sortBy: [SortDescriptor(\.fetchedAt, order: .reverse)]
         )
         let candidates = (try? context.fetch(descriptor)) ?? []
-        return candidates.filter { calendar.isDate($0.fetchedAt, inSameDayAs: dayStart) }
+        return candidates.filter { $0.accountEmail == account && calendar.isDate($0.fetchedAt, inSameDayAs: dayStart) }
     }
 
     private func reload() {
         guard let context else { return }
-        var descriptor = FetchDescriptor<UsageSnapshotRecord>(
+        let descriptor = FetchDescriptor<UsageSnapshotRecord>(
             sortBy: [SortDescriptor(\.fetchedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = 200
         let records = (try? context.fetch(descriptor)) ?? []
-        recent = records.map { $0.toSnapshot() }
+        recent = records.lazy
+            .filter { $0.accountEmail == self.activeAccount }
+            .prefix(200)
+            .map { $0.toSnapshot() }
     }
 }

@@ -59,12 +59,8 @@ final class ChatGPTAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(config: Self.chatgptConfig())
-    }
-
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
-        super.init(config: Self.chatgptConfig(), directory: directory)
+    /// Live store by default; tests isolate it to `directory` or pass `store`.
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        super.init(config: Self.chatgptConfig(), directory: directory, store: store)
     }
 }

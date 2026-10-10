@@ -43,13 +43,9 @@ final class CursorAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(config: Self.cursorConfig())
-    }
-
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
-        super.init(config: Self.cursorConfig(), directory: directory)
+    /// Live store by default; tests isolate it to `directory` or pass `store`.
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        super.init(config: Self.cursorConfig(), directory: directory, store: store)
     }
 
     nonisolated static func isCursorDomain(_ domain: String) -> Bool {

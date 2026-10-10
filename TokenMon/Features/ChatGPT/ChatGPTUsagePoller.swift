@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import os
 
-/// Polls ChatGPT usage, retrying once before invalidating the session.
+/// Polls ChatGPT usage for the captured session cookie.
 @MainActor
 final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: ChatGPTSnapshot?
@@ -17,8 +17,6 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     private let fetchUsage: (String) async throws -> ChatGPTUsageClient.Fetch
     /// Access token reused across polls by the live client.
     private let tokenCache: ChatGPTAccessTokenCache
-    /// Wait before the one retry that precedes tearing the stored session down.
-    private let unauthorizedRetryDelayNanoseconds: UInt64
     private let logger = Logger(category: "ChatGPT")
     private var cancellables = Set<AnyCancellable>()
 
@@ -30,7 +28,6 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     init(
         settings: AppSettings,
         auth: ChatGPTAuthSession,
-        unauthorizedRetryDelayNanoseconds: UInt64 = 1_500_000_000,
         fetchUsage: ((String) async throws -> ChatGPTUsageClient.Fetch)? = nil
     ) {
         self.settings = settings
@@ -40,13 +37,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchUsage = fetchUsage ?? { cookieHeader in
             try await ChatGPTUsageClient(cookieHeader: cookieHeader, tokenCache: tokenCache).fetchUsage()
         }
-        self.unauthorizedRetryDelayNanoseconds = unauthorizedRetryDelayNanoseconds
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -90,7 +82,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
-                await invalidateUnlessRetrySucceeds(error, generation: generation, cookieHeader: cookieHeader)
+                tokenCache.clear()
+                auth.recordAuthFailure(reason: error.localizedDescription)
+                reportFailure(error)
             default:
                 reportFailure(error)
             }
@@ -98,28 +92,6 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             guard auth.isCurrent(generation) else { return }
             reportFailure(error)
         }
-    }
-
-    /// One retry before invalidating. A 401 here can be a transient token-exchange
-    /// hiccup, and `markSessionInvalid` deletes the stored cookie, so invalidating
-    /// on the first failure forces a full manual sign-in for a blip.
-    private func invalidateUnlessRetrySucceeds(
-        _ error: ProviderError,
-        generation: Int,
-        cookieHeader: String
-    ) async {
-        if unauthorizedRetryDelayNanoseconds > 0 {
-            try? await Task.sleep(nanoseconds: unauthorizedRetryDelayNanoseconds)
-        }
-        guard !Task.isCancelled, auth.isCurrent(generation) else { return }
-        tokenCache.clear()
-        if let fetch = try? await fetchUsage(cookieHeader), auth.isCurrent(generation) {
-            publish(fetch)
-            return
-        }
-        guard auth.isCurrent(generation) else { return }
-        auth.markSessionInvalid(reason: error.localizedDescription)
-        reportFailure(error)
     }
 
     private func publish(_ fetch: ChatGPTUsageClient.Fetch) {
@@ -137,6 +109,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         lastError = nil
         lastRefreshedAt = Date()
         auth.needsSignIn = false
+        auth.recordAuthSuccess()
         let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
         logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
     }

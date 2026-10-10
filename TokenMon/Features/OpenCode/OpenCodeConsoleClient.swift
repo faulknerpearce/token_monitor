@@ -153,7 +153,7 @@ struct OpenCodeConsoleClient: Sendable {
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         if let orgID { request.setValue(orgID, forHTTPHeaderField: "x-org-id") }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await ProviderURLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.openCode, "invalid response")
         }
@@ -169,7 +169,10 @@ struct OpenCodeConsoleClient: Sendable {
     /// another; a 403 without an org id is the session being refused outright.
     /// Error bodies are logged privately and never shown to the user.
     static func check(_ http: HTTPURLResponse, data: Data, orgID: String?) throws {
-        if let final = http.url, isLoginRedirect(final) {
+        if ProviderHTTP.isBotChallenge(http, data: data) {
+            throw ProviderError.badResponse(.openCode, ProviderHTTP.botChallengeMessage(status: http.statusCode))
+        }
+        if let final = http.url, Self.isLoginRedirect(final) {
             throw ProviderError.unauthorized(.openCode)
         }
         if http.statusCode == 403, orgID != nil {

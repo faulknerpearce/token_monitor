@@ -63,13 +63,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader in
             try await CursorUsageClient(cookieHeader: cookieHeader, eventCache: eventCache).fetchSnapshot()
         }
-        // Drop the Cursor snapshot as soon as this shared session signs out.
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // Drop the Cursor snapshot and daily history as soon as this shared
+        // session signs out or changes account; an expired session keeps them.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -121,6 +118,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             snapshot = snap
             dayHourlyUsage = hourly
+            auth.recordAuthSuccess()
             if let email = snap.accountEmail {
                 auth.saveAccountEmail(email)
             }
@@ -170,7 +168,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             let usageError = cursorError.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: cursorError.localizedDescription)
+                auth.recordAuthFailure(reason: cursorError.localizedDescription)
             default:
                 break
             }

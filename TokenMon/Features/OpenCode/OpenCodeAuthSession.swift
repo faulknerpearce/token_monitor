@@ -52,13 +52,9 @@ final class OpenCodeAuthSession: ProviderAuthSession {
         )
     }
 
-    init() {
-        super.init(config: Self.openCodeConfig())
-    }
-
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
-        super.init(config: Self.openCodeConfig(), directory: directory)
+    /// Live store by default; tests isolate it to `directory` or pass `store`.
+    init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
+        super.init(config: Self.openCodeConfig(), directory: directory, store: store)
     }
 
     override func refreshFromDisk() {

@@ -7,7 +7,8 @@ import XCTest
 ///  - drop a result that lands after a sign-out / account switch (success path);
 ///  - NOT tear down the current session when a request that began under a
 ///    previous credential state returns 401/403 (error path);
-///  - DO invalidate the session when the live session itself is rejected.
+///  - DO invalidate the session once the live session itself is rejected
+///    `ProviderAuthSession.authFailureThreshold` times in a row.
 ///
 /// These use the injected fetch seams; no network or WebKit is touched.
 @MainActor
@@ -114,6 +115,21 @@ final class PollerSessionGuardTests: XCTestCase {
         )
     }
 
+    /// Polls `authFailureThreshold` times, asserting the session survives
+    /// every rejection before the last.
+    private func pollUntilInvalidated(
+        _ poller: some ProviderUsagePoller,
+        auth: ProviderAuthSession,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 1..<ProviderAuthSession.authFailureThreshold {
+            await poller.refreshNow()
+            XCTAssertTrue(auth.isSignedIn, "invalidated before the threshold", file: file, line: line)
+        }
+        await poller.refreshNow()
+    }
+
     // MARK: - Grok
 
     func testGrokStaleUnauthorizedDoesNotInvalidateNewSession() async {
@@ -147,7 +163,7 @@ final class PollerSessionGuardTests: XCTestCase {
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in throw ProviderError.unauthorized(.grok) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
@@ -219,7 +235,7 @@ final class PollerSessionGuardTests: XCTestCase {
             daily: dailyStore("cursor"),
             fetchSnapshot: { _ in throw ProviderError.unauthorized(.cursor) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
@@ -255,7 +271,7 @@ final class PollerSessionGuardTests: XCTestCase {
             daily: dailyStore("claude"),
             fetchUsage: { _ in throw ProviderError.unauthorized(.claude) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
@@ -272,7 +288,6 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in
                 auth.signOut()
                 auth.save(cookieHeader: "__Secure-next-auth.session-token=new")
@@ -290,30 +305,32 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in throw ProviderError.unauthorized(.chatGPT) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
 
-    /// A single 401 is retried before the stored session is deleted, so a
-    /// transient token-exchange failure does not force a manual sign-in.
-    func testChatGPTTransientUnauthorizedRecoversOnRetry() async {
+    /// A single 401 does not delete the stored session, so a transient
+    /// token-exchange failure does not force a manual sign-in.
+    func testChatGPTTransientUnauthorizedRecoversOnNextPoll() async {
         let auth = ChatGPTAuthSession(directory: dir)
         auth.save(cookieHeader: "__Secure-next-auth.session-token=live")
         let attempts = AttemptCounter()
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in
                 if attempts.next() == 1 { throw ProviderError.unauthorized(.chatGPT) }
                 return self.chatGPTFetch()
             }
         )
         await poller.refreshNow()
+        XCTAssertTrue(auth.isSignedIn)
+        XCTAssertEqual(auth.consecutiveAuthFailures, 1)
+        await poller.refreshNow()
+        XCTAssertEqual(auth.consecutiveAuthFailures, 0)
         XCTAssertTrue(auth.isSignedIn)
         XCTAssertFalse(auth.needsSignIn)
         XCTAssertNotNil(poller.snapshot)
@@ -326,7 +343,6 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            unauthorizedRetryDelayNanoseconds: 0,
             fetchUsage: { _ in
                 ChatGPTUsageClient.Fetch(
                     response: self.chatGPTResponse(),
@@ -369,7 +385,9 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             fetchSnapshot: { _ in throw ProviderError.unauthorized(.openRouter) }
         )
-        await poller.refreshNow()
+        for _ in 1...ProviderAuthSession.authFailureThreshold {
+            await poller.refreshNow()
+        }
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
@@ -405,7 +423,7 @@ final class PollerSessionGuardTests: XCTestCase {
             daily: dailyStore("grokbot"),
             fetchSnapshot: { _, _ in throw ProviderError.unauthorized(.grokbot) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }
@@ -476,7 +494,7 @@ final class PollerSessionGuardTests: XCTestCase {
             fetchConsole: { _, _ in throw ProviderError.unauthorized(.openCode) },
             fetchLocal: { (self.openCodeSnapshot(), nil) }
         )
-        await poller.refreshNow()
+        await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertFalse(auth.isSignedIn)
     }

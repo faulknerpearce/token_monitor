@@ -10,6 +10,7 @@ mkdir -p "$OUT"
 
 CORE_SOURCES=(
   TokenMon/Features/Shared/AppLog.swift
+  TokenMon/Features/Shared/StaticURL.swift
   TokenMon/Features/Grok/Usage/UsageModels.swift
   TokenMon/Features/Grok/Usage/UsageClient.swift
   TokenMon/Features/Grok/Usage/DailyUsageBuilder.swift

@@ -53,12 +53,8 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 )
             }.value
         }
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -115,6 +111,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 lastRefreshedAt = Date()
                 dataSourceLabel = "OpenCode console"
                 auth.needsSignIn = false
+                auth.recordAuthSuccess()
                 let pct = snap.primaryUsedPercent
                 logger.info(
                     "OpenCode console refresh: monthly \(pct, format: .fixed(precision: 1))%"
@@ -126,9 +123,10 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 guard auth.isCurrent(generation) else { return }
                 switch error.usageError {
                 case .unauthorized, .notSignedIn:
-                    auth.markSessionInvalid(reason: error.localizedDescription)
-                    // The invalidation above advanced the generation; adopt it so
-                    // this poll still publishes the local estimate below.
+                    auth.recordAuthFailure(reason: error.localizedDescription)
+                    // A third consecutive rejection invalidates the session and
+                    // advances the generation; adopt it so this poll still
+                    // publishes the local estimate below.
                     generation = auth.sessionGeneration
                 default:
                     break

@@ -11,7 +11,7 @@ struct OpenCodeSignInView: View {
             config: ProviderSignInConfig(
                 title: "Sign in to OpenCode",
                 subtitle: "Sign in to the OpenCode console. This window finishes on its own once the console loads.",
-                startURL: URL(string: "https://opencode.ai/console/login")!,
+                startURL: URL(staticString: "https://opencode.ai/console/login"),
                 isAuthHost: { host, path in
                     host.contains("auth.opencode.ai")
                         || path.contains("/auth/authorize")

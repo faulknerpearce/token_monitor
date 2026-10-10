@@ -55,14 +55,14 @@ final class WebKitCookieCaptureTests: XCTestCase {
         XCTAssertEqual(Set(chosen?.map(\.name) ?? []), ["sessionToken", "orgId"])
     }
 
-    /// An allowlist that misses the session cookie falls back to the broad
-    /// full-jar capture.
-    func testAllowlistWithoutSessionCookieFallsBackToFullJar() {
+    /// Without the session cookie among the allowlisted ones nothing is
+    /// captured; the rest of the jar is never stored in its place.
+    func testAllowlistWithoutSessionCookieCapturesNothing() {
         let chosen = WebKitCookieCapture.select(
             from: allCookies,
             policy: narrowPolicy(essential: ["orgid"])
         )
-        XCTAssertEqual(chosen?.count, jar.count)
+        XCTAssertNil(chosen)
     }
 
     /// Empty allowlist keeps the broad full-jar capture.
@@ -97,6 +97,14 @@ final class WebKitCookieCaptureTests: XCTestCase {
     func testFallsBackToShortValueContainingAt() {
         let cookies = [cookie(name: "track", value: "fallback@example.io")]
         XCTAssertEqual(WebKitCookieCapture.extractEmail(from: cookies), "fallback@example.io")
+    }
+
+    /// Tokens that merely contain `@` are not emails.
+    func testRejectsImplausibleEmailValues() {
+        for value in ["a@b", "@example.com", "user@", "x@y@z.com", "token@abc.12", "user@example.com; path=/", "\"q\"@example.com", "https://u@example.com"] {
+            XCTAssertNil(WebKitCookieCapture.extractEmail(from: [cookie(name: "track", value: value)]), value)
+        }
+        XCTAssertNil(WebKitCookieCapture.extractEmail(from: [cookie(name: "email", value: "not-an-email@localhost")]))
     }
 
     func testIgnoresLongValuesWithSpaces() {

@@ -1,10 +1,13 @@
 import Foundation
 
-/// Persists grok.com session cookies under Application Support.
-/// Uses file-based storage instead of Keychain; debug builds prompt repeatedly for Keychain access.
+/// Session for grok.com (`sso` / `sso-rw` cookies).
+///
+/// Sign-in may pass through x.com / twitter.com (see `SignInView.authHosts`),
+/// but those hosts are not part of the session: their cookies are never
+/// captured or stored.
 @MainActor
 final class AuthSessionService: ProviderAuthSession {
-    private static let grokHosts = ["grok.com", "x.ai", "x.com", "twitter.com"]
+    private static let grokHosts = ["grok.com", "x.ai"]
 
     /// Cookie names that indicate a real authenticated session (not anonymous browsing).
     private static let authCookieHints: Set<String> = [
@@ -12,18 +15,16 @@ final class AuthSessionService: ProviderAuthSession {
         "x-session", "xai", "oidc", "refresh", "access"
     ]
 
-    /// The grok.com/xAI session cookies the usage requests send. Narrowing the
-    /// persisted jar to these keeps an X/Twitter session (`auth_token`, `ct0`)
-    /// out of `auth_session.dat`; when none is present the capture falls back to
-    /// the full domain jar so sign-in still works.
+    /// The grok.com/xAI session cookies the usage requests send. Capture stores
+    /// only these, and waits until one of them is present.
     static let essentialCookieNames: Set<String> = ["sso", "sso-rw"]
 
     convenience init() {
         self.init(directory: nil)
     }
 
-    /// Test seam: isolates the session's file store to `directory`.
-    init(directory: URL?) {
+    /// Test seam: isolates the session's file store to `directory`, or uses `store`.
+    init(directory: URL?, store: (any CredentialStore)? = nil) {
         super.init(
             config: ProviderAuthConfig(
                 storeFilenamePrefix: "auth_",
@@ -33,7 +34,8 @@ final class AuthSessionService: ProviderAuthSession {
                 capturePolicy: Self.grokPolicy(),
                 isDomain: { domain in Self.isGrokDomain(domain) }
             ),
-            directory: directory
+            directory: directory,
+            store: store
         )
     }
 

@@ -51,14 +51,11 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader, accountEmail in
             try await GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchSnapshot()
         }
-        // The session is shared with Cursor. Signing out (or a 401) from either
-        // surface must drop this snapshot immediately, not on the next poll.
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // The session is shared with Cursor. Signing out or switching accounts
+        // from either surface drops this snapshot and its history immediately;
+        // an expired session keeps them.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -88,7 +85,6 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         defer { isRefreshing = false }
 
         guard let cookieHeader = auth.cookieHeader(), !cookieHeader.isEmpty else {
-            if snapshot != nil { clearSnapshot() }
             lastError = "Sign in to Cursor to load your Grokbot allowance."
             return
         }
@@ -100,6 +96,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             snapshot = fresh
             lastError = nil
             lastRefreshedAt = Date()
+            auth.recordAuthSuccess()
             logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
             if let resetsAt = fresh.resetsAt {
@@ -136,7 +133,9 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                // Counts toward the shared Cursor session's rejection streak;
+                // a Bot-only 403 maps to `.custom` and never reaches here.
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }

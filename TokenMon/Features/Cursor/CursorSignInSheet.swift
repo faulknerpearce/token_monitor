@@ -21,7 +21,7 @@ struct CursorSignInView: View {
             config: ProviderSignInConfig(
                 title: "Sign in to Cursor",
                 subtitle: "Sign in to your Cursor account. This window finishes on its own once you reach the dashboard.",
-                startURL: URL(string: "https://cursor.com/dashboard/usage")!,
+                startURL: URL(staticString: "https://cursor.com/dashboard/usage"),
                 isAuthHost: { host, path in Self.isAuthPage(host: host, path: path) },
                 isReturnPage: { url in
                     guard let host = url.host?.lowercased() else { return false }
