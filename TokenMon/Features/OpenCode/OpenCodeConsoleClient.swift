@@ -117,9 +117,12 @@ struct OpenCodeConsoleClient: Sendable {
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         if let orgID { request.setValue(orgID, forHTTPHeaderField: "x-org-id") }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await ProviderURLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.openCode, "invalid response")
+        }
+        if ProviderHTTP.isBotChallenge(http, data: data) {
+            throw ProviderError.badResponse(.openCode, ProviderHTTP.botChallengeMessage(status: http.statusCode))
         }
         // An expired console session redirects to the login page (URLSession
         // follows it) rather than returning 401.

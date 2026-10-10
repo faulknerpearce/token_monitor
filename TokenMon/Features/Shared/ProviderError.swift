@@ -5,6 +5,10 @@ struct ProviderErrorContext: Sendable, Equatable {
     var displayName: String
     var notSignedInMessage: String
     var unauthorizedMessage: String
+    /// Message for a 403 that refuses one feature rather than the session.
+    /// When set, a non-challenge 403 maps to a transient error with this
+    /// message instead of `.unauthorized`.
+    var forbiddenMessage: String?
 
     static let claude = ProviderErrorContext(
         displayName: "Claude",
@@ -30,10 +34,13 @@ struct ProviderErrorContext: Sendable, Equatable {
         unauthorizedMessage: "Session expired. Please sign in again."
     )
 
+    /// Grokbot borrows the Cursor session; a 403 from the Bot endpoint means
+    /// this account has no Bot access, not that the Cursor session expired.
     static let grokbot = ProviderErrorContext(
         displayName: "Grokbot",
         notSignedInMessage: "Sign in to Cursor to load your Grokbot allowance.",
-        unauthorizedMessage: "Cursor session expired. Sign in again."
+        unauthorizedMessage: "Cursor session expired. Sign in again.",
+        forbiddenMessage: "Grok Bot is not available on this Cursor account."
     )
 
     static let openCode = ProviderErrorContext(
@@ -167,28 +174,72 @@ enum ProviderHTTP {
 
     /// Decodes a 2xx body as a JSON object.
     ///
-    /// An HTML body is a provider's sign-in page served after an expired-session
-    /// redirect (WorkOS, Clerk), so it maps to `.unauthorized`. Any other
-    /// malformed body stays transient, so the poller keeps the last-good
-    /// snapshot instead of signing the user out on a truncated response.
+    /// An HTML sign-in page (served after an expired-session redirect: WorkOS,
+    /// Clerk) maps to `.unauthorized`. Any other HTML, such as a bot-protection
+    /// interstitial or an error page, and any malformed body stay transient, so
+    /// the poller keeps the last-good snapshot instead of counting a rejection.
     static func jsonObject(
         _ data: Data,
         context: ProviderErrorContext
     ) throws -> [String: Any] {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             if looksLikeHTML(data) {
-                throw ProviderError.unauthorized(context)
+                if looksLikeLoginPage(data) {
+                    throw ProviderError.unauthorized(context)
+                }
+                throw ProviderError.badResponse(context, "Unexpected HTML response")
             }
             throw ProviderError.badResponse(context, "Malformed response body")
         }
         return object
     }
 
-    /// True when `data` looks like an HTML document (a sign-in page), as opposed
-    /// to a malformed or truncated JSON payload.
+    /// True when `data` looks like an HTML document, as opposed to a malformed
+    /// or truncated JSON payload.
     static func looksLikeHTML(_ data: Data) -> Bool {
         guard let text = String(data: data.prefix(512), encoding: .utf8) else { return false }
         return text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<")
+    }
+
+    /// Markers of a Cloudflare challenge / interstitial page.
+    private static let challengeMarkers = [
+        "cf-chl", "challenge-platform", "cf_chl_opt", "just a moment...",
+        "attention required! | cloudflare", "cf-browser-verification"
+    ]
+
+    /// Markers of a provider sign-in page.
+    private static let loginMarkers = [
+        "type=\"password\"", "type='password'", "sign in", "sign-in", "signin",
+        "log in", "log-in", "login", "authkit", "workos"
+    ]
+
+    /// Lowercased start of an HTML body, enough to hold the title and the
+    /// first form. Decoded as Latin-1, which accepts any bytes (a UTF-8
+    /// sequence cut at the limit included) and keeps the ASCII markers intact.
+    private static func htmlPrefix(_ data: Data) -> String {
+        (String(bytes: data.prefix(65_536), encoding: .isoLatin1) ?? "").lowercased()
+    }
+
+    /// True when an HTML body is a sign-in page rather than a challenge.
+    static func looksLikeLoginPage(_ data: Data) -> Bool {
+        guard looksLikeHTML(data) else { return false }
+        let html = htmlPrefix(data)
+        if challengeMarkers.contains(where: html.contains) { return false }
+        return loginMarkers.contains(where: html.contains)
+    }
+
+    /// True when `response` is a bot-protection challenge (Cloudflare) rather
+    /// than a verdict on the credentials: any response carrying a
+    /// `cf-mitigated` header, or a 403 whose body is HTML. A real credential
+    /// rejection on these APIs is a 401, or a 403 with a JSON body.
+    static func isBotChallenge(_ response: HTTPURLResponse, data: Data) -> Bool {
+        if response.value(forHTTPHeaderField: "cf-mitigated") != nil { return true }
+        return response.statusCode == 403 && looksLikeHTML(data)
+    }
+
+    /// User-facing message for a bot-protection challenge.
+    static func botChallengeMessage(status: Int) -> String {
+        "Request blocked by a bot-protection check (HTTP \(status)). Retrying."
     }
 
     /// Provider payloads signal an expired session with an `error` string
@@ -231,7 +282,8 @@ enum ProviderHTTP {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: json)
         }
-        return try await AuthenticatedRequest.performWithResponse(request) { usageError in
+        let forbidden = context.forbiddenMessage.map { ProviderError.custom(message: $0, usage: .badResponse($0)) }
+        return try await AuthenticatedRequest.performWithResponse(request, forbidden: forbidden) { usageError in
             ProviderError(usageError, context: context)
         }
     }
