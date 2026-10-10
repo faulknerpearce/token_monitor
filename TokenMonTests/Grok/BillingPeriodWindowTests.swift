@@ -24,7 +24,8 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: bounds.end), 15)
         XCTAssertEqual(cal.dateComponents([.day], from: bounds.start, to: bounds.end).day, 6)
 
-        // Still before reset on that Thursday morning: stay on old week (one Thursday only).
+        // Still before reset on that Thursday morning: the running period owns today,
+        // so the window keeps its start and runs through the reset day.
         let resetMorning = ISO8601DateFormatter().date(from: "2026-07-16T12:00:00Z")!
         let onResetDayMorning = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
@@ -33,8 +34,18 @@ final class BillingPeriodWindowTests: XCTestCase {
             now: resetMorning
         ))
         XCTAssertEqual(cal.component(.day, from: onResetDayMorning.start), 9)
-        XCTAssertEqual(cal.component(.day, from: onResetDayMorning.end), 15)
-        XCTAssertEqual(cal.dateComponents([.day], from: onResetDayMorning.start, to: onResetDayMorning.end).day, 6)
+        XCTAssertEqual(cal.component(.day, from: onResetDayMorning.end), 16)
+        XCTAssertEqual(cal.dateComponents([.day], from: onResetDayMorning.start, to: onResetDayMorning.end).day, 7)
+
+        // Browsing back from the reset morning still shows whole 7-day periods.
+        let previousFromMorning = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+            resetsAt: resetsAt,
+            weekOffset: -1,
+            calendar: cal,
+            now: resetMorning
+        ))
+        XCTAssertEqual(cal.component(.day, from: previousFromMorning.start), 2)
+        XCTAssertEqual(cal.component(.day, from: previousFromMorning.end), 8)
 
         // After reset fires (API may lag): roll entire window — single new Thursday, not two.
         let afterReset = ISO8601DateFormatter().date(from: "2026-07-16T20:00:00Z")!
@@ -269,6 +280,45 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(tueDay?.totalPercent ?? 0, 15, accuracy: 0.5)
         XCTAssertEqual(wedDay?.totalPercent ?? 0, 15, accuracy: 0.5)
         XCTAssertTrue(week.hasDailyData)
+    }
+
+    /// Usage between midnight and the reset instant on the reset day belongs to
+    /// the running period, so the chart shows it on that day's bar.
+    func testResetDayUsageBeforeResetInstantIsCharted() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        cal.firstWeekday = 2
+        let iso = ISO8601DateFormatter()
+        let resetsAt = try XCTUnwrap(iso.date(from: "2026-07-16T18:57:00Z"))
+        let wed = try XCTUnwrap(iso.date(from: "2026-07-15T20:00:00Z"))
+        let thuMorning = try XCTUnwrap(iso.date(from: "2026-07-16T12:00:00Z"))
+        let history = [
+            WeeklyUsageSnapshot(
+                fetchedAt: wed,
+                usedPercent: 60,
+                resetsAt: resetsAt,
+                products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 60)]
+            ),
+            WeeklyUsageSnapshot(
+                fetchedAt: thuMorning,
+                usedPercent: 72,
+                resetsAt: resetsAt,
+                products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 72)]
+            )
+        ]
+        let week = try XCTUnwrap(DailyUsageBuilder.week(
+            history: history,
+            current: history.last,
+            weekOffset: 0,
+            resetsAt: resetsAt,
+            calendar: cal,
+            now: thuMorning
+        ))
+        XCTAssertEqual(week.days.count, 8)
+        let resetDay = try XCTUnwrap(week.days.last)
+        XCTAssertTrue(cal.isDate(resetDay.dayStart, inSameDayAs: thuMorning))
+        XCTAssertTrue(resetDay.isToday)
+        XCTAssertEqual(resetDay.totalPercent, 12, accuracy: 0.5)
     }
 
     func testServerDailySeriesUsedOnlyWhenLocalHistoryEmpty() throws {

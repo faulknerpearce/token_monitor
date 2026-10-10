@@ -384,10 +384,12 @@ enum DailyUsageBuilder {
 
     // MARK: - Billing period week
 
-    /// Exactly **7** calendar days for the active SuperGrok billing period: before
+    /// **7** calendar days for the active SuperGrok billing period: before
     /// `resetsAt`, the previous reset day through the day before reset; once it fires,
-    /// the window rolls to the new period starting that day. Returns nil when
-    /// `resetsAt` is unknown — never falls back to a calendar week.
+    /// the window rolls to the new period starting that day. On the reset day itself,
+    /// before the reset instant, the running period still owns today, so the current
+    /// window (`weekOffset == 0`) runs through the reset day as an eighth bar. Returns
+    /// nil when `resetsAt` is unknown — never falls back to a calendar week.
     static func billingPeriodWeekBounds(
         resetsAt: Date?,
         weekOffset: Int,
@@ -422,6 +424,9 @@ enum DailyUsageBuilder {
         }
         let shiftedStart = cal.date(byAdding: .day, value: weekOffset * 7, to: baseStart) ?? baseStart
         let shiftedEnd = cal.date(byAdding: .day, value: 6, to: shiftedStart) ?? shiftedStart
+        if weekOffset == 0, now < resetsAt, cal.isDate(now, inSameDayAs: resetDay) {
+            return (shiftedStart, resetDay)
+        }
         return (shiftedStart, shiftedEnd)
     }
 
