@@ -10,17 +10,6 @@ struct CursorPanelView: View {
         if auth.needsSignIn && poller.snapshot == nil {
             signedOut
         } else if let snapshot = poller.snapshot {
-            let cursorModelsPercent: Double = {
-                if let total = snapshot.pools.first(where: { $0.kind == .total }) { return total.usedPercent }
-                if let auto = snapshot.pools.first(where: { $0.kind == .auto }) { return auto.usedPercent }
-                return snapshot.usedPercent
-            }()
-            let otherModelsPercent: Double = {
-                if let api = snapshot.pools.first(where: { $0.kind == .api }) { return api.usedPercent }
-                return 0
-            }()
-            let cursorModelsResetsAt = snapshot.pools.first(where: { $0.kind == .total })?.resetsAt ?? snapshot.resetsAt
-            let otherModelsResetsAt = snapshot.pools.first(where: { $0.kind == .api })?.resetsAt ?? snapshot.resetsAt
             VStack(alignment: .leading, spacing: 10) {
                 ProviderHeaderRow(provider: .cursor, title: "Cursor") {
                     Text(snapshot.displayPlanName)
@@ -29,24 +18,20 @@ struct CursorPanelView: View {
 
                 PanelCard {
                     PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
-                    SlimUsageTrack(
-                        label: "Cursor Models",
-                        percent: cursorModelsPercent,
-                        color: ProviderColors.cursorColor,
-                        caption: cursorModelsResetsAt.map { Format.resetCaption($0) }
-                    )
-                    SlimUsageTrack(
-                        label: "Other Models",
-                        percent: otherModelsPercent,
-                        color: ProviderColors.cursorColor,
-                        caption: otherModelsResetsAt.map { Format.resetCaption($0) }
-                    )
+                    ForEach(snapshot.pools) { pool in
+                        SlimUsageTrack(
+                            label: pool.kind.trackLabel,
+                            percent: pool.usedPercent,
+                            color: ProviderColors.cursorColor,
+                            caption: (pool.resetsAt ?? snapshot.resetsAt).map { Format.resetCaption($0) }
+                        )
+                    }
                 }
 
                 NavigableDailyBudgetCard(
                     style: .monthly,
                     accent: ProviderColors.cursorColor,
-                    periodUsedPercent: cursorModelsPercent,
+                    periodUsedPercent: snapshot.usedPercent,
                     periodStart: snapshot.billingCycleStart,
                     resetsAt: snapshot.billingCycleEnd,
                     daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) ?? [] }

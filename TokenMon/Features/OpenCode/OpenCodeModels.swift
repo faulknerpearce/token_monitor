@@ -371,3 +371,53 @@ enum ModelPalette {
         }
     }
 }
+
+/// Human-readable names for OpenCode model ids (`gpt-5.4-mini` → "GPT-5.4 Mini").
+enum OpenCodeModelName {
+    /// Brand spellings that title-casing would get wrong.
+    private static let brands: [String: String] = [
+        "gpt": "GPT",
+        "glm": "GLM",
+        "minimax": "MiniMax",
+        "deepseek": "DeepSeek",
+        "mimo": "MiMo",
+        "hy3": "HY3"
+    ]
+
+    /// Brands written with a hyphen before the version (`GPT-5.4`, `GLM-5.1`).
+    private static let hyphenatedBrands: Set<String> = ["GPT", "GLM"]
+
+    /// Display name for `modelID`: brand casing, the first letter of every
+    /// other word upper-cased (the rest kept, so `k2.6` reads `K2.6`), and
+    /// consecutive bare integers joined as a version (`4-5` → `4.5`).
+    static func display(_ modelID: String) -> String {
+        let lower = modelID.lowercased()
+        if lower.contains("muse-spark") { return "Muse Spark" }
+        var words: [String] = []
+        for part in modelID.split(separator: "-").map(String.init) where !part.isEmpty {
+            if let last = words.last, isInteger(part), isVersionTail(last) {
+                words[words.count - 1] = "\(last).\(part)"
+                continue
+            }
+            if let last = words.last, hyphenatedBrands.contains(last), part.first?.isNumber == true {
+                words[words.count - 1] = "\(last)-\(part)"
+                continue
+            }
+            words.append(brands[part.lowercased()] ?? capitalizedFirst(part))
+        }
+        return words.isEmpty ? modelID : words.joined(separator: " ")
+    }
+
+    private static func isInteger(_ word: String) -> Bool {
+        !word.isEmpty && word.allSatisfy(\.isNumber)
+    }
+
+    /// True for a bare number (or number.number) that a following integer extends.
+    private static func isVersionTail(_ word: String) -> Bool {
+        !word.isEmpty && word.allSatisfy { $0.isNumber || $0 == "." }
+    }
+
+    private static func capitalizedFirst(_ word: String) -> String {
+        word.prefix(1).uppercased() + word.dropFirst()
+    }
+}

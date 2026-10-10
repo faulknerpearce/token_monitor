@@ -39,7 +39,9 @@ struct OpenCodeSignInView: View {
             afterCapture: {
                 guard let cookie = auth.cookieHeader() else { return }
                 let client = OpenCodeConsoleClient(cookieHeader: cookie)
-                if let id = try? await client.resolveOrgID() {
+                // Keep the workspace from the sign-in redirect; list the
+                // account's workspaces only when the redirect carried none.
+                if let id = try? await client.resolveOrgID(preferred: auth.workspaceID) {
                     auth.saveWorkspaceID(id)
                 }
                 if let email = await client.fetchAccountEmail() {

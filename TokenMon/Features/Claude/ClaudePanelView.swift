@@ -22,10 +22,10 @@ struct ClaudePanelView: View {
                         caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
-                        label: "Weekly",
+                        label: snapshot.weeklyLabel,
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
                         color: ProviderColors.claudeColor,
-                        caption: snapshot.sevenDay?.resetsAt.map { Format.resetCaption($0) }
+                        caption: poller.weeklyResetsAt().map { Format.resetCaption($0) }
                     )
                 }
 
@@ -33,7 +33,7 @@ struct ClaudePanelView: View {
                     style: .weekly,
                     accent: ProviderColors.claudeColor,
                     periodUsedPercent: snapshot.sevenDay?.usedPercent,
-                    resetsAt: snapshot.sevenDay?.resetsAt,
+                    resetsAt: poller.weeklyResetsAt(),
                     daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
                 )
 

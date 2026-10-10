@@ -62,6 +62,14 @@ enum OpenRouterBudgetSource: String, Sendable {
         case .keyLimit: return "Key limit"
         }
     }
+
+    /// Stats-grid title for the budget denominator.
+    var statTitle: String {
+        switch self {
+        case .accountCredits: return "Credits purchased"
+        case .keyLimit: return "Key spending limit"
+        }
+    }
 }
 
 /// One OpenRouter poll result.
@@ -101,6 +109,16 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
     var usedPercent: Double? {
         guard let budgetUSD, budgetUSD > 0 else { return nil }
         return Percent.clamp(usedUSD / budgetUSD * 100)
+    }
+
+    /// Stats-grid title for the budget figure, named after its source.
+    var budgetStatTitle: String {
+        budgetSource?.statTitle ?? "Credit limit"
+    }
+
+    /// Stats-grid value for the budget figure; "None" when the key is unlimited.
+    var budgetStatValue: String {
+        budgetUSD.map { Format.usd($0) } ?? "None"
     }
 
     /// Builds a snapshot preferring account credits, then key limit, then spend only.

@@ -44,7 +44,7 @@ struct OpenRouterPanelView: View {
                         .padding(.top, 12)
                         .padding(.bottom, 8)
                     MetricStatGrid([
-                        MetricStat(title: "Credits purchased", value: Format.usd(snapshot.accountCreditsUSD ?? snapshot.keyLimitUSD ?? 0)),
+                        MetricStat(title: snapshot.budgetStatTitle, value: snapshot.budgetStatValue),
                         MetricStat(title: "Total spent", value: Format.usd(snapshot.accountUsedUSD ?? snapshot.keyUsageUSD)),
                         MetricStat(title: "Remaining", value: Format.usd(snapshot.remainingUSD ?? 0)),
                         MetricStat(title: "Spent today", value: Format.usd(snapshot.keyUsageDailyUSD))

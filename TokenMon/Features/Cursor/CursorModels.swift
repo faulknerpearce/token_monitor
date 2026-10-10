@@ -13,6 +13,15 @@ enum CursorPoolKind: String, Codable, CaseIterable, Sendable {
         case .api: return "API"
         }
     }
+
+    /// Usage-track label naming the models each pool covers.
+    var trackLabel: String {
+        switch self {
+        case .total: return "Total"
+        case .auto: return "Auto + Composer"
+        case .api: return "API (Other Models)"
+        }
+    }
 }
 
 /// One Cursor quota pool (total / auto / API).
@@ -37,14 +46,6 @@ struct CursorCostStats: Hashable, Sendable {
     var cycleTokens: Int64
     var cycleInputTokens: Int64 = 0
     var cycleOutputTokens: Int64 = 0
-    /// Sum of `chargedCents` for today (USD).
-    var todayUSD: Double
-    /// Sum of `chargedCents` over the last 20 days (USD).
-    var last20dUSD: Double
-    /// Token total for today.
-    var todayTokens: Int64
-    /// Token total over the last 20 days.
-    var last20dTokens: Int64
 }
 
 /// Per-hour activity, quota, and token weights for one calendar day.
@@ -59,6 +60,66 @@ struct CursorDayHourlyUsage: Hashable, Sendable {
 
     var isEmpty: Bool {
         quotaHourWeights.allSatisfy { $0 <= 0 } && hourWeights.allSatisfy { $0 <= 0 }
+    }
+
+    /// All-zero weights for `dayStart`.
+    static func empty(dayStart: Date) -> Self {
+        Self(
+            dayStart: dayStart,
+            hourWeights: Array(repeating: 0, count: 24),
+            quotaHourWeights: Array(repeating: 0, count: 24)
+        )
+    }
+}
+
+/// Every figure derived from one page-through of Cursor usage events.
+struct CursorEventAggregates: Sendable {
+    /// When the events were fetched.
+    var fetchedAt: Date
+    /// Earliest event instant requested (see `CursorUsageClient.eventsWindowStart`).
+    var windowStart: Date
+    var costStats: CursorCostStats
+    /// Hourly weights for the calendar day of `fetchedAt`.
+    var hourly: CursorDayHourlyUsage
+    /// Per-day token weight for the daily back-fill.
+    var estimatedWeightByDay: [Date: Double]
+
+    /// True when these aggregates can stand in for a fresh fetch at `now`:
+    /// same event window, same calendar day, and younger than
+    /// `CursorUsageClient.eventsRefreshInterval`.
+    func isFresh(windowStart: Date, now: Date, calendar: Calendar = .current) -> Bool {
+        self.windowStart == windowStart
+            && calendar.isDate(fetchedAt, inSameDayAs: now)
+            && now.timeIntervalSince(fetchedAt) < CursorUsageClient.eventsRefreshInterval
+            && now >= fetchedAt
+    }
+}
+
+/// In-memory cache of the last event aggregates, keyed by session so a
+/// different account never sees another account's figures.
+final class CursorEventCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entry: (key: String, value: CursorEventAggregates)?
+
+    /// Cached aggregates for `key`, or nil.
+    func value(forKey key: String) -> CursorEventAggregates? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let entry, entry.key == key else { return nil }
+        return entry.value
+    }
+
+    /// Replaces the cached aggregates.
+    func store(_ value: CursorEventAggregates, forKey key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entry = (key, value)
+    }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        entry = nil
     }
 }
 
