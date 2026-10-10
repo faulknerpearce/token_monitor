@@ -12,21 +12,32 @@ enum Format {
     }()
 
     /// Compact human-readable token count (K / M / B).
+    ///
+    /// Each unit rounds half away from zero, and a value that rounds up to 1000
+    /// of one unit is shown in the next (999,500 → "1.0M", not "1000K").
     static func tokens(_ count: Int64) -> String {
         let value = Double(count)
-        if value >= 1_000_000_000 {
-            return String(format: "%.1fB", value / 1_000_000_000)
+        guard value >= 1_000 else { return "\(count)" }
+        let thousands = rounded(value / 1_000, decimals: 0)
+        if thousands < 1_000 {
+            return compact(thousands, decimals: 0, suffix: "K")
         }
-        if value >= 1_000_000 {
-            let millions = value / 1_000_000
-            return millions >= 10
-                ? String(format: "%.0fM", millions)
-                : String(format: "%.1fM", millions)
+        let millions = value / 1_000_000
+        let millionDecimals = rounded(millions, decimals: 1) < 10 ? 1 : 0
+        let shownMillions = rounded(millions, decimals: millionDecimals)
+        if shownMillions < 1_000 {
+            return compact(shownMillions, decimals: millionDecimals, suffix: "M")
         }
-        if value >= 1_000 {
-            return String(format: "%.0fK", value / 1_000)
-        }
-        return "\(count)"
+        return compact(rounded(value / 1_000_000_000, decimals: 1), decimals: 1, suffix: "B")
+    }
+
+    private static func rounded(_ value: Double, decimals: Int) -> Double {
+        let scale = decimals == 0 ? 1.0 : 10.0
+        return (value * scale).rounded(.toNearestOrAwayFromZero) / scale
+    }
+
+    private static func compact(_ value: Double, decimals: Int, suffix: String) -> String {
+        String(format: "%.\(decimals)f\(suffix)", value)
     }
 
     /// USD currency string without an approximation prefix.
@@ -44,13 +55,25 @@ enum Format {
         }
     }
 
-    /// Cached DateFormatter keyed by date format.
+    /// Cached DateFormatter keyed by date format and time-zone identifier. A
+    /// `nil` time zone resolves to the current system zone at each call, and the
+    /// cache is emptied when the system time zone changes.
     private static let formatterCacheLock = NSLock()
     // swiftlint:disable:next modifier_order
     private nonisolated(unsafe) static var formatterCache: [String: DateFormatter] = [:]
+    private static let timeZoneObserver: NSObjectProtocol = NotificationCenter.default.addObserver(
+        forName: .NSSystemTimeZoneDidChange,
+        object: nil,
+        queue: nil
+    ) { _ in
+        NSTimeZone.resetSystemTimeZone()
+        Format.clearFormatterCache()
+    }
 
     private static func cachedFormatter(dateFormat: String, timeZone: TimeZone?) -> DateFormatter {
-        let key = "\(dateFormat)|\(timeZone?.identifier ?? "default")"
+        _ = timeZoneObserver
+        let zone = timeZone ?? TimeZone.current
+        let key = "\(dateFormat)|\(zone.identifier)"
         formatterCacheLock.lock()
         defer { formatterCacheLock.unlock() }
         if let formatter = formatterCache[key] {
@@ -58,10 +81,23 @@ enum Format {
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = timeZone
+        formatter.timeZone = zone
         formatter.dateFormat = dateFormat
         formatterCache[key] = formatter
         return formatter
+    }
+
+    /// Number of cached date formatters.
+    static var cachedFormatterCount: Int {
+        formatterCacheLock.lock()
+        defer { formatterCacheLock.unlock() }
+        return formatterCache.count
+    }
+
+    private static func clearFormatterCache() {
+        formatterCacheLock.lock()
+        formatterCache.removeAll()
+        formatterCacheLock.unlock()
     }
 
     /// Formats a reset date in a fixed locale, with lowercase meridian (am/pm).

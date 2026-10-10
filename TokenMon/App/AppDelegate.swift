@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // alone — Settings opens only when the user asks for it.
         Self.dismissAutoPresentedWindows()
         DispatchQueue.main.async { Self.dismissAutoPresentedWindows() }
+        if !AppModel.isRunningTests {
+            LegacyCacheCleanup.runOnce()
+        }
     }
 
     /// Closes normal app windows the system opened without the user asking.

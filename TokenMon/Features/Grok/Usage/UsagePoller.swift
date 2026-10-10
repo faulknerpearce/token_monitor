@@ -102,7 +102,12 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             auth.recordAuthSuccess()
             history.append(snap)
             grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
-            notifier.evaluate(usedPercent: snap.usedPercent, settings: settings, account: auth.accountEmail)
+            notifier.evaluate(
+                usedPercent: snap.usedPercent,
+                settings: settings,
+                account: auth.accountEmail,
+                resetsAt: snap.resetsAt
+            )
             logger.info("Usage refreshed: \(snap.usedPercent, format: .fixed(precision: 1))% used")
             return .success
         } catch is CancellationError {

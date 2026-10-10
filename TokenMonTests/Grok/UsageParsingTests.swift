@@ -71,6 +71,22 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertFalse(text.contains(",=cmd|"))
     }
 
+    func testCSVEscapeGuardsLeadingTabAndCarriageReturn() {
+        XCTAssertEqual(ExportService.csvEscape("\t=1+1"), "'\t=1+1")
+        XCTAssertEqual(ExportService.csvEscape("\r=1+1"), "\"'\r=1+1\"")
+        XCTAssertEqual(ExportService.csvEscape("\r\n=1+1"), "\"'\r\n=1+1\"")
+        XCTAssertEqual(ExportService.csvEscape("-5"), "'-5")
+        XCTAssertEqual(ExportService.csvEscape("plain"), "plain")
+    }
+
+    func testCSVEscapeQuotesCarriageReturnAndLineBreaks() {
+        XCTAssertEqual(ExportService.csvEscape("a\rb"), "\"a\rb\"")
+        XCTAssertEqual(ExportService.csvEscape("a\r\nb"), "\"a\r\nb\"")
+        XCTAssertEqual(ExportService.csvEscape("a\nb"), "\"a\nb\"")
+        XCTAssertEqual(ExportService.csvEscape("a,b"), "\"a,b\"")
+        XCTAssertEqual(ExportService.csvEscape("say \"hi\""), "\"say \"\"hi\"\"\"")
+    }
+
     func testExportJSONRoundTrip() throws {
         let data = try ExportService.export([.preview], format: .json)
         let obj = try JSONSerialization.jsonObject(with: data)

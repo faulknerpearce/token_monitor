@@ -502,6 +502,57 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(calendar.isDate(bounds.end, inSameDayAs: date(2026, 9, 16)))
     }
 
+    /// Later cycles are counted from the anchor day, so a month-end anchor
+    /// returns to the 31st after a short month instead of drifting to the 28th.
+    func testSubscriptionMonthAdvanceKeepsAnchorDayAfterShortMonth() throws {
+        let fromStart = try XCTUnwrap(
+            DailyBudget.subscriptionMonth(
+                knownStart: date(2026, 1, 31),
+                now: date(2026, 3, 10),
+                calendar: calendar
+            )
+        )
+        XCTAssertTrue(calendar.isDate(fromStart.start, inSameDayAs: date(2026, 2, 28)))
+        XCTAssertTrue(calendar.isDate(fromStart.end, inSameDayAs: date(2026, 3, 31)))
+
+        let fromReset = try XCTUnwrap(
+            DailyBudget.subscriptionMonth(
+                resetsAt: date(2026, 1, 31),
+                now: date(2026, 4, 2),
+                calendar: calendar
+            )
+        )
+        XCTAssertTrue(calendar.isDate(fromReset.start, inSameDayAs: date(2026, 3, 31)))
+        XCTAssertTrue(calendar.isDate(fromReset.end, inSameDayAs: date(2026, 4, 30)))
+    }
+
+    /// On the reset day before the reset instant the extra bar is shown, but the
+    /// daily share stays at the period's 31 days instead of dropping to 1/32.
+    func testBuildDaysKeepsDailyShareOnFinalMorning() {
+        let start = date(2026, 7, 16, hour: 12)
+        let end = date(2026, 8, 16, hour: 12)
+        let before = DailyBudget.buildDays(
+            periodStart: start,
+            periodEnd: end,
+            limitUSD: 100,
+            spentByDay: [:],
+            now: date(2026, 8, 15, hour: 9),
+            calendar: calendar
+        )
+        let finalMorning = DailyBudget.buildDays(
+            periodStart: start,
+            periodEnd: end,
+            limitUSD: 100,
+            spentByDay: [:],
+            now: date(2026, 8, 16, hour: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(before.count, 31)
+        XCTAssertEqual(finalMorning.count, 32)
+        XCTAssertEqual(before.first?.budgetUSD ?? 0, 100.0 / 31.0, accuracy: 1e-9)
+        XCTAssertEqual(finalMorning.first?.budgetUSD ?? 0, 100.0 / 31.0, accuracy: 1e-9)
+    }
+
     func testStaleMonthlyEndDoesNotPaintClosedSuffix() throws {
         let built = try XCTUnwrap(
             DailyBudget.buildSubscriptionMonthLast7Days(
@@ -650,7 +701,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(caption.hasPrefix("Usage 7.1% over today's allowance"), "got: \(caption)")
     }
 
-    /// Regression (Grokbot, first day of a fresh period): the allowance is one
+    /// Grokbot, first day of a fresh period: the allowance is one
     /// whole day's share, so 7% used on day 1 of a weekly pool leaves ~7.3% — not
     /// the fractional-time value, and never a false over-pace.
     func testFirstDayRemainingIsWholeDayShare() throws {

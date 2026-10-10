@@ -130,4 +130,54 @@ final class ThresholdNotifierTests: XCTestCase {
             .evaluate(usedPercent: 99, settings: settings, account: nil)
         XCTAssertTrue(recorder.calls.isEmpty)
     }
+
+    /// A new billing period re-arms the alert even when no poll saw usage drop
+    /// below the threshold across the reset.
+    @MainActor
+    func testEvaluateReArmsForNewBillingPeriod() throws {
+        let suite = "ThresholdNotifierTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = makeSettings(defaults, threshold: 80)
+        let recorder = Recorder()
+        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let firstReset = Date(timeIntervalSince1970: 1_784_000_000)
+        let nextReset = firstReset.addingTimeInterval(7 * 86_400)
+
+        notifier.evaluate(usedPercent: 85, settings: settings, account: "a@b.com", resetsAt: firstReset)
+        notifier.evaluate(usedPercent: 90, settings: settings, account: "a@b.com", resetsAt: firstReset)
+        XCTAssertEqual(recorder.calls, [85])
+        // A reset instant reported a few minutes later is still the same period.
+        notifier.evaluate(
+            usedPercent: 92,
+            settings: settings,
+            account: "a@b.com",
+            resetsAt: firstReset.addingTimeInterval(300)
+        )
+        XCTAssertEqual(recorder.calls, [85])
+
+        notifier.evaluate(usedPercent: 82, settings: settings, account: "a@b.com", resetsAt: nextReset)
+        XCTAssertEqual(recorder.calls, [85, 82])
+        notifier.evaluate(usedPercent: 88, settings: settings, account: "a@b.com", resetsAt: nextReset)
+        XCTAssertEqual(recorder.calls, [85, 82])
+    }
+
+    /// A record written without a period adopts the first period it sees rather
+    /// than firing again inside it.
+    @MainActor
+    func testEvaluateAdoptsPeriodForRecordWithoutOne() throws {
+        let suite = "ThresholdNotifierTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = makeSettings(defaults, threshold: 80)
+        let recorder = Recorder()
+        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let reset = Date(timeIntervalSince1970: 1_784_000_000)
+
+        notifier.evaluate(usedPercent: 85, settings: settings, account: nil)
+        notifier.evaluate(usedPercent: 86, settings: settings, account: nil, resetsAt: reset)
+        XCTAssertEqual(recorder.calls, [85])
+        notifier.evaluate(usedPercent: 86, settings: settings, account: nil, resetsAt: reset.addingTimeInterval(7 * 86_400))
+        XCTAssertEqual(recorder.calls, [85, 86])
+    }
 }
