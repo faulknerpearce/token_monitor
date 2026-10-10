@@ -153,14 +153,21 @@ TokenMon/
     OpenRouter/  OpenRouter key/credits usage and panel
     Overview/    Multi-provider overview and hourly chart
     Provider/    Provider identity, registry, switching, and logos
-    Shared/      Credentials, HTTP/error helpers, cookie capture, sign-in shell, usage-pool + Daily Budget kernels, poll helpers
+    Shared/
+      Auth/        Auth session, Keychain credential store, cookie capture, sign-in window
+      Networking/  Authenticated requests, error mapping, host matching
+      Polling/     Polling loop, backoff, system sleep/wake gate
+      Storage/     Application Support files, daily and hourly usage stores
+      UI/          Panel cards, typography, colors, Daily Budget bars
+      Usage/       Daily Budget math, usage pools, day keys, percent helpers
+      Utilities/   Formatting, JSON, ISO 8601, logging
     MenuBar/     Status item controller, label renderer, dropdown, daily chart
     Settings/    Preferences, UserDefaults
     Update/      GitHub release check and verified in-place install
   Resources/     Info.plist, entitlements, assets
 Docs/            Architecture, auth/endpoints, notarization
 Scripts/         Icon generator, core tests, notarize, coverage conversion
-TokenMonTests/  XCTest suite
+TokenMonTests/   XCTest suite, mirroring the TokenMon/Features folders
 Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 ```
 

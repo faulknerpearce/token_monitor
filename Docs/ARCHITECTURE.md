@@ -37,7 +37,13 @@ TokenMon is an agent-style macOS app (`LSUIElement` + a custom `NSStatusItem`, n
 | `OpenRouter/` | OpenRouter bearer-key auth, usage client/poller, and panel |
 | `Overview/` | Multi-provider hourly chart and shared provider accent colors |
 | `Provider/` | Provider identity, switching, and logos |
-| `Shared/` | Provider-neutral infrastructure: `ProviderAuthSession`, WebKit cookie bridge/capture, credential stores (Keychain + files), `ProviderURLSession` / `AuthenticatedRequest`, sign-in sheet shell, `PollingLoop`, delta stores, daily-budget math, formatters |
+| `Shared/Auth/` | `ProviderAuthSession`, `KeychainVault` / credential stores, WebKit cookie bridge and capture, sign-in window and buttons |
+| `Shared/Networking/` | `ProviderURLSession` / `AuthenticatedRequest`, `UsageError` / `ProviderError` mapping, `Domain` host matching, static URLs |
+| `Shared/Polling/` | `PollingLoop`, `BackoffTimer`, `SystemWakeGate`, the `ProviderUsagePoller` protocol |
+| `Shared/Storage/` | `AppSupport`, `FileBackedStringStore`, daily and hourly delta stores, `LegacyCacheCleanup` |
+| `Shared/UI/` | Panel cards, typography, color palette, usage track, Daily Budget bars |
+| `Shared/Usage/` | Daily Budget math, `UsagePool`, `DayKey`, `Percent` |
+| `Shared/Utilities/` | `Format`, `JSON`, `ISO8601`, `AppLog` |
 | `MenuBar/` | `MenuBarController` (`NSStatusItem` + `MenuBarPanel`), status-item bitmap renderer, panel, segmented bar, category rows |
 | `Settings/` | UserDefaults-backed preferences, launch-at-login |
 | `Update/` | GitHub release check, verified in-place install (`UpdateChecker`, `ReleaseFeed`, `AppInstaller`) |

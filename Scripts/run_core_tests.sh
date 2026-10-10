@@ -9,20 +9,20 @@ OUT="$ROOT/.build/manual"
 mkdir -p "$OUT"
 
 CORE_SOURCES=(
-  TokenMon/Features/Shared/AppLog.swift
-  TokenMon/Features/Shared/StaticURL.swift
+  TokenMon/Features/Shared/Utilities/AppLog.swift
+  TokenMon/Features/Shared/Networking/StaticURL.swift
   TokenMon/Features/Grok/Usage/UsageModels.swift
   TokenMon/Features/Grok/Usage/UsageClient.swift
   TokenMon/Features/Grok/Usage/DailyUsageBuilder.swift
   TokenMon/Features/Grok/History/ExportService.swift
-  TokenMon/Features/Shared/Percent.swift
-  TokenMon/Features/Shared/Format.swift
-  TokenMon/Features/Shared/JSON.swift
-  TokenMon/Features/Shared/ColorPalette.swift
-  TokenMon/Features/Shared/ISO8601.swift
-  TokenMon/Features/Shared/UsageError.swift
-  TokenMon/Features/Shared/AuthenticatedRequest.swift
-  TokenMon/Features/Shared/ProviderError.swift
+  TokenMon/Features/Shared/Usage/Percent.swift
+  TokenMon/Features/Shared/Utilities/Format.swift
+  TokenMon/Features/Shared/Utilities/JSON.swift
+  TokenMon/Features/Shared/UI/ColorPalette.swift
+  TokenMon/Features/Shared/Utilities/ISO8601.swift
+  TokenMon/Features/Shared/Networking/UsageError.swift
+  TokenMon/Features/Shared/Networking/AuthenticatedRequest.swift
+  TokenMon/Features/Shared/Networking/ProviderError.swift
   Tests/Manual/CoreTestsMain.swift
 )
 
