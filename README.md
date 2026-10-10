@@ -39,11 +39,12 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 | **Dropdown** | Per-provider panel headed by its usage pool (Weekly / Monthly / Mixed), plus used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
 | **Overview tab** | All connected providers at a glance with hourly multi-provider chart |
 | **Daily Budget** | Per-pool daily charts (weekly windows, subscription months) paced against the provider's own consumed % |
-| **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and sessions persist under Application Support |
-| **Polling** | Faster refresh while the menu is open; backoff on errors; sleep / wake aware |
+| **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and session credentials are kept in the macOS Keychain |
+| **Polling** | Faster refresh while the menu is open, slower when idle; failed refreshes are retried on later polls |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
 | **Alerts** | Optional threshold notifications |
 | **Preferences** | Menu bar toggles, poll intervals, provider order, visible products, launch at login |
+| **Updates** | Optional check for new GitHub releases; verified in-place install (see [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md#in-app-updates)) |
 | **Agent app** | No Dock icon by default (`LSUIElement`) |
 
 ## Requirements
@@ -150,11 +151,12 @@ TokenMon/
     Grokbot/     Grokbot weekly allowance and panel (borrows the Cursor session)
     OpenCode/    OpenCode auth, console/local usage, and panel
     OpenRouter/  OpenRouter key/credits usage and panel
-    Overview/    Multi-provider rings and hourly chart
+    Overview/    Multi-provider overview and hourly chart
     Provider/    Provider identity, registry, switching, and logos
     Shared/      Credentials, HTTP/error helpers, cookie capture, sign-in shell, usage-pool + Daily Budget kernels, poll helpers
-    MenuBar/     Label renderer, dropdown, daily chart
+    MenuBar/     Status item controller, label renderer, dropdown, daily chart
     Settings/    Preferences, UserDefaults
+    Update/      GitHub release check and verified in-place install
   Resources/     Info.plist, entitlements, assets
 Docs/            Architecture, auth/endpoints, notarization
 Scripts/         Icon generator, core tests, notarize
@@ -164,10 +166,14 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 
 ## Privacy
 
-- Session cookies and optional bearer tokens are stored as **user-only** files under Application Support (not Keychain — avoids access-dialog loops on ad-hoc debug builds).
-- The app is **not sandboxed**; the store path is:
-  `~/Library/Application Support/TokenMon/` (files `auth_*.dat`, mode `0600`)
-- Network access is limited to authenticated hosts of the connected providers (chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com/x.ai) for usage and auth.
+- **Credentials** (session cookies, OpenRouter API key) are stored in the **macOS login Keychain** (service `com.modelmonitor.app.credentials`, this device only, never synced). The account email and OpenCode workspace id stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. Credentials saved by older versions in that folder are moved into the Keychain on first launch.
+- **Keychain prompts after updates.** Release builds are ad-hoc signed, so after each update macOS asks once whether the new TokenMon may read its Keychain items. Choose **Always Allow** to keep it from asking again until the next update.
+- **Network access** is limited to:
+  - the connected providers' own hosts, for usage and sign-in: chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com / x.ai (plus the identity pages a provider's sign-in redirects to);
+  - GitHub, for update checks and downloads: `api.github.com`, `github.com`, and its release-asset hosts `objects.githubusercontent.com` / `release-assets.githubusercontent.com`. Turn off automatic checks in Settings to stop these.
+- **Local files read:** for OpenCode, TokenMon reads `~/.local/share/opencode/opencode.db` **read-only** to estimate costs and activity. The data never leaves the Mac.
+- Provider responses are never cached to disk, and provider cookies never enter a shared cookie jar.
+- The app is **not sandboxed** (needed to read the OpenCode database).
 - History stays on this Mac (SwiftData). No third-party telemetry.
 
 ## Documentation
