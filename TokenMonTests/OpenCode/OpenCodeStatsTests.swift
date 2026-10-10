@@ -717,8 +717,8 @@ final class OpenCodeStatsTests: XCTestCase {
 
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
         let zen = try XCTUnwrap(snap.models.first { $0.modelID == "deepseek-v4-flash-free" })
-        // 1M * $0.04872 + 0.5M * $0.09744 = $0.09744 of included-use value.
-        XCTAssertEqual(zen.costUSD, 0.09744, accuracy: 0.001)
+        // Zen paid-equivalent DeepSeek V4 Flash: 1M * $0.14 + 0.5M * $0.28 = $0.28.
+        XCTAssertEqual(zen.costUSD, 0.28, accuracy: 0.001)
         XCTAssertTrue(zen.isCostEstimated)
 
         let go = try XCTUnwrap(snap.models.first { $0.modelID == "minimax-m3" })
@@ -736,7 +736,7 @@ final class OpenCodeStatsTests: XCTestCase {
             cacheReadTokens: 0,
             cacheWriteTokens: 0
         )
-        XCTAssertEqual(billable.cost, 0.04872, accuracy: 0.001)
+        XCTAssertEqual(billable.cost, 0.14, accuracy: 0.001)
         XCTAssertTrue(billable.isEstimated)
 
         let recorded = OpenCodeZenCostEstimate.billableCostUSD(
@@ -824,8 +824,8 @@ final class OpenCodeStatsTests: XCTestCase {
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
         // 1M + 1M input from the two in-month messages (session inserts also mirror messages).
         XCTAssertGreaterThanOrEqual(snap.monthlyTokens, 2_000_000)
-        // Recorded Go $2 + DeepSeek V4 Flash included-use value $0.04872.
-        XCTAssertEqual(snap.monthlyEstimatedUSD, 2.04872, accuracy: 0.02)
+        // Recorded Go $2 + Zen DeepSeek V4 Flash free-equivalent $0.14.
+        XCTAssertEqual(snap.monthlyEstimatedUSD, 2.14, accuracy: 0.02)
     }
 
     func testDayHourlyUsageStacksModelsByLocalHour() throws {
