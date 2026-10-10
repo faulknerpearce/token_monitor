@@ -50,7 +50,6 @@ enum DailyUsageBuilder {
     static func week(
         history: [WeeklyUsageSnapshot],
         current: WeeklyUsageSnapshot?,
-        serverDaily: [DailyUsageSnapshot] = [],
         weekOffset: Int = 0,
         resetsAt: Date? = nil,
         calendar: Calendar = .current,
@@ -249,8 +248,7 @@ enum DailyUsageBuilder {
                     dayOfMonth: dayNum,
                     segments: segments,
                     isToday: isToday,
-                    isAfterReset: isAfterReset,
-                    resetAt: nil
+                    isAfterReset: isAfterReset
                 )
             )
         }
@@ -266,27 +264,6 @@ enum DailyUsageBuilder {
             resetsAt: effectiveResetsAt,
             calendar: cal
         )
-        if localWeek.hasDailyData || serverDaily.isEmpty {
-            return localWeek
-        }
-
-        let weekDays = buildDaysFromServer(
-            serverDaily: serverDaily,
-            weekStart: weekStart,
-            dayCount: dayCount,
-            calendar: cal,
-            now: now
-        )
-        if weekDays.contains(where: { !$0.segments.isEmpty }) {
-            return finalize(
-                weekStart: weekStart,
-                weekEnd: weekEnd,
-                days: weekDays,
-                isEstimated: false,
-                resetsAt: effectiveResetsAt,
-                calendar: cal
-            )
-        }
         return localWeek
     }
 
@@ -366,8 +343,7 @@ enum DailyUsageBuilder {
                     dayOfMonth: dayOfMonthFormatter.string(from: dayStart),
                     segments: segments,
                     isToday: false,
-                    isAfterReset: false,
-                    resetAt: nil
+                    isAfterReset: false
                 )
             )
         }
@@ -470,47 +446,6 @@ enum DailyUsageBuilder {
         }
 
         return currentResetsAt
-    }
-
-    private static func buildDaysFromServer(
-        serverDaily: [DailyUsageSnapshot],
-        weekStart: Date,
-        dayCount: Int,
-        calendar: Calendar,
-        now: Date
-    ) -> [DailyUsageDay] {
-        let (weekdayFormatter, dayOfMonthFormatter) = Self.makeDateFormatters(calendar: calendar)
-
-        let byDay = Dictionary(
-            serverDaily.map { (calendar.startOfDay(for: $0.dayStart), $0) },
-            uniquingKeysWith: { _, last in last }
-        )
-
-        var days: [DailyUsageDay] = []
-        for offset in 0..<dayCount {
-            guard let dayStart = calendar.date(byAdding: .day, value: offset, to: weekStart) else { continue }
-            let symbol = String(weekdayFormatter.string(from: dayStart).prefix(3))
-            let dayNum = dayOfMonthFormatter.string(from: dayStart)
-            let snap = byDay[dayStart]
-            let segments: [DailyUsageSegment]
-            if let snap, snap.percentOfWeekly > 0.05 {
-                segments = segmentsFromProducts(snap.products, fallbackTotal: snap.percentOfWeekly)
-            } else {
-                segments = []
-            }
-            days.append(
-                DailyUsageDay(
-                    dayStart: dayStart,
-                    weekdaySymbol: symbol,
-                    dayOfMonth: dayNum,
-                    segments: segments,
-                    isToday: calendar.isDate(dayStart, inSameDayAs: now),
-                    isAfterReset: false,
-                    resetAt: nil
-                )
-            )
-        }
-        return days
     }
 
     private static func finalize(

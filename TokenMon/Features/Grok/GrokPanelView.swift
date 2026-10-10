@@ -64,7 +64,6 @@ struct GrokPanelView: View {
         let week = DailyUsageBuilder.week(
             history: history.recent.reversed(),
             current: snapshot,
-            serverDaily: snapshot.dailySeries,
             weekOffset: weekOffset,
             resetsAt: snapshot.resetsAt
         )

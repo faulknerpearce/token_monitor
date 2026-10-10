@@ -52,8 +52,6 @@ final class UsageSnapshotRecord {
         accountEmail = snapshot.accountEmail
     }
 
-    /// `dailySeries` is held in memory only: it is non-empty only when the
-    /// server supplies a per-day series, which the local-delta path supersedes.
     func toSnapshot() -> WeeklyUsageSnapshot {
         let products: [ProductUsage]
         if let decoded = try? Self.decoder.decode([ProductUsage].self, from: productsJSON) {
