@@ -144,12 +144,14 @@ final class AppModel: ObservableObject {
     }
 
     init() {
-        let auth = AuthSessionService()
-        let openCodeAuth = OpenCodeAuthSession()
-        let cursorAuth = CursorAuthSession()
-        let claudeAuth = ClaudeAuthSession()
-        let chatGPTAuth = ChatGPTAuthSession()
-        let openRouterAuth = OpenRouterAuthSession()
+        // The test host must not read or migrate the user's credentials.
+        let store: () -> (any CredentialStore)? = { Self.isRunningTests ? InMemoryCredentialStore() : nil }
+        let auth = AuthSessionService(directory: nil, store: store())
+        let openCodeAuth = OpenCodeAuthSession(store: store())
+        let cursorAuth = CursorAuthSession(store: store())
+        let claudeAuth = ClaudeAuthSession(store: store())
+        let chatGPTAuth = ChatGPTAuthSession(store: store())
+        let openRouterAuth = OpenRouterAuthSession(store: store())
         self.auth = auth
         self.openCodeAuth = openCodeAuth
         self.cursorAuth = cursorAuth

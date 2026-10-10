@@ -5,7 +5,8 @@ import WebKit
 
 /// Per-provider configuration for the shared `ProviderAuthSession`.
 struct ProviderAuthConfig {
-    /// File-bucket prefix isolating each provider's cookie/email store.
+    /// Prefix isolating each provider's stored keys: the `<prefix><key>.dat`
+    /// file name and the `<prefix><key>` Keychain account.
     var storeFilenamePrefix: String
     /// Log category (subsystem: `com.modelmonitor.app`).
     var logCategory: String
@@ -17,6 +18,9 @@ struct ProviderAuthConfig {
     var capturePolicy: WebKitCookieCapture.Policy
     /// Matches a cookie domain to this provider (also used on sign-out via WKWebsiteDataStore).
     var isDomain: (String) -> Bool
+    /// Lowercased name of a captured cookie whose value identifies the account
+    /// (Claude's `lastActiveOrg`). `nil` identifies the account by its email.
+    var accountIdentityCookie: String?
 }
 
 /// Shared cookie/email/bearer session backing every provider's auth.
@@ -32,6 +36,20 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     @Published private(set) var accountEmail: String?
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
+
+    /// Fires when locally stored usage history stops belonging to the session:
+    /// an explicit sign-out, or a capture for a different account. Invalidation
+    /// after rejected requests does not fire it, so history survives a re-login
+    /// to the same account.
+    let accountReset = PassthroughSubject<Void, Never>()
+
+    /// Consecutive rejections of the live session required before it is
+    /// invalidated. One rejection can be a token-exchange hiccup or an edge
+    /// challenge, and invalidation deletes the stored credential.
+    static let authFailureThreshold = 3
+
+    /// Rejections of the live session since its last successful request.
+    private(set) var consecutiveAuthFailures = 0
 
     /// Monotonic counter identifying the current credential state. A poller
     /// captures it before a fetch and checks it after the await via
@@ -49,6 +67,11 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// Capture awaits it so a quick re-auth cannot race the late clear.
     private var clearTask: Task<Void, Never>?
 
+    /// Store keys holding a credential; they live in the Keychain. The others
+    /// (account email and identity, workspace id) identify the account but
+    /// cannot authenticate, so they stay in Application Support files.
+    static let secretStoreKeys: Set<String> = ["session"]
+
     init(config: ProviderAuthConfig, directory: URL? = nil, store: (any CredentialStore)? = nil) {
         self.config = config
         self.logger = Logger(category: config.logCategory)
@@ -57,7 +80,10 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         } else if let directory {
             self.store = FileBackedCredentialStore(directory: directory, filenamePrefix: config.storeFilenamePrefix)
         } else {
-            self.store = FileBackedCredentialStore(filenamePrefix: config.storeFilenamePrefix)
+            self.store = SecretRoutingCredentialStore.live(
+                filenamePrefix: config.storeFilenamePrefix,
+                secretKeys: Self.secretStoreKeys
+            )
         }
         // `refreshFromDisk()` derives `needsSignIn` from the stored credentials.
         refreshFromDisk()
@@ -69,18 +95,43 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         isSignedIn = !(cookies?.isEmpty ?? true)
         accountEmail = loadEmail()
         needsSignIn = !isSignedIn
+        consecutiveAuthFailures = 0
         sessionGeneration += 1
     }
 
-    /// Marks the session invalid (e.g. server returned 401/403) and clears both
-    /// disk state and browser cookies, so "Sign in again" cannot auto-capture
-    /// the same expired session.
+    /// Counts a rejection of the live session and invalidates it once
+    /// `authFailureThreshold` rejections arrive in a row.
+    ///
+    /// - Returns: `true` when this rejection invalidated the session.
+    @discardableResult
+    func recordAuthFailure(reason: String) -> Bool {
+        consecutiveAuthFailures += 1
+        guard consecutiveAuthFailures >= Self.authFailureThreshold else {
+            let count = consecutiveAuthFailures
+            let threshold = Self.authFailureThreshold
+            logger.info("\(self.config.logCategory, privacy: .public) auth rejection \(count, privacy: .public) of \(threshold, privacy: .public)")
+            return false
+        }
+        markSessionInvalid(reason: reason)
+        return true
+    }
+
+    /// Resets the rejection count after the live session authenticated.
+    func recordAuthSuccess() {
+        consecutiveAuthFailures = 0
+    }
+
+    /// Marks the session invalid (e.g. repeated 401s) and clears both disk
+    /// credentials and browser cookies, so "Sign in again" cannot auto-capture
+    /// the same expired session. Usage history is kept: `accountReset` does not
+    /// fire, and the stored account identity survives for the next capture.
     func markSessionInvalid(reason: String? = nil) {
         needsSignIn = true
         if let reason { lastAuthError = reason }
         clearBrowserState()
         isSignedIn = false
         accountEmail = nil
+        consecutiveAuthFailures = 0
         logger.info("\(self.config.logCategory, privacy: .public) session marked invalid")
     }
 
@@ -105,9 +156,9 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         return pruned
     }
 
-    /// Narrows a stored `Cookie:` header to the provider's essential cookies,
-    /// mirroring `WebKitCookieCapture.select`: only narrow when one of them is
-    /// present, so a provider without an allowlist keeps its stored jar. Prefixed
+    /// Narrows a stored `Cookie:` header to the provider's essential cookies.
+    /// Only narrows when one of them is present, so a stored jar without any
+    /// essential cookie is left for the server to accept or reject. Prefixed
     /// families (NextAuth's chunked session cookie) are matched as a whole.
     static func pruneCookieHeader(
         _ header: String,
@@ -135,30 +186,53 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// otherwise only ever polled and never renewed, so it hard-expires while the
     /// user is still signed in. Writes the store directly: it must not bump
     /// `sessionGeneration`, or a poll in flight would invalidate its own session.
-    func applyRefreshedCookies(_ setCookieHeaders: [String]) {
-        guard !setCookieHeaders.isEmpty, let stored = readStore(key: "session") else { return }
+    ///
+    /// Each value may hold several cookies folded into one comma-joined header,
+    /// as `HTTPURLResponse` reports them; Foundation's parser splits them and
+    /// reads `Expires` dates. A cookie with an empty value or an expiry at or
+    /// before `now` (`Max-Age=0`) deletes the stored cookie. A renewed member of
+    /// a chunked family (`…session-token.0`, `.1`) replaces every stored member
+    /// of that family, so the chunks always come from the same token.
+    func applyRefreshedCookies(_ setCookieHeaders: [String], now: Date = Date()) {
+        guard !setCookieHeaders.isEmpty,
+              let stored = readStore(key: "session"),
+              let host = config.signOutHosts.first,
+              let url = URL(string: "https://\(host)/") else { return }
+        let policy = config.capturePolicy
+        var latest: [String: HTTPCookie] = [:]
         var order: [String] = []
-        var values: [String: String] = [:]
-        for pair in Self.cookiePairs(stored) {
-            order.append(pair.name)
-            values[pair.name.lowercased()] = pair.value
-        }
-        var changed = false
         for raw in setCookieHeaders {
-            guard let pair = Self.parseSetCookie(raw), config.capturePolicy.isEssential(pair.name) else {
-                continue
-            }
-            let key = pair.name.lowercased()
-            if values[key] != pair.value {
-                if values[key] == nil { order.append(pair.name) }
-                values[key] = pair.value
-                changed = true
+            for cookie in HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": raw], for: url)
+                where policy.isEssential(cookie.name) {
+                let key = cookie.name.lowercased()
+                if latest[key] == nil { order.append(key) }
+                latest[key] = cookie
             }
         }
-        guard changed else { return }
-        let header = order.compactMap { name -> String? in
-            values[name.lowercased()].map { "\(name)=\($0)" }
-        }.joined(separator: "; ")
+        guard !order.isEmpty else { return }
+        let refreshed = order.compactMap { latest[$0] }
+        let isLive: (HTTPCookie) -> Bool = { cookie in
+            !cookie.value.isEmpty && (cookie.expiresDate.map { $0 > now } ?? true)
+        }
+        let renewedFamilies = Set(refreshed.filter(isLive).compactMap { policy.essentialFamily(of: $0.name) })
+        var pairs = Self.cookiePairs(stored).filter { pair in
+            let key = pair.name.lowercased()
+            if latest[key] != nil { return true }
+            guard let family = policy.essentialFamily(of: pair.name) else { return true }
+            return !renewedFamilies.contains(family)
+        }
+        for cookie in refreshed {
+            let key = cookie.name.lowercased()
+            let index = pairs.firstIndex { $0.name.lowercased() == key }
+            switch (index, isLive(cookie)) {
+            case let (index?, true): pairs[index].value = cookie.value
+            case (nil, true): pairs.append((cookie.name, cookie.value))
+            case let (index?, false): pairs.remove(at: index)
+            case (nil, false): break
+            }
+        }
+        let header = pairs.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+        guard header != stored else { return }
         writeStore(key: "session", value: header)
     }
 
@@ -171,21 +245,40 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         }
     }
 
-    /// Extracts the name/value from a `Set-Cookie` header, ignoring attributes.
-    private static func parseSetCookie(_ raw: String) -> (name: String, value: String)? {
-        let first = raw.split(separator: ";").first.map(String.init) ?? raw
-        return cookiePairs(first).first
-    }
-
+    /// Persists the account email. For providers identified by email, an email
+    /// that differs from the previous account's fires `accountReset`.
     func saveAccountEmail(_ email: String) {
         writeStore(key: "email", value: email)
         accountEmail = email
+        if config.accountIdentityCookie == nil {
+            noteAccountIdentity(email)
+        }
+    }
+
+    /// Records `identity` as the signed-in account, firing `accountReset` when
+    /// it differs from the account the stored history belongs to.
+    private func noteAccountIdentity(_ identity: String) {
+        let previous = readStore(key: "account")
+        guard previous != identity else { return }
+        writeStore(key: "account", value: identity)
+        if previous != nil {
+            logger.info("\(self.config.logCategory, privacy: .public) account changed")
+            accountReset.send()
+        }
+    }
+
+    /// The identity of the account a capture signed in to, when known.
+    private func accountIdentity(of result: WebKitCookieCapture.CaptureResult) -> String? {
+        guard let cookieName = config.accountIdentityCookie else { return result.email }
+        let value = result.cookies.first { $0.name.lowercased() == cookieName }?.value
+        return value.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func save(cookieHeader: String) {
         writeStore(key: "session", value: cookieHeader)
         isSignedIn = true
         needsSignIn = false
+        consecutiveAuthFailures = 0
         sessionGeneration += 1
     }
 
@@ -199,30 +292,49 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
             logger.warning("No auth cookies found after sign-in")
             return false
         }
+        adopt(result)
+        return true
+    }
 
+    /// Stores a capture as the live session and records its account.
+    func adopt(_ result: WebKitCookieCapture.CaptureResult) {
         save(cookieHeader: result.cookieHeader)
-        // Only the file store keeps these; copying into `HTTPCookieStorage.shared`
-        // would leave the session in a shared jar that outlives the 0600 file and
-        // lets unrelated requests auto-attach it. Request paths send the captured
-        // Cookie header explicitly.
+        // Only the credential store keeps these; copying into
+        // `HTTPCookieStorage.shared` would leave the session in a shared jar
+        // that outlives sign-out and lets unrelated requests auto-attach it.
+        // Request paths send the captured Cookie header explicitly.
+        //
+        // The email shown is the captured account's: a capture without one
+        // drops the previous account's email until a poll supplies it.
+        if let identity = accountIdentity(of: result) {
+            noteAccountIdentity(identity)
+        }
         if let email = result.email {
-            saveAccountEmail(email)
+            writeStore(key: "email", value: email)
+            accountEmail = email
+        } else {
+            removeStore(key: "email")
+            accountEmail = nil
         }
 
         isSignedIn = true
         needsSignIn = false
         lastAuthError = nil
         logger.info("Captured \(result.cookies.count, privacy: .public) session cookies")
-        return true
     }
 
+    /// Explicit sign-out: clears credentials, the account identity, and fires
+    /// `accountReset` so pollers drop that account's stored history.
     func signOut() {
         clearBrowserState()
+        removeStore(key: "account")
         isSignedIn = false
         accountEmail = nil
         needsSignIn = true
         lastAuthError = nil
+        consecutiveAuthFailures = 0
         logger.info("\(self.config.logCategory, privacy: .public) signed out")
+        accountReset.send()
     }
 
     /// Clears persisted session keys and browser cookies (the provider's isolated

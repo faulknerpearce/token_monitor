@@ -49,12 +49,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchUsage = fetchUsage ?? { cookieHeader in
             try await ClaudeUsageClient(cookieHeader: cookieHeader).fetchUsage()
         }
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // The persisted hourly and daily history is wiped only on sign-out or
+        // an account change, never because the session expired.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -104,6 +102,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             lastError = nil
             lastRefreshedAt = Date()
             auth.needsSignIn = false
+            auth.recordAuthSuccess()
             if let percent = response.fiveHour?.usedPercent {
                 hourly.record(usedPercent: percent, at: fetchedAt)
                 logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")
@@ -134,7 +133,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }

@@ -54,14 +54,11 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         observeSleep()
-        // Signing out (or a 401) must drop the snapshot and the account-scoped
-        // hourly deltas immediately, not on the next poll.
-        auth.$isSignedIn
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                if !signedIn { self?.clearSnapshot() }
-            }
+        // Signing out or switching accounts drops the snapshot and the
+        // account-scoped hourly deltas immediately. An expired session keeps
+        // them: the same account usually signs back in.
+        auth.accountReset
+            .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }
 
@@ -114,6 +111,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             lastError = nil
             lastRefreshedAt = Date()
             backoff.reset()
+            auth.recordAuthSuccess()
             history.append(snap)
             grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
             notifier.evaluate(usedPercent: snap.usedPercent, settings: settings, account: auth.accountEmail)
@@ -124,7 +122,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             guard auth.isCurrent(generation) else { return }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
-                auth.markSessionInvalid(reason: error.localizedDescription)
+                auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }

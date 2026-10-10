@@ -6,12 +6,19 @@ import os
 ///
 /// OpenRouter authenticates with a plain bearer key (`sk-or-…`) rather than a
 /// browser session, so this session skips the WebKit cookie machinery other
-/// providers need and persists only the key in the same 0600 file store.
+/// providers need and persists only the key, in the Keychain.
 @MainActor
 final class OpenRouterAuthSession: ObservableObject {
     @Published private(set) var isSignedIn = false
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
+
+    /// Fires on explicit sign-out; see `ProviderAuthSession.accountReset`.
+    let accountReset = PassthroughSubject<Void, Never>()
+
+    /// Rejections of the live key since its last successful request; see
+    /// `ProviderAuthSession.authFailureThreshold`.
+    private(set) var consecutiveAuthFailures = 0
 
     /// Monotonic counter identifying the current key state; see
     /// `ProviderAuthSession.sessionGeneration`.
@@ -26,7 +33,7 @@ final class OpenRouterAuthSession: ObservableObject {
         } else if let directory {
             self.store = FileBackedCredentialStore(directory: directory, filenamePrefix: "openrouter_auth_")
         } else {
-            self.store = FileBackedCredentialStore(filenamePrefix: "openrouter_auth_")
+            self.store = SecretRoutingCredentialStore.live(filenamePrefix: "openrouter_auth_", secretKeys: ["key"])
         }
         refreshFromDisk()
     }
@@ -34,7 +41,25 @@ final class OpenRouterAuthSession: ObservableObject {
     func refreshFromDisk() {
         isSignedIn = apiKey() != nil
         needsSignIn = !isSignedIn
+        consecutiveAuthFailures = 0
         sessionGeneration += 1
+    }
+
+    /// Counts a rejection of the live key and marks it invalid once
+    /// `ProviderAuthSession.authFailureThreshold` rejections arrive in a row.
+    ///
+    /// - Returns: `true` when this rejection invalidated the key.
+    @discardableResult
+    func recordAuthFailure(reason: String) -> Bool {
+        consecutiveAuthFailures += 1
+        guard consecutiveAuthFailures >= ProviderAuthSession.authFailureThreshold else { return false }
+        markSessionInvalid(reason: reason)
+        return true
+    }
+
+    /// Resets the rejection count after the key authenticated.
+    func recordAuthSuccess() {
+        consecutiveAuthFailures = 0
     }
 
     func apiKey() -> String? {
@@ -62,6 +87,7 @@ final class OpenRouterAuthSession: ObservableObject {
         }
         writeStore(key: "key", value: key)
         lastAuthError = nil
+        consecutiveAuthFailures = 0
         isSignedIn = true
         needsSignIn = false
         sessionGeneration += 1
@@ -73,6 +99,7 @@ final class OpenRouterAuthSession: ObservableObject {
         needsSignIn = true
         if let reason { lastAuthError = reason }
         isSignedIn = false
+        consecutiveAuthFailures = 0
         sessionGeneration += 1
         logger.info("OpenRouter session marked invalid")
     }
@@ -82,8 +109,10 @@ final class OpenRouterAuthSession: ObservableObject {
         isSignedIn = false
         needsSignIn = true
         lastAuthError = nil
+        consecutiveAuthFailures = 0
         sessionGeneration += 1
         logger.info("OpenRouter signed out")
+        accountReset.send()
     }
 
     static func looksLikeAPIKey(_ key: String) -> Bool {
