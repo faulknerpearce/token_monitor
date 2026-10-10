@@ -60,18 +60,23 @@ struct OverviewPanelView: View {
             PanelCard {
                 PanelSectionHeader(title: "Usage Today")
                 // Re-evaluates at each local midnight so a panel left open
-                // across the day boundary switches to the new day.
-                TimelineView(.explicit(Self.upcomingMidnights(after: Date()))) { context in
+                // across the day boundary switches to the new day. The schedule
+                // starts at today's midnight, so the first render shows today.
+                TimelineView(.explicit(Self.midnightSchedule(from: Date()))) { context in
                     OverviewHourlyUsageChart(usage: providerHourlyUsage(now: context.date))
                 }
             }
         }
     }
 
-    /// The next week of local midnights after `date`, for the chart's day roll.
-    static func upcomingMidnights(after date: Date, calendar: Calendar = .current) -> [Date] {
+    /// Local midnights from the start of `date`'s day through the next week.
+    ///
+    /// `TimelineView` renders the latest entry at or before the current time,
+    /// so the first entry must be today's midnight; an all-future schedule
+    /// renders with the first future date and shows tomorrow's empty day.
+    static func midnightSchedule(from date: Date, calendar: Calendar = .current) -> [Date] {
         let today = calendar.startOfDay(for: date)
-        return (1...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        return (0...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
     private func providerHourlyUsage(now: Date) -> ProviderDayHourlyUsage? {
