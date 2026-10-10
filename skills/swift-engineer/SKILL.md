@@ -99,12 +99,13 @@ enum OrderStatus: String, Codable, CaseIterable, Hashable, Sendable {
 - One `XCTestCase` file per unit under test, grouped by feature folder: `TokenMonTests/Grok/`, `TokenMonTests/OpenCode/`, `TokenMonTests/Cursor/`.
 - Import with `@testable import TokenMon`. Keep internals `internal` — `@testable` reaches them from the test bundle, so you do NOT need to widen visibility to `public` for tests.
 - NEVER add `#if DEBUG` test-only code or inline test modules to source files; production modules stay free of test-only imports and behavior.
-- Use descriptive test names: `testParseLiteSubscriptionJS`, `testWorkspaceIDFromURL`, `testOrderStatusRejectsInvalidInput` — not `test1`.
+- Use descriptive test names: `testWorkspaceIDFromURL`, `testExportCSVNeutralizesFormulaInjection`, `testOrderStatusRejectsInvalidInput` — not `test1`.
 - Test happy paths and error cases; test edge cases and boundary conditions.
 - For enums: always test `rawValue` roundtripping and invalid-input rejection (`XCTAssertNil(OrderStatus(rawValue: "nonexistent"))`).
 - Use `XCTAssertEqual(_:_:accuracy:)` for floating point — never exact equality.
 - Pure parsers/builders that need no app host go in `Tests/Manual/CoreTestsMain.swift` and run via `Scripts/run_core_tests.sh` (`make test-core`).
 - Keep tests hermetic: use fixture JSON/text/hex (see the gRPC hex fixture in `Tests/Manual/CoreTestsMain.swift`), never live endpoints. If a test must touch a live surface, gate it behind an environment flag and skip by default so the suite stays hermetic.
+- Never touch real user state: inject a temporary directory instead of `~/Library/Application Support/TokenMon` or `~/Library/Caches`, a throwaway `UserDefaults(suiteName:)` instead of `.standard`, `InMemoryCredentialStore` / a fake `KeychainBackend` instead of the Keychain, and a stubbed transport instead of the network.
 
 ## Performance & Micro-Optimizations
 
@@ -115,7 +116,7 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 ### Defaults that make code fast by construction
 
 - **Value semantics + `let`** (the core philosophy) means COW sharing is harmless: nobody mutates shared storage. This is the highest-leverage perf property of this codebase.
-- **Lean parsing by default.** Read only the fields you need. When the server shape is unstable, a manual scan (`data.range(of:)`, index math, brace-scan) beats `JSONDecoder`/`JSONSerialization` on hot paths — the `GRPCWebParser` and `OpenCodeConsoleClient.windowFields` are the pattern. Stable shapes and cold paths may use `Codable`.
+- **Lean parsing by default.** Read only the fields you need. When the server shape is unstable, a manual scan (`data.range(of:)`, index math, brace-scan) beats `JSONDecoder`/`JSONSerialization` on hot paths — `GRPCWebParser` is the pattern. Stable shapes and cold paths may use `Codable`.
 - **Bulk over per-item.** One connection/transaction/statement batch, one prepared statement reused, one `Dictionary(grouping:)`, one `reduce(into:)`.
 - **Reuse expensive things as `static let`:** `DateFormatter`, `NSRegularExpression`, `NumberFormatter`, rank maps. Constructing a `DateFormatter` per call is the classic hidden tax.
 - **Never allocate per row/render/poll** what could be hoisted out: fonts, colors, `[NSAttributedString.Key: Any]`, parse buffers.
@@ -135,9 +136,9 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 ### Project hot paths (token_monitor)
 
 - **Menu bar render** — `MenuBarStatusRenderer` (NSCache-bounded; keep the key complete, keep colors resolved against the live appearance).
-- **Polling** — `PollingLoop` (sleep/wake + backoff are intentional; don't poll hot against a throttling server).
-- **OpenCode SQLite reads** — `OpenCodeLocalStats` (open once, prepare once, lean per-row field extraction, `busy_timeout` + `mode=ro`).
-- **Grok/OpenCode payload parsing** — `GRPCWebParser`, `UsageResponseParser`, `OpenCodeConsoleClient` (manual scans are right; don't "upgrade" them to a framework).
+- **Polling** — `PollingLoop` (one loop per provider; the interval comes from the provider each tick; don't poll hot against a throttling server).
+- **OpenCode SQLite reads** — `OpenCodeLocalStats` (one read-only connection per scan, `json_extract` in SQL so rows arrive as plain columns, `busy_timeout`, re-read only when the database changes).
+- **Grok payload parsing** — `GRPCWebParser` (manual protobuf scan) and `UsageResponseParser` (multi-shape `JSONSerialization`); don't "upgrade" them to a framework.
 
 **Workflow hook (quality gate):** before claiming done, also sanity-check the hot paths above for the smells in the Deep Audits quick checklist — no Instruments run required for the obvious ones (formatter-per-call, per-row full-JSON, `[UInt8]` copies, eager log strings).
 
@@ -146,8 +147,7 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 Disciplined performance review of Swift/macOS code through the lens of Jeff Dean
 & Sanjay Ghemawat's **Performance Hints** (Abseil, 2025 —
 https://abseil.io/fast/hints.html), translated to idiomatic Swift, SwiftUI, and
-AppKit. Formerly the standalone `swift-performance-reviewer` skill (merged here
-2026-08-07); Rust and PHP siblings exist as `rust-performance-reviewer` and
+AppKit. Rust and PHP siblings exist as `rust-performance-reviewer` and
 `php-performance-reviewer`.
 
 **Scope:** menu bar apps, CLI tools, and libraries — CPU, memory, COW behavior,
@@ -176,9 +176,7 @@ one-shot scripts. Do not sacrifice correctness or introduce dual mechanisms.
 
 **Correctness bugs often *are* the performance story.** A feature that "never
 fires" (always-false flag, wrong comparison order, stale cached appearance) looks
-like lag or missing work. Diagnose with live state before rewriting loops — the
-menu bar label "perf" bug in this repo was a correctness bug (see Hard-Earned
-Lessons).
+like lag or missing work. Diagnose with live state before rewriting loops.
 
 ### Philosophy (from Abseil → Swift)
 
@@ -307,7 +305,7 @@ Checklist:
 - [ ] `Dictionary(minimumCapacity:)` to avoid rehash churn
 - [ ] Prefer `append` + `reserveCapacity` over `+=` concatenation in loops
 - [ ] Build strings with `joined(separator:)` / `reduce(into:)` — not `reduce("") { $0 + $1 }` (O(n²)) and not `String(format:)` in a loop
-- [ ] Reuse formatters: `DateFormatter`, `NumberFormatter`, and regexes are **expensive to construct** — make them `static let` (see Hard-Earned Lessons)
+- [ ] Reuse formatters: `DateFormatter`, `NumberFormatter`, and regexes are **expensive to construct** — make them `static let` or a lock-guarded cache (see `Format.cachedFormatter`, `DailyUsageBuilder.makeDateFormatters`)
 - [ ] Use `String(Int)` / interpolation, not `String(format: "%d", …)` — the latter bridges through `CVarArg`/`NSString`
 - [ ] Replace `JSONSerialization` full-tree parses with `data.range(of:)` / `String` scanning when only a few fields are read
 - [ ] Avoid `[UInt8](data)` copies in parse loops — use `data.withUnsafeBytes { … }` and pointer arithmetic instead
@@ -320,7 +318,7 @@ Checklist:
 
 Swift-specific smells (each is a finding when on a hot path):
 - `DateFormatter()` created inside a `week()`/`render()`/`row()` function
-- `NSRegularExpression(pattern:)` created per call (see `OpenCodeConsoleClient`)
+- `NSRegularExpression(pattern:)` created per call
 - `String(format: "%.1f", …)` on a hot log line
 - `someArray.map { String($0) }.joined()` when a single pass suffices
 - `JSONSerialization.jsonObject` per DB row just to read `id` + `cost`
@@ -352,7 +350,7 @@ Often the biggest win: don't do it.
 - Hot call site may not need full generality: `hasPrefix`/`range(of:)` over a regex; `Set` over `[String]`; manual parse over `JSONDecoder` when the shape is unstable (this repo's hand-rolled gRPC-web parser is the right call).
 
 #### Cache
-- Fingerprint/cache-keyed caches for expensive renders (see `MenuBarStatusRenderer._cache`). **The cache key must encode every input that changes the output — including the appearance** (Hard-Earned Lessons #2/#3).
+- Fingerprint/cache-keyed caches for expensive renders (see `MenuBarStatusRenderer._cache`). **The cache key must encode every input that changes the output — including the appearance and, for date formatters, the time zone** (Hard-Earned Lessons #2/#3).
 
 #### Logging / stats on hot paths
 - `os.Logger` interpolation is evaluated **eagerly** even when the level is filtered — don't build expensive strings for a line that won't be shown
@@ -402,7 +400,7 @@ See also `@MainActor`/actor guidance above and the repo's `PollingLoop` + `AppMo
 - Counters: `OSAllocatedUnfairLock<Int>` or a small value type; avoid `NSLock`/`Mutex`-style sync for a plain counter.
 - `Sendable` structs are cheap to pass across concurrency domains; `@unchecked Sendable` on a `final class` only when you prove safety.
 - Actor reentrancy means your state can change between `await`s — guard or snapshot; correctness first (a reentrancy bug reads as "lag").
-- `URLSession` reuse: this repo uses `.shared` (and a per-client session) — one shared connection pool is correct. Don't create a `URLSession` per poll.
+- `URLSession` reuse: provider requests share `ProviderURLSession.shared` (ephemeral, no cookie jar, no cache) — one shared connection pool is correct. Don't create a `URLSession` per poll, and don't send provider requests through `URLSession.shared`, whose cookie jar and disk cache outlive sign-out.
 - Coalesce `objectWillChange` churn (see `AppModel.forwardChanges`) — don't notify SwiftUI 20× per poll for 20 fields.
 
 ### Lens 8 — Serialization / parsing (JSON, gRPC-web, seroval)
@@ -411,7 +409,7 @@ Heavy schema frameworks are convenient and **expensive**. In Swift the tiers are
 
 1. **`Codable`/`JSONDecoder`** — cleanest, but slowest per byte; synthesized decoding builds dictionaries and does key lookup with overhead. `JSONDecoder` was historically not thread-safe; prefer a per-thread or a shared instance confined to one actor. Use for cold/rarely-called decoding and for *stable* shapes.
 2. **`JSONSerialization`** — faster for ad-hoc `[String: Any]` probing when the shape is unstable or multi-shaped (this repo's `UsageResponseParser` is a legitimate use — it must accept many server shapes).
-3. **Manual scanning** — fastest. When the wire format is unstable but the fields you need are few, scan the bytes directly: `data.range(of:)` for ASCII keys + index math, `String` slicing, or a tiny state machine. The repo's `GRPCWebParser` (raw protobuf scan) and `OpenCodeConsoleClient` (`windowFields` brace-scan, `firstNumber`) are exactly right — keep that instinct, but cut the per-call `[UInt8](data)` copies (see Lens 3).
+3. **Manual scanning** — fastest. When the wire format is unstable but the fields you need are few, scan the bytes directly: `data.range(of:)` for ASCII keys + index math, `String` slicing, or a tiny state machine. The repo's `GRPCWebParser` (raw protobuf scan) is exactly right — keep that instinct, but cut the per-call `[UInt8](data)` copies (see Lens 3).
 
 General rules:
 - Re-encoding/decoding the same blob repeatedly is waste — decode once, keep the typed value.
@@ -466,7 +464,8 @@ API design (Abseil "API considerations"):
 ### Lens 10 — SQLite (this repo: `OpenCodeLocalStats`)
 
 The repo reads the OpenCode SQLite DB (`~/.local/share/opencode/opencode.db`)
-read-only via the C API. This is a first-class hot path on poll.
+read-only via the C API (`SQLITE_OPEN_READONLY`). It is re-read when the file
+changes, so a scan runs at most once per change rather than once per view.
 
 Checklist:
 - [ ] **`=` not `LIKE`** for exact keys — `LIKE` without wildcards still forces different plans (measured on the Rust sibling: 75× on 1.1M rows)
@@ -475,11 +474,11 @@ Checklist:
 - [ ] **Prepare statements once**, `reset` + re-bind in the loop
 - [ ] **One transaction per batch** where you write (this repo is read-only — still, `PRAGMA query_only=ON` on readers)
 - [ ] **`PRAGMA busy_timeout` on every connection** (this repo already sets 2000 — good; the Rust sibling hit `database is locked` at default 0)
-- [ ] **WAL-friendly**: opening `mode=ro` with a URI is correct for readers concurrent with a writer — keep it
+- [ ] **WAL-friendly**: a read-only open is correct for readers concurrent with a writer — keep it
 - [ ] **Avoid DISTINCT/GROUP BY when a bare filter returns one row/key**
 - [ ] **N+1 point queries** → bulk `IN (...)` or a single ranged scan
-- [ ] **One connection per fetch, not one per query** — this repo currently opens the DB 3× per snapshot (session rows + 2 message scans); opening once and preparing 3 statements cuts syscalls and page-cache churn
-- [ ] **Don't parse full JSON per row** — `json_extract(data, '$.role')` filters server-side (good), but per-row `String(cString:)` + `.data(using: .utf8)` + `JSONSerialization` to read 4 fields is the dominant cost on large week/month scans; a lean field scan wins
+- [ ] **One connection per fetch, not one per query** — open once and prepare each statement on it
+- [ ] **Don't parse full JSON per row** — select the fields with `json_extract` in SQL (as `OpenCodeLocalStats` does) instead of `String(cString:)` + `JSONSerialization` per row
 - [ ] Backup before schema changes; `ANALYZE` after schema changes
 
 ### Lens 11 — Polling loops & network work ordering
@@ -487,14 +486,14 @@ Checklist:
 The repo is a poll-driven menu bar app. Cadence multiplies waste.
 
 Checklist:
-- [ ] **Order work cheapest → dearest**: settings/throttle/`isSignedIn` gates before network I/O; the `PollingLoop` already checks `Task.isCancelled` between sleeps — keep that
+- [ ] **Order work cheapest → dearest**: settings/throttle/`isSignedIn` gates before network I/O; the `PollingLoop` checks `Task.isCancelled` — keep that
 - [ ] **Fail fast on auth**: `401/403` → surface re-auth immediately, don't fall through 4 candidate endpoints (this repo does this for `.unauthorized` — keep it)
-- [ ] **Candidate probing**: the Grok REST probe iterates 4 candidates sequentially with 15 s timeouts each — worst case ~60 s of serial latency on a poll. Consider bounding total probe time, running candidates in a `TaskGroup` (they're independent), or ordering most-likely first
+- [ ] **Candidate probing**: Grok calls the gRPC-web billing endpoint first and probes its 4 REST candidates (sequential, 15 s timeouts) only when billing fails transiently — keep the probes off the common path, and bound their total time if they ever move onto it
 - [ ] **Don't pay N× external I/O over the whole queue when one poll advances one item**
-- [ ] **Backoff exists** (429/5xx capped at 10 m) — preserve it; never poll hot against a throttling server
-- [ ] **Cache discovery results** — `cachedServerID` in `OpenCodeConsoleClient` is exactly right; don't re-resolve server-fn IDs every poll
+- [ ] **Never poll hot against a throttling server** — failed refreshes wait for a later tick; check `PollingLoop` and the poller's error path for the current retry policy before changing cadence
+- [ ] **Cache discovery results** — e.g. the OpenCode workspace id is stored after sign-in and tried first; don't re-resolve per poll what rarely changes
 - [ ] **Logging**: per-item `info!` × N polls is disk + I-cache tax; summary once, `debug` for detail (repo already mostly does this)
-- [ ] **Sleep/wake handling**: Grok's sleep/wake handling is a correctness + battery feature — don't poll during sleep
+- [ ] **Sleep/wake handling**: don't poll during sleep (the Grok poller observes `NSWorkspace` sleep/wake)
 
 ### Review output format
 
@@ -547,9 +546,9 @@ Push back on "optimize everything" — prioritize the critical 3%.
 - **Menu bar content is drawn as an AppKit bitmap**, not SwiftUI (see `MenuBarStatusRenderer`): one `NSImage` composite of per-provider segments plus the hit regions for the same layout, so a status-item click maps back to its provider (`MenuBarController`).
 - Menu bar labels are bitmaps: text must use system label colors resolved from the menu bar's *live* `effectiveAppearance`, and the image cache must be keyed by appearance and invalidated on `AppleInterfaceThemeChangedNotification`.
 - App-wide services live on `AppModel` (`@MainActor` `ObservableObject`); child services forward `objectWillChange` into it so the status-item label refreshes (see `AppModel.forwardChanges`).
-- Polling uses `PollingLoop`; Grok adds sleep/wake handling and exponential error backoff (429/5xx → backoff capped at 10m).
-- Auth: `WebKitCookieCapture` + provider-specific session policies; session cookies are stored as mode-`0600` files under Application Support, **not** Keychain (avoids access-dialog loops on ad-hoc debug builds).
-- Percent semantics: menu bar shows used %; dropdown shows used + remaining; the daily chart is always exactly 7 days of the active billing period, deriving day-over-day deltas from local history (server `dailySeries` only when local samples cannot paint bars).
+- Polling uses `PollingLoop`, one loop per provider, with a shorter interval while the panel is open (`PollInterval`). Read `PollingLoop` and the provider's poller for the current wait, retry, and sleep/wake behaviour before changing them.
+- Auth: `ProviderAuthSession` subclasses with per-provider `WebKitCookieCapture` policies (isolated non-persistent WebKit store, essential-cookie allowlist, three-strike invalidation). Secrets (session cookie headers, the OpenRouter key) live in the login Keychain via `SecretRoutingCredentialStore` / `KeychainCredentialStore`; email, account identity, and workspace id are mode-`0600` files under Application Support. Tests use `InMemoryCredentialStore` or a fake `KeychainBackend`. See `Docs/AUTH_AND_ENDPOINTS.md`.
+- Percent semantics: menu bar shows used %; dropdown shows used + remaining; the Grok daily chart shows the 7 days of the active billing period (plus the reset day before its reset instant), deriving day-over-day deltas from local history (server `dailySeries` only when local samples cannot paint bars).
 
 ## Workflow
 
@@ -560,7 +559,14 @@ Push back on "optimize everything" — prioritize the critical 3%.
 5. Write tests — `TokenMonTests/<Feature>/<Type>Tests.swift` plus `Tests/Manual/CoreTestsMain.swift` for CLT-friendly parsers, covering happy paths, errors, and edge cases. Never add test-only modules to source.
 6. Review for hot paths — once correct, optimize allocation patterns, COW/copy behavior, main-actor usage, and caching (see Performance & Micro-Optimizations, and Deep Audits for review hunts).
 7. Self-review — before presenting code, verify: Are all types documented? Are there tests and are they hermetic? Is mutation minimized? Are strings eliminated in favor of enums? Are errors properly typed? Any hot-path smells (formatter-per-call, per-row full-JSON, `[UInt8]` copies, eager log strings)?
-8. **Quality gate (MANDATORY before claiming done or asking to commit/deploy):** from the repo root, run `make project` if files changed, then `make build` — it MUST succeed — and `make test` + `make test-core` MUST pass. Do not hand off code that fails this gate.
+8. **Quality gate (MANDATORY before claiming done or asking to commit/deploy)** — the same checks CI runs. From the repo root:
+   1. `make project` when files were added, moved, or removed, and commit the regenerated `TokenMon.xcodeproj` — CI fails when `make project` leaves `git diff` non-empty (project drift check). New core-test sources also go in `CORE_SOURCES` in `Scripts/run_core_tests.sh`.
+   2. `make lint` — SwiftLint strict; every warning is an error.
+   3. `make format` — SwiftFormat lint; no drift.
+   4. `make secrets` — gitleaks over the working tree and history.
+   5. `make build`, then `make test` and `make test-core`.
+
+   Every step MUST pass. Do not hand off code that fails this gate.
 
 ## Review Focus
 
@@ -581,32 +587,31 @@ Push back on "optimize everything" — prioritize the critical 3%.
 - "Model a new domain concept (usage, billing period, product) with a Codable struct/enum."
 - "This feels slow / laggy / spins the CPU." (→ Deep Audits)
 
-## Hard-Earned Lessons (token_monitor workspace, 2026-08)
+## Hard-Earned Lessons (token_monitor workspace)
 
-Distilled from real fixes and post-mortems in this workspace. These override generic best practices when they conflict.
+Repo rules distilled from real fixes. These override generic best practices when they conflict.
 
 1. **The menu bar is not SwiftUI.** It is an `NSStatusItem` whose label is one AppKit bitmap (`MenuBarStatusRenderer`) and whose dropdown is a borderless `MenuBarPanel`; a status-item click is hit-tested from the status image's x to a provider region, and the event's own location is unreliable for that (`MenuBarController` reads `NSEvent.mouseLocation`). Do not reintroduce `MenuBarExtra`/`NSPopover`.
-2. **Never hardcode menu bar text color, and never cache an appearance boolean frozen at first resolution.** The label was stuck black for a whole session because `menuBarIsDark` was resolved once — before the status window existed — and cached forever. Resolve `NSColor.labelColor` against the status bar's *live* `effectiveAppearance` on every render; key cached images by the resolved appearance and clear the cache on `AppleInterfaceThemeChangedNotification`. Account for wallpaper-tinted menu bars, where the status bar appearance differs from the system theme.
-3. **The image cache key must encode every input that changes the output.** The `MenuBarStatusRenderer` NSCache key now includes the appearance; without it a stale black bitmap was served after a theme flip. If it affects the pixels, it is part of the key.
-4. **Session cookies belong in files, not Keychain.** Ad-hoc debug builds loop the user with "wants to access the keychain" dialogs. Store auth as mode-`0600` files under Application Support; delete legacy Keychain items on launch.
-5. **`project.yml` is the only source of truth.** Adding a Swift file without running `xcodegen generate` (`make project`) means it never compiles. Run it after any file add/move before building.
-6. **Menu bar labels only observe `AppModel`.** The status-item label cannot observe every nested service; forward each child's `objectWillChange` into `AppModel` (see `AppModel.forwardChanges`) or labels go stale.
-7. **Parse failures degrade, never crash.** Decode errors are logged and recorded with empty products; auth `401/403` marks the session invalid instead of aborting (see `Docs/ARCHITECTURE.md`, Error handling).
-8. **After surprising edit successes, re-read the file.** An edit whose oldString "shouldn't have matched" did match — and left a duplicated brace only the compiler caught. Surprise = signal.
+2. **Never hardcode menu bar text color, and never cache an appearance value.** Resolve `NSColor.labelColor` against the status bar's *live* `effectiveAppearance` on every render; key cached images by the resolved appearance and clear the cache on `AppleInterfaceThemeChangedNotification`. Account for wallpaper-tinted menu bars, where the status bar appearance differs from the system theme.
+3. **A cache key must encode every input that changes the output.** If it affects the pixels (appearance) or the text (time zone, locale), it is part of the key, or the cache is cleared when it changes.
+4. **Credentials go in the Keychain through `SecretRoutingCredentialStore`, never in new files.** Only identifiers that cannot authenticate (email, account identity, workspace id) stay in `0600` files. Legacy file secrets are migrated only after a verified Keychain write.
+5. **Provider requests use `ProviderURLSession.shared`.** It has no cookie jar and no cache; send the stored credential in an explicit header.
+6. **`project.yml` is the only source of truth.** A Swift file added without `make project` never compiles, and CI rejects an uncommitted project diff.
+7. **Menu bar labels only observe `AppModel`.** Forward each child's `objectWillChange` into `AppModel` (see `AppModel.forwardChanges`) or labels go stale.
+8. **Parse failures degrade, never crash; one rejection is not an expiry.** Decode errors are logged and surfaced as bad responses. A 401/403 counts toward `ProviderAuthSession.authFailureThreshold` (three in a row) before the session is invalidated, and a bot-protection challenge never counts.
+9. **Day keys and dates.** Bucket by `calendar.startOfDay(for:)` with the injected `Calendar`, never `Calendar.current` inside a function that takes one; month arithmetic counts each cycle from its anchor, not from the previous result.
+10. **After surprising edit successes, re-read the file.** An edit that "shouldn't have matched" may have matched somewhere else. Surprise = signal.
 
-### Performance field lessons (measured/observed 2026-08)
+### Performance field notes
 
-Repo-specific, evidence-backed patterns for the Deep Audits review mode. Prefer
-these over generic "maybe reserveCapacity" advice when auditing this tree.
+Repo-specific patterns for the Deep Audits review mode. Prefer these over
+generic "maybe reserveCapacity" advice when auditing this tree.
 
-1. **The menu bar "perf" bug was a correctness bug (fixed).** The label was stuck black; it *looked* like a rendering perf problem but was a stale cached appearance boolean. **Lesson:** when the user says "it's lagging / wrong / frozen," inspect live state and predicates first. The follow-on cache rule stands (see #2/#3 above).
-2. **`[UInt8](data)` copies in the protobuf parse loop.** `GRPCWebParser` converts `Data` to `[UInt8]` in `dataFrames`, `trailerFields`, `scanProtobuf`, and re-slices `Data(bytes[start..<end])` on recursion. For the small gRPC-web billing payload this is negligible, but the pattern is a trap on any larger payload. **Prefer `data.withUnsafeBytes` + pointer/index math** when a parser graduates from toy-size to hot-size.
-3. **`firstIndex(of:)` inside sort comparators.** `ProductCatalog.sortForDisplay` and `DailyUsageBuilder.finalize` sort with a comparator calling `displayOrder.firstIndex(of:)` — O(k² log k) for k products. Tiny here (≤ 6 products), but **precompute a `[String: Int]` rank once** as the pattern for any future larger enum/product list.
-4. **`NSRegularExpression` created per call.** `OpenCodeConsoleClient.goRouteChunkName` and `liteSubscriptionServerID` call `NSRegularExpression(pattern:)` per invocation (once per discovery, so Minor) — hoist to `static let` for the pattern.
-5. **`DateFormatter()` created per call.** `Format.resetDate` and `DailyUsageBuilder.makeDateFormatters` construct formatters on every call. `DateFormatter` construction is notoriously expensive (locale/calendar machinery). Hoist to `static let` (guarded for thread-safety) or use `Date.FormatStyle`/`.formatted()`. Minor here (per-week chart), Important in any per-row loop.
-6. **SQLite: 3 opens per snapshot + full JSON per row.** `OpenCodeLocalStats.fetchSnapshot` opens the DB for session rows and twice more for message scans; each row does `String(cString:)` → `.data(using: .utf8)` → `JSONSerialization` → key lookups. For a week/month of messages this is the dominant cost. **Open once, prepare 3 statements, and extract the 4 needed fields with a lean scan** (or keep `JSONSerialization` but reuse one decoder and drop the intermediate `String`/`Data` round-trips). `busy_timeout` + `mode=ro` are already correct — don't regress those.
-7. **Eager string building in logging.** `UsageClient` builds `productLog` (`products.map { … }.joined(separator:)`) to pass to `logger.info`. `os.Logger` string interpolation is evaluated eagerly even when the level discards it — gate the build behind a level check or `#if DEBUG`.
-8. **What not to optimize (accepted costs).** The menu bar render is NSCache-bounded by a full input key — that's the win. The gRPC-web payload is small (KBs); a manual protobuf framework would be a regression in size/complexity for no gain — the hand scan is right. One-shot probe/discovery code (`resolveWorkspaceID`, entry-client fetch) is per-session, not per-poll — cache the *result*, don't speed the path. `PollingLoop` sleep/wake + backoff is intentional.
+1. **Inspect live state first.** A label that looks laggy or frozen is more often a stale cached value or a wrong predicate than slow code.
+2. **`[UInt8](data)` copies in the protobuf parse loop.** `GRPCWebParser` converts `Data` to `[UInt8]` in `dataFrames`, `trailerFields`, and `scanProtobuf`. For the small gRPC-web billing payload this is negligible, but the pattern is a trap on any larger payload. **Prefer `data.withUnsafeBytes` + pointer/index math** when a parser graduates from toy-size to hot-size.
+3. **`firstIndex(of:)` inside sort comparators.** `ProductCatalog.sortForDisplay` and `DailyUsageBuilder.finalize` sort with a comparator calling `displayOrder.firstIndex(of:)` — O(k² log k) for k products. Tiny here (≤ 6 products), but **precompute a `[String: Int]` rank once** for any larger list.
+4. **Eager string building in logging.** `UsageClient` builds `productLog` (`products.map { … }.joined(separator:)`) to pass to `logger.info`. `os.Logger` string interpolation is evaluated eagerly even when the level discards it — gate the build behind a level check or `#if DEBUG`.
+5. **What not to optimize (accepted costs).** The menu bar render is NSCache-bounded by a full input key — that's the win. The gRPC-web payload is small (KBs); a protobuf framework would be a regression in size and complexity — the hand scan is right. Per-session work (OpenCode workspace discovery, sign-in capture) is not per-poll — cache the *result*, don't speed the path.
 
 ## Source attribution
 
