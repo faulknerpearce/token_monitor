@@ -12,12 +12,15 @@ coverage:
         target: 50%
         only_pulls: true
 
-# UI-heavy files excluded from coverage: SwiftUI views and the custom-drawn
-# bars, rows, and charts that do not end in "View.swift".
+# CI uploads LCOV for the app target only (Scripts/xccov_to_lcov.py), so test
+# sources never count. UI-only files without tests are excluded: SwiftUI views
+# and the custom-drawn rows, bars, and charts listed by name. Files with unit
+# tests (for example SegmentedUsageBar.swift) stay in.
 ignore:
+  - "TokenMonTests/**"
+  - "Tests/**"
   - "TokenMon/App/AppDelegate.swift"
   - "TokenMon/Features/**/*View.swift"
-  - "TokenMon/Features/**/*Bar.swift"
-  - "TokenMon/Features/**/*Row.swift"
-  - "TokenMon/Features/**/*Chart.swift"
-  - "Tests/Manual/**"
+  - "TokenMon/Features/MenuBar/CategoryRow.swift"
+  - "TokenMon/Features/OpenCode/OpenCodeLimitBar.swift"
+  - "TokenMon/Features/Overview/OverviewHourlyUsageChart.swift"

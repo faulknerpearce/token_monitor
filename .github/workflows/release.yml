@@ -1,12 +1,18 @@
 name: Release
 
-# Pushing a tag vX.Y.Z (matching MARKETING_VERSION in project.yml) builds the
-# app zip and pkg and attaches them to that GitHub Release. The in-app updater
-# downloads TokenMon-*.zip from releases/latest.
+# Pushing a tag vX.Y.Z (matching MARKETING_VERSION in project.yml) runs every
+# CI gate (lint, format, project drift, secret scan, core and unit tests, and
+# the Release build) against the tagged commit, then builds the app zip, pkg,
+# and dSYM zip and attaches them to that GitHub Release. The in-app updater
+# downloads TokenMon-*.zip from releases/latest and checks it against the
+# SHA-256 digest GitHub records for the asset.
 #
 # The runner has no Developer ID certificate, so these files are ad-hoc signed.
 # Gatekeeper will warn on a first download. An already-installed copy can still
 # replace itself from the zip.
+#
+# Assets already attached to the release are never replaced on the first run.
+# Re-running the workflow run (run attempt 2 or later) replaces them.
 
 on:
   push:
@@ -14,32 +20,21 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish zip and pkg
-    runs-on: macos-26
-    timeout-minutes: 45
-    env:
-      XCODEGEN_VERSION: "2.46.0"
+  check-tag:
+    name: Tag matches MARKETING_VERSION
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install XcodeGen (pinned)
-        run: |
-          set -euo pipefail
-          curl -sSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o /tmp/xcodegen.zip
-          unzip -q -o /tmp/xcodegen.zip -d /tmp/xcodegen
-          test "$(/tmp/xcodegen/xcodegen/bin/xcodegen version | awk '{print $2}')" = "$XCODEGEN_VERSION"
-          sudo ln -sf /tmp/xcodegen/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
-
-      - name: Regenerate Xcode project
-        run: make project
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Require the tag to match MARKETING_VERSION
         run: |
@@ -53,26 +48,70 @@ jobs:
             exit 1
           fi
 
-      - name: Build release zip and pkg
+  gates:
+    name: CI gates
+    needs: check-tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish zip, pkg, and dSYMs
+    needs: gates
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: `make release` numbers the build by commit count.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The committed project is used as-is; the gates job fails on drift.
+      - name: Build release zip, pkg, and dSYM zip
         run: make release
 
       - name: Attach the files to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
           version="${tag#v}"
-          zip="dist/TokenMon-${version}.zip"
-          pkg="dist/TokenMon-${version}.pkg"
-          test -f "$zip"
-          test -f "$pkg"
+          files=(
+            "dist/TokenMon-${version}.zip"
+            "dist/TokenMon-${version}.pkg"
+            "dist/TokenMon-${version}-dSYM.zip"
+          )
+          for file in "${files[@]}"; do
+            test -f "$file"
+          done
           # A tag push does not create a release. Keep notes that were written
           # by hand; only create the release when the tag has none yet.
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$zip" "$pkg" --clobber
+            existing="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            clashes=()
+            for file in "${files[@]}"; do
+              if grep -Fxq "$(basename "$file")" <<<"$existing"; then
+                clashes+=("$(basename "$file")")
+              fi
+            done
+            if [ "${#clashes[@]}" -gt 0 ]; then
+              if [ "$RUN_ATTEMPT" -le 1 ]; then
+                echo "Release $tag already has: ${clashes[*]}"
+                echo "Refusing to replace published assets. Delete them, or re-run this workflow run to replace them."
+                exit 1
+              fi
+              echo "Re-run (attempt $RUN_ATTEMPT): replacing ${clashes[*]}"
+              gh release upload "$tag" "${files[@]}" --clobber
+            else
+              gh release upload "$tag" "${files[@]}"
+            fi
           else
-            gh release create "$tag" "$zip" "$pkg" \
+            gh release create "$tag" "${files[@]}" \
               --title "$tag" \
               --generate-notes \
               --verify-tag
