@@ -74,10 +74,11 @@ Keychain is intentionally avoided: unsigned/debug builds repeatedly prompt “wa
 
 - **Auth capture** — `WebKitCookieCapture` + per-provider domain/session policy (`AuthSessionService`, `OpenCodeAuthSession`, `CursorAuthSession`).
 - **Sign-in UI** — `ProviderSignInSheet` + `ProviderSignInWebView`; thin provider wrappers supply URLs and return-page rules.
-- **Polling** — `PollingLoop` + `PollInterval.seconds(menuIsOpen:settings:)`. Grok alone adds sleep/wake and error backoff.
+- **Polling** — one `PollingLoop` per provider. Each sleeps the full remaining interval and parks (no timer) while its provider is not needed; `AppModel` wakes the loops on menu open and on polling-relevant setting changes, and `SystemWakeGate` pauses them across system sleep until the network is back.
 
 ## Error handling
 
 - `401/403` → provider `markSessionInvalid` + panel prompts re-auth (Grok REST probes must not swallow unauthorized)
-- `429/5xx` / network → exponential backoff on Grok (30s → 10m cap)
+- `429` → `UsageError.rateLimited` carrying `Retry-After`, which the loop honours
+- Any failed refresh → exponential backoff in `PollingLoop` for every provider (30s → 10m cap, ±10% jitter)
 - Decode failures are logged and recorded with empty products rather than crashing
