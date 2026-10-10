@@ -28,8 +28,8 @@ struct SignInView: View {
                 title: "Sign in to Grok",
                 subtitle: "Sign in with your Grok / xAI account. This window finishes on its own once you're back on grok.com.",
                 startURL: URL(
-                    string: "https://accounts.x.ai/sign-in?redirect=https%3A%2F%2Fgrok.com%2F%3F_s%3Dusage"
-                )!,
+                    staticString: "https://accounts.x.ai/sign-in?redirect=https%3A%2F%2Fgrok.com%2F%3F_s%3Dusage"
+                ),
                 isAuthHost: { host, _ in Self.isAuthHost(host) },
                 isReturnPage: { url in Self.isReturnPage(url) },
                 returnDelayNanoseconds: 1_500_000_000

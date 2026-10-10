@@ -11,7 +11,7 @@ struct ChatGPTSignInView: View {
             config: ProviderSignInConfig(
                 title: "Sign in to ChatGPT",
                 subtitle: "Sign in to your ChatGPT account. This window finishes on its own once you return to chatgpt.com.",
-                startURL: URL(string: "https://chatgpt.com/")!,
+                startURL: URL(staticString: "https://chatgpt.com/"),
                 isAuthHost: ChatGPTSignInView.isAuthHost,
                 isReturnPage: ChatGPTSignInView.isReturnPage
             ),

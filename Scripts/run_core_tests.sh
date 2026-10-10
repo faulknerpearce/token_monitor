@@ -14,6 +14,7 @@ TARGET="${SWIFT_TARGET:-$(uname -m)-apple-macos14.0}"
 "$SWIFTC" -sdk "$SDK" -target "$TARGET" -parse-as-library \
   -o "$OUT/CoreTests" \
   "$ROOT/TokenMon/Features/Shared/AppLog.swift" \
+  "$ROOT/TokenMon/Features/Shared/StaticURL.swift" \
   "$ROOT/TokenMon/Features/Grok/Usage/UsageModels.swift" \
   "$ROOT/TokenMon/Features/Grok/Usage/UsageClient.swift" \
   "$ROOT/TokenMon/Features/Grok/Usage/DailyUsageBuilder.swift" \

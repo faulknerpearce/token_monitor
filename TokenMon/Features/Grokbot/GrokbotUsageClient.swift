@@ -21,7 +21,7 @@ import Foundation
 /// with a SuperGrok subscription, the SuperGrok plan fields are populated and
 /// the rest of the payload is identical.
 struct GrokbotUsageClient: Sendable {
-    static let baseURL = URL(string: "https://cursor.com")!
+    static let baseURL = URL(staticString: "https://cursor.com")
     static let usageStatusPath = "/api/dashboard/get-sand-usage-status"
 
     private let cookieHeader: String

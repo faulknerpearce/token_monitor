@@ -11,7 +11,7 @@ struct ClaudeSignInView: View {
             config: ProviderSignInConfig(
                 title: "Sign in to Claude",
                 subtitle: "Sign in to your Claude account. This window finishes on its own once you return to claude.ai.",
-                startURL: URL(string: "https://claude.ai/new")!,
+                startURL: URL(staticString: "https://claude.ai/new"),
                 isAuthHost: ClaudeSignInView.isAuthHost,
                 isReturnPage: ClaudeSignInView.isReturnPage
             ),
