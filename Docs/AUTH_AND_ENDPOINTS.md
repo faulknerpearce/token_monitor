@@ -36,7 +36,7 @@ ChatGPT's session cookie rolls: `/api/auth/session` returns a renewed `Set-Cooki
 
 Provider requests go through `ProviderURLSession.shared` (`AuthenticatedRequest.swift`): an ephemeral session with no cookie jar (`httpCookieStorage = nil`, `httpShouldSetCookies = false`) and no URL cache. The stored credential is sent in an explicit `Cookie` or `Authorization` header, a provider's `Set-Cookie` never lands in a shared jar, and authenticated JSON is never written to disk. Requests carry `Accept: application/json` and `User-Agent: TokenMon/<version>`, plus the `Referer` / `Origin` the provider's own page would send.
 
-Builds before this session existed used `URLSession.shared`, so their responses could sit in `~/Library/Caches/com.modelmonitor.app/Cache.db` and `fsCachedData/`. `LegacyCacheCleanup` deletes exactly those files once at launch and clears `URLCache.shared`.
+Older builds sent provider requests through `URLSession.shared`, which can leave responses in `~/Library/Caches/com.modelmonitor.app/Cache.db` and `fsCachedData/`, and provider cookies in the shared jar `com.modelmonitor.app.binarycookies` (under `~/Library/HTTPStorages/` or `~/Library/Cookies/`). At launch `LegacyCacheCleanup` clears `URLCache.shared` and `HTTPCookieStorage.shared` and deletes exactly those files, once each.
 
 Response mapping (`AuthenticatedRequest.responseError`, `ProviderHTTP`):
 

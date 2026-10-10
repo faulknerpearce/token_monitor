@@ -62,7 +62,7 @@ Credentials are stored through `SecretRoutingCredentialStore`:
 - Account email, account identity, and OpenCode's workspace id are mode `0600` files in `~/Library/Application Support/TokenMon/` (`<prefix><key>.dat`).
 - A secret still in a legacy `.dat` file is moved into the Keychain once it has been written and read back; if the Keychain write fails the file is kept and used.
 
-A first launch after the rename moves `Application Support/ModelMonitor/` onto `TokenMon/` when the new folder does not already exist. At launch `LegacyCacheCleanup` removes, once, the `URLCache` files that earlier builds left in `~/Library/Caches/com.modelmonitor.app/`.
+A first launch after the rename moves `Application Support/ModelMonitor/` onto `TokenMon/` when the new folder does not already exist. At launch `LegacyCacheCleanup` removes, once, the `URLCache` files in `~/Library/Caches/com.modelmonitor.app/` and the shared cookie jar `com.modelmonitor.app.binarycookies`, which `URLSession.shared` kept for provider requests in older builds.
 
 Provider requests use `ProviderURLSession.shared`, an ephemeral session with no cookie jar and no URL cache; credentials travel only in explicit `Cookie` / `Authorization` headers. Details: `AUTH_AND_ENDPOINTS.md`.
 
