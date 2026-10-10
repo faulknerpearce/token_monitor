@@ -27,67 +27,57 @@ extension ProviderError {
     }
 }
 
-/// Fetches SuperGrok weekly usage via authenticated grok.com / CLI endpoints.
+/// Fetches SuperGrok weekly usage via authenticated grok.com endpoints.
+///
+/// The gRPC-web billing endpoint behind grok.com Settings → Usage is the
+/// source of truth and is called first. The REST paths are guesses, probed
+/// only when that call fails for a reason other than a rejected session, and
+/// their responses never decide whether the session is valid.
 struct UsageClient: Sendable {
     private let logger = Logger(category: "UsageClient")
 
     /// Primary gRPC-web billing endpoint used by grok.com Settings → Usage.
-    static let billingEndpoint = URL(
-        string: "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
-    )!
+    static let billingEndpoint = URL(staticString: "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig")
 
     /// Candidate REST paths probed for product breakdown JSON.
     static let restCandidates: [URL] = [
-        URL(string: "https://grok.com/rest/subscriptions")!,
-        URL(string: "https://grok.com/rest/user")!,
-        URL(string: "https://grok.com/rest/billing/usage")!,
-        URL(string: "https://grok.com/rest/usage")!
+        URL(staticString: "https://grok.com/rest/subscriptions"),
+        URL(staticString: "https://grok.com/rest/user"),
+        URL(staticString: "https://grok.com/rest/billing/usage"),
+        URL(staticString: "https://grok.com/rest/usage")
     ]
 
     var cookieHeader: String?
     var accountEmail: String?
-    var session: URLSession = .shared
+    var session: URLSession = ProviderURLSession.shared
 
-    /// Fetches usage, preferring REST breakdown JSON and falling back to gRPC-web billing.
+    /// Fetches usage from gRPC-web billing, falling back to the REST probes
+    /// when billing fails transiently.
+    ///
+    /// - Throws: `.unauthorized` only when the billing endpoint rejects the
+    ///   session; otherwise the billing error when no probe yields usage.
     func fetchUsage() async throws -> WeeklyUsageSnapshot {
         if cookieHeader == nil {
             throw ProviderError.notSignedIn(.grok)
         }
-
-        var lastError: Error?
-
-        // 1) Prefer REST JSON that may include product breakdown.
-        // Do not swallow unauthorized — re-auth must surface immediately.
-        do {
-            if let rest = try await fetchRESTBreakdown() {
-                return rest
-            }
-        } catch let error as ProviderError where error == .unauthorized(.grok) {
-            throw error
-        } catch {
-            lastError = error
-            logger.warning("REST usage probe failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // 2) grok.com gRPC-web billing (overall %).
         do {
             return try await fetchGRPCWebBilling()
-        } catch let error as ProviderError where error == .unauthorized(.grok) {
+        } catch let error as ProviderError where error.usageError == .unauthorized {
             throw error
         } catch {
-            lastError = error
             logger.warning("gRPC-web billing failed: \(error.localizedDescription, privacy: .public)")
+            if let rest = await fetchRESTBreakdown() {
+                return rest
+            }
+            throw error
         }
-
-        if let lastError {
-            throw lastError
-        }
-        throw ProviderError.grokEmptyResponse
     }
 
     // MARK: - REST
 
-    private func fetchRESTBreakdown() async throws -> WeeklyUsageSnapshot? {
+    /// First REST probe that returns parseable usage, or `nil`. Every failure,
+    /// including 401/403, only moves on to the next path.
+    private func fetchRESTBreakdown() async -> WeeklyUsageSnapshot? {
         for url in Self.restCandidates {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
@@ -96,18 +86,12 @@ struct UsageClient: Sendable {
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("https://grok.com", forHTTPHeaderField: "Origin")
             request.setValue("https://grok.com/?_s=usage", forHTTPHeaderField: "Referer")
+            request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
 
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { continue }
-            // These paths are speculative, so a 403 is usually a WAF/CSRF refusal
-            // of a guessed path rather than an expired session. Only 401
-            // invalidates here; the canonical gRPC endpoint decides 403 for the
-            // real session, so a spurious REST 403 no longer forces re-sign-in.
-            if http.statusCode == 401 {
-                throw ProviderError.unauthorized(.grok)
-            }
-            guard http.statusCode == 200, !data.isEmpty else { continue }
-            if let snapshot = UsageResponseParser.parseJSON(data, accountEmail: accountEmail) {
+            guard let result = try? await session.data(for: request),
+                  let http = result.1 as? HTTPURLResponse,
+                  http.statusCode == 200, !result.0.isEmpty else { continue }
+            if let snapshot = UsageResponseParser.parseJSON(result.0, accountEmail: accountEmail) {
                 logger.info("Parsed usage from \(url.path, privacy: .public)")
                 return snapshot
             }
@@ -136,14 +120,20 @@ struct UsageClient: Sendable {
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.grok, "Invalid response")
         }
+        if ProviderHTTP.isBotChallenge(http, data: data) {
+            let message = ProviderHTTP.botChallengeMessage(status: http.statusCode)
+            throw ProviderError.custom(message: message, usage: .badResponse(message))
+        }
         if http.statusCode == 401 || http.statusCode == 403 {
             throw ProviderError.unauthorized(.grok)
         }
         guard http.statusCode == 200 else {
             let body = String(data: data.prefix(400), encoding: .utf8) ?? ""
-                throw ProviderError.grokHTTPStatus(http.statusCode, body: body)
+            throw ProviderError.grokHTTPStatus(http.statusCode, body: body)
         }
 
+        // A trailers-only reply carries `grpc-status` in the HTTP headers.
+        try GRPCWebParser.validateHeaders(http)
         try GRPCWebParser.validateTrailers(data)
         let parsed = try GRPCWebParser.parseUsage(data)
         let used = parsed.usedPercent
@@ -186,7 +176,11 @@ struct UsageClient: Sendable {
 
 // MARK: - JSON parsing
 
-/// Parses REST usage JSON with tolerant key and wrapper handling.
+/// Parses REST usage JSON from a known set of usage keys and wrappers.
+///
+/// Only usage-specific keys are read (no bare `percent` / `value`), and every
+/// percentage must lie in 0...100, so an unrelated 200 response cannot pass
+/// as usage.
 enum UsageResponseParser {
     /// Parses `data` as usage JSON, returning nil when no usable pool is present.
     static func parseJSON(_ data: Data, accountEmail: String?) -> WeeklyUsageSnapshot? {
@@ -208,11 +202,12 @@ enum UsageResponseParser {
 
         let used = firstDouble(dict, keys: [
             "usedPercent", "usagePercent", "credit_usage_percent", "percentUsed",
-            "used_percent", "usage_percent", "percent"
+            "used_percent", "usage_percent"
         ])
         let remaining = firstDouble(dict, keys: [
             "remainingPercent", "remaining_percent", "percentRemaining"
         ])
+        guard isPercent(used), isPercent(remaining) else { return nil }
 
         var products: [ProductUsage] = []
         if let breakdown = dict["products"] as? [[String: Any]]
@@ -227,14 +222,15 @@ enum UsageResponseParser {
                     ?? stringValue(item["name"])
                     ?? stringValue(item["label"])
                     ?? ProductCatalog.displayName(for: id)
-                let pct = firstDouble(item, keys: ["percentOfPool", "percent", "usagePercent", "value"]) ?? 0
+                guard let pct = firstDouble(item, keys: ["percentOfPool", "usagePercent"]) else { return nil }
                 return ProductUsage(id: id.lowercased(), displayName: name, percentOfPool: pct)
             }
         } else if let map = dict["byProduct"] as? [String: Any] ?? dict["productUsage"] as? [String: Any] {
             products = map.compactMap { key, value in
                 let pct: Double
                 if let n = value as? Double { pct = n } else if let n = value as? Int { pct = Double(n) } else if let nested = value as? [String: Any] {
-                    pct = firstDouble(nested, keys: ["percent", "value", "usagePercent"]) ?? 0
+                    guard let nestedPct = firstDouble(nested, keys: ["percentOfPool", "usagePercent"]) else { return nil }
+                    pct = nestedPct
                 } else { return nil }
                 return ProductUsage(
                     id: key.lowercased(),
@@ -253,6 +249,8 @@ enum UsageResponseParser {
             "extraCredits", "extraCreditsBalance", "onDemandBalance", "creditsBalance"
         ])
 
+        guard products.allSatisfy({ isPercent($0.percentOfPool) }) else { return nil }
+
         // Accept if a used% or products that sum to used are present.
         let inferredUsed: Double? = {
             if let used { return used }
@@ -260,7 +258,7 @@ enum UsageResponseParser {
             return sum > 0 ? sum : nil
         }()
 
-        guard let inferredUsed else { return nil }
+        guard let inferredUsed, isPercent(inferredUsed) else { return nil }
         let rem = remaining ?? max(0, 100 - inferredUsed)
         let finalProducts = products.isEmpty
             ? UsageClient.synthesizeProducts(usedPercent: inferredUsed)
@@ -274,6 +272,13 @@ enum UsageResponseParser {
             extraCreditsBalance: credits,
             accountEmail: accountEmail ?? stringValue(dict["email"])
         )
+    }
+
+    /// True for a missing value or a finite value in 0...100 (with a little
+    /// rounding slack).
+    private static func isPercent(_ value: Double?) -> Bool {
+        guard let value else { return true }
+        return value.isFinite && value >= 0 && value <= 100.5
     }
 
     private static func firstDouble(_ dict: [String: Any], keys: [String]) -> Double? {
@@ -504,8 +509,26 @@ enum GRPCWebParser {
     /// Throws `.unauthorized` on gRPC auth trailers, else maps `grpc-status` to an error.
     static func validateTrailers(_ data: Data) throws {
         let fields = trailerFields(from: data)
-        guard let raw = fields["grpc-status"], let status = Int(raw), status != 0 else { return }
-        let message = fields["grpc-message"] ?? ""
+        try validateStatus(fields["grpc-status"], message: fields["grpc-message"])
+    }
+
+    /// Applies `validateTrailers` rules to a `grpc-status` sent in the HTTP
+    /// headers, as a trailers-only reply (e.g. UNAUTHENTICATED with an empty
+    /// body) does.
+    static func validateHeaders(_ response: HTTPURLResponse) throws {
+        let message = response.value(forHTTPHeaderField: "grpc-message")
+        try validateStatus(
+            response.value(forHTTPHeaderField: "grpc-status"),
+            message: message?.removingPercentEncoding ?? message
+        )
+    }
+
+    /// Throws `.unauthorized` for status 16 (UNAUTHENTICATED) or an
+    /// "unauthenticated" message, a body-free error for any other non-zero
+    /// status, and nothing for a missing or zero status.
+    private static func validateStatus(_ raw: String?, message: String?) throws {
+        guard let raw, let status = Int(raw.trimmingCharacters(in: .whitespaces)), status != 0 else { return }
+        let message = message ?? ""
         if status == 16 || message.lowercased().contains("unauthenticated") {
             throw ProviderError.unauthorized(.grok)
         }
