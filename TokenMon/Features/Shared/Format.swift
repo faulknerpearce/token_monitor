@@ -46,7 +46,8 @@ enum Format {
 
     /// Cached DateFormatter keyed by date format.
     private static let formatterCacheLock = NSLock()
-    private static var formatterCache: [String: DateFormatter] = [:]
+    // swiftlint:disable:next modifier_order
+    private nonisolated(unsafe) static var formatterCache: [String: DateFormatter] = [:]
 
     private static func cachedFormatter(dateFormat: String, timeZone: TimeZone?) -> DateFormatter {
         let key = "\(dateFormat)|\(timeZone?.identifier ?? "default")"
