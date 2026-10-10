@@ -83,9 +83,13 @@ enum ReleaseFeed {
         )
     }
 
-    /// Asset to install with the given extension. Prefers `TokenMon-*` names.
+    /// Asset to install with the given extension. Prefers `TokenMon-*` names
+    /// and skips debug-symbol archives (`*-dSYM.zip`).
     static func preferredAsset(in assets: [ReleaseAsset], withExtension pathExtension: String) -> ReleaseAsset? {
-        let matching = assets.filter { $0.name.lowercased().hasSuffix(".\(pathExtension)") }
+        let matching = assets.filter {
+            let name = $0.name.lowercased()
+            return name.hasSuffix(".\(pathExtension)") && !name.contains("dsym")
+        }
         return matching.first { $0.name.lowercased().hasPrefix("tokenmon") } ?? matching.first
     }
 

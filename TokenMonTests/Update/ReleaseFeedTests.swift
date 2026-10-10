@@ -90,6 +90,19 @@ final class ReleaseFeedTests: XCTestCase {
         XCTAssertEqual(release?.installerPackage?.url.lastPathComponent, "TokenMon-2.0.0.pkg")
     }
 
+    /// The debug-symbol zip published beside the app zip is never installed.
+    func testDSYMArchiveIsNotChosen() throws {
+        let release = try parse("""
+        {"tag_name":"2.0.0","assets":[
+          {"name":"TokenMon-2.0.0-dSYM.zip",
+           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0-dSYM.zip"},
+          {"name":"TokenMon-2.0.0.zip",
+           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"}
+        ]}
+        """)
+        XCTAssertEqual(release?.archive?.name, "TokenMon-2.0.0.zip")
+    }
+
     func testMalformedDigestIsDropped() {
         XCTAssertNil(ReleaseFeed.sha256(fromDigest: nil))
         XCTAssertNil(ReleaseFeed.sha256(fromDigest: "sha1:" + String(repeating: "a", count: 40)))
