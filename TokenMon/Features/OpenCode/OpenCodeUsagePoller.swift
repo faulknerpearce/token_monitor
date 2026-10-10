@@ -88,7 +88,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         defer { isRefreshing = false }
 
         // Prefer official console Go usage (matches opencode.ai bars).
-        let generation = auth.sessionGeneration
+        var generation = auth.sessionGeneration
         let cookieHeader = auth.cookieHeader()
         if let cookieHeader, !cookieHeader.isEmpty {
             do {
@@ -127,6 +127,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 switch error.usageError {
                 case .unauthorized, .notSignedIn:
                     auth.markSessionInvalid(reason: error.localizedDescription)
+                    // The invalidation above advanced the generation; adopt it so
+                    // this poll still publishes the local estimate below.
+                    generation = auth.sessionGeneration
                 default:
                     break
                 }
