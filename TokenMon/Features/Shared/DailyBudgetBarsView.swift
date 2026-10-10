@@ -54,6 +54,11 @@ struct MonthlyDailyBudgetBarsView: View {
     var showsLiveFooter: Bool = true
 
     var body: some View {
+        bars
+    }
+
+    /// The shared chart, pacing against the subscription month and its reset.
+    var bars: DailyBudgetBarsView {
         let start = DailyBudget.monthlyPacePeriodStart(
             days: days,
             knownStart: periodStart,
@@ -66,6 +71,7 @@ struct MonthlyDailyBudgetBarsView: View {
             allowancePeriod: .monthly,
             allowanceNoun: "monthly",
             periodUsedPercent: periodUsedPercent,
+            resetsAt: resetsAt,
             periodStart: start,
             onPreviousWeek: onPreviousWeek,
             onNextWeek: onNextWeek,
