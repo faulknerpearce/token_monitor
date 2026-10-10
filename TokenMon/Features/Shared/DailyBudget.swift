@@ -58,8 +58,9 @@ enum DailyBudget {
     /// units as `limitUSD`.
     ///
     /// When `now` falls on the `periodEnd` calendar day *before* the reset instant,
-    /// the running period still owns today, so that day is included (same rule as
-    /// the weekly window).
+    /// the running period still owns today, so that day is included as an extra
+    /// bar (same rule as the weekly window). The daily share stays at the
+    /// period's regular day count, so the bars and pace do not shift on that day.
     static func buildDays(
         periodStart: Date,
         periodEnd: Date,
@@ -77,7 +78,8 @@ enum DailyBudget {
             ? calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
             : endDay
         let totalDays = daysInBillingCycle(start: start, end: exclusiveEnd, calendar: calendar)
-        let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: totalDays)
+        let periodDays = daysInBillingCycle(start: start, end: endDay, calendar: calendar)
+        let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: periodDays)
         var days: [DailyBudgetDay] = []
         for offset in 0..<totalDays {
             guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
@@ -315,7 +317,9 @@ enum DailyBudget {
     ///
     /// With only one side, infers the other by shifting one calendar month
     /// (anniversary-style cycles). A stale ended cycle advances in whole months
-    /// to the running period.
+    /// to the running period. Each later boundary is computed from the anchor
+    /// (`knownStart` when only it is known, otherwise `resetsAt`) and clamped to
+    /// the length of its month, so a Jan 31 anchor yields Feb 28 then Mar 31.
     static func subscriptionMonth(
         knownStart: Date? = nil,
         resetsAt: Date? = nil,
@@ -324,19 +328,28 @@ enum DailyBudget {
     ) -> (start: Date, end: Date)? {
         var start: Date
         var end: Date
+        /// Boundary the later cycle ends are counted from, and the month offset of `end` from it.
+        let anchor: Date
+        var endOffset: Int
         if let knownStart, let resetsAt, resetsAt > knownStart {
             start = knownStart
             end = resetsAt
+            anchor = resetsAt
+            endOffset = 0
         } else if let knownStart {
             guard let inferredEnd = calendar.date(byAdding: .month, value: 1, to: knownStart),
                   inferredEnd > knownStart else { return nil }
             start = knownStart
             end = inferredEnd
+            anchor = knownStart
+            endOffset = 1
         } else if let resetsAt {
             guard let inferredStart = calendar.date(byAdding: .month, value: -1, to: resetsAt),
                   resetsAt > inferredStart else { return nil }
             start = inferredStart
             end = resetsAt
+            anchor = resetsAt
+            endOffset = 0
         } else {
             return nil
         }
@@ -344,10 +357,11 @@ enum DailyBudget {
         if let now {
             var guardIter = 0
             while end <= now, guardIter < 520 {
-                start = end
-                guard let advanced = calendar.date(byAdding: .month, value: 1, to: end),
+                guard let advanced = calendar.date(byAdding: .month, value: endOffset + 1, to: anchor),
                       advanced > end else { break }
+                start = end
                 end = advanced
+                endOffset += 1
                 guardIter += 1
             }
         }
