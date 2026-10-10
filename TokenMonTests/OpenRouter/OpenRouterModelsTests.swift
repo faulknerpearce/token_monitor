@@ -47,6 +47,7 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.usedUSD, 30, accuracy: 0.001)
         XCTAssertEqual(snapshot.remainingUSD ?? -1, 90, accuracy: 0.001)
         XCTAssertEqual(snapshot.usedPercent ?? -1, 25, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatTitle, "Credits purchased")
     }
 
     /// Inference key without /credits access falls back to its own credit limit.
@@ -59,6 +60,8 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.usedUSD, 25, accuracy: 0.001)
         XCTAssertEqual(snapshot.remainingUSD ?? -1, 75, accuracy: 0.001)
         XCTAssertEqual(snapshot.usedPercent ?? -1, 25, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatTitle, "Key spending limit")
+        XCTAssertEqual(snapshot.budgetStatValue, Format.usd(100))
     }
 
     /// Unlimited key with no credits endpoint access has no denominator.
@@ -71,6 +74,7 @@ final class OpenRouterModelsTests: XCTestCase {
         XCTAssertNil(snapshot.remainingUSD)
         XCTAssertNil(snapshot.usedPercent)
         XCTAssertEqual(snapshot.usedUSD, 12.5, accuracy: 0.001)
+        XCTAssertEqual(snapshot.budgetStatValue, "None")
     }
 
     /// With a provider-declared reset window, the bar must reflect spend in the

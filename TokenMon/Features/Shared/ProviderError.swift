@@ -198,6 +198,21 @@ enum ProviderHTTP {
         return lowered.contains("not_authenticated") || lowered.contains("unauthor")
     }
 
+    /// Resolves `path` against `baseURL`, treating the base as a directory.
+    ///
+    /// A relative `path` (`"key"`) lands under the base's last segment, so
+    /// `https://openrouter.ai/api/v1` + `"key"` is `…/api/v1/key` whether or not
+    /// the base ends in `/`. A root-relative `path` (`"/api/…"`) replaces the
+    /// base path, and an absolute URL string is used as-is.
+    static func resolve(_ path: String, baseURL: URL) -> URL? {
+        var base = baseURL.absoluteString
+        if !base.hasSuffix("/") {
+            base += "/"
+        }
+        guard let directory = URL(string: base) else { return nil }
+        return URL(string: path, relativeTo: directory)?.absoluteURL
+    }
+
     private static func send(
         _ path: String,
         baseURL: URL,
@@ -210,7 +225,7 @@ enum ProviderHTTP {
         headers: [String: String] = [:],
         json: [String: Any]? = nil
     ) async throws -> (data: Data, response: HTTPURLResponse) {
-        guard let resolved = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+        guard let resolved = resolve(path, baseURL: baseURL) else {
             throw ProviderError.badResponse(context, "Invalid path \(path)")
         }
         var request = URLRequest(url: resolved)
