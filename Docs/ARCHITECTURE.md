@@ -78,7 +78,7 @@ Keychain is intentionally avoided: unsigned/debug builds repeatedly prompt “wa
 
 ## Error handling
 
-- `401/403` → provider `markSessionInvalid` + panel prompts re-auth (Grok REST probes must not swallow unauthorized)
+- `401/403` → `recordAuthFailure`; the session is invalidated (and the panel prompts re-auth) after three rejections in a row. A bot-protection challenge (403 with HTML, or `cf-mitigated`) is transient and never counts
 - `429` → `UsageError.rateLimited` carrying `Retry-After`, which the loop honours
 - Any failed refresh → exponential backoff in `PollingLoop` for every provider (30s → 10m cap, ±10% jitter)
 - Decode failures are logged and recorded with empty products rather than crashing
