@@ -17,8 +17,9 @@ final class OpenCodePollerFallbackTests: XCTestCase {
         UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
     }
 
-    /// An expired console session still publishes the local estimate in the
-    /// same poll, labelled as such.
+    /// Each rejected console poll still publishes the local estimate. The
+    /// session is invalidated on the third consecutive rejection, and that poll
+    /// labels the estimate as coming from an expired session.
     func testExpiredConsoleSessionFallsBackToLocalEstimate() async throws {
         let settings = try AppSettings(defaults: XCTUnwrap(UserDefaults(suiteName: suiteName)))
         settings.selectedProvider = .opencode
@@ -31,6 +32,12 @@ final class OpenCodePollerFallbackTests: XCTestCase {
             fetchConsole: { _, _ in throw ProviderError.unauthorized(.openCode) },
             fetchLocal: { (local, nil) }
         )
+        await poller.refreshNow()
+        XCTAssertFalse(auth.needsSignIn)
+        XCTAssertEqual(poller.snapshot?.isEstimated, true)
+        XCTAssertEqual(poller.lastError, "Console fetch failed — showing local estimate.")
+
+        await poller.refreshNow()
         await poller.refreshNow()
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertEqual(poller.snapshot?.isEstimated, true)
