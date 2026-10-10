@@ -42,7 +42,7 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 | **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and session credentials are kept in the macOS Keychain |
 | **Polling** | Faster refresh while the menu is open, slower when idle; failed refreshes are retried on later polls |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
-| **Alerts** | Optional threshold notifications |
+| **Alerts** | Optional notification when any provider's usage crosses a threshold |
 | **Preferences** | Menu bar toggles, poll intervals, provider order, visible products, launch at login |
 | **Updates** | Optional check for new GitHub releases; verified in-place install (see [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md#in-app-updates)) |
 | **Agent app** | No Dock icon by default (`LSUIElement`) |
