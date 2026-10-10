@@ -24,13 +24,19 @@ enum OpenCodeLocalStats {
     static let rolling5hSeconds: TimeInterval = 5 * 3600
 
     /// Real user home, not the sandbox container home (`NSHomeDirectory` would
-    /// resolve to the app container).
-    static var realHomeDirectory: URL {
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+    /// resolve to the app container). Resolved once with the reentrant
+    /// `getpwuid_r`, so detached readers never share `getpwuid`'s static buffer.
+    static let realHomeDirectory: URL = {
+        var record = passwd()
+        var result: UnsafeMutablePointer<passwd>?
+        let suggested = sysconf(Int32(_SC_GETPW_R_SIZE_MAX))
+        var buffer = [CChar](repeating: 0, count: suggested > 0 ? suggested : 4096)
+        if getpwuid_r(getuid(), &record, &buffer, buffer.count, &result) == 0,
+           result != nil, let dir = record.pw_dir {
             return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
         }
         return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-    }
+    }()
 
     static var databaseDirectory: URL {
         realHomeDirectory
