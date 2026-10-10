@@ -59,7 +59,9 @@ enum Format {
     /// `nil` time zone resolves to the current system zone at each call, and the
     /// cache is emptied when the system time zone changes.
     private static let formatterCacheLock = NSLock()
-    nonisolated(unsafe) private static var formatterCache: [String: DateFormatter] = [:]
+    // SwiftLint versions disagree on where `nonisolated(unsafe)` goes; SwiftFormat sets this order.
+    // swiftlint:disable:next modifier_order superfluous_disable_command
+    private nonisolated(unsafe) static var formatterCache: [String: DateFormatter] = [:]
     private static let timeZoneObserver: NSObjectProtocol = NotificationCenter.default.addObserver(
         forName: .NSSystemTimeZoneDidChange,
         object: nil,
