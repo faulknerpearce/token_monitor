@@ -23,7 +23,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let logger = Logger(category: "Claude")
     private var cancellables = Set<AnyCancellable>()
 
-    /// Last observed `seven_day.resets_at`; anchors the chart when a later payload
+    /// Last observed weekly `resets_at`; anchors the chart when a later payload
     /// omits the reset time. A forward move does not clear accumulated day deltas.
     private var weeklyResetsAt: Date?
     /// Instant the current bars were built against, so earlier weeks shift from
@@ -122,7 +122,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             budgetReferenceNow = fetchedAt
             dailyBudgetDays = Self.buildDailyBudgetDays(
                 spentByDay: daily.spentByDay,
-                resetsAt: response.sevenDay?.resetsAt ?? weeklyResetsAt,
+                resetsAt: weeklyResetsAt(now: fetchedAt),
                 windowStart: daily.windowStart,
                 interruptedWindowStart: daily.interruptedWindowStart,
                 now: fetchedAt
@@ -155,7 +155,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
     }
 
-    /// Tracks the latest observed `seven_day.resets_at` to anchor the chart when a
+    /// Tracks the latest observed weekly `resets_at` to anchor the chart when a
     /// later payload omits the reset time.
     ///
     /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
@@ -170,8 +170,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// Daily bars for the current weekly window, anchored to the pool's actual reset
-    /// time; returns [] when no provider reset has been observed (a rolling 7-day
-    /// window is never substituted). The pool is split evenly across the period's
+    /// time; returns [] when no provider reset has ever been observed (a rolling
+    /// 7-day window is never substituted). The pool is split evenly across the period's
     /// days, so each day's budget is 1/7th.
     ///
     /// `windowStart` / `interruptedWindowStart` come from the daily store after a
@@ -205,13 +205,37 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Reads the live daily store so the panel can browse earlier weeks without
     /// a new poll. `0` matches ``dailyBudgetDays``.
     func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay] {
-        Self.buildDailyBudgetDays(
+        let now = budgetReferenceNow ?? Date()
+        return Self.buildDailyBudgetDays(
             spentByDay: daily.spentByDay,
-            resetsAt: snapshot?.sevenDay?.resetsAt ?? weeklyResetsAt,
+            resetsAt: weeklyResetsAt(now: now),
             windowStart: daily.windowStart,
             interruptedWindowStart: daily.interruptedWindowStart,
             weekOffset: weekOffset,
-            now: budgetReferenceNow ?? Date()
+            now: now
         )
+    }
+
+    /// Weekly reset instant the bars and the reset caption anchor to.
+    ///
+    /// Uses the latest payload's `resets_at`, else the last one seen this run,
+    /// else the one the daily store persisted on an earlier run. A remembered
+    /// instant that has already passed is carried forward by whole weeks (the
+    /// pool resets on a fixed weekly cadence), so a payload that omits
+    /// `resets_at` still yields the current window.
+    func weeklyResetsAt(now: Date = Date()) -> Date? {
+        if let live = snapshot?.sevenDay?.resetsAt {
+            return live
+        }
+        return Self.projectWeeklyReset(weeklyResetsAt ?? daily.windowResetsAt, now: now)
+    }
+
+    /// Advances `resetsAt` by whole weeks until it is after `now`.
+    static func projectWeeklyReset(_ resetsAt: Date?, now: Date) -> Date? {
+        guard let resetsAt else { return nil }
+        guard resetsAt <= now else { return resetsAt }
+        let week: TimeInterval = 7 * 86_400
+        let weeks = (now.timeIntervalSince(resetsAt) / week).rounded(.down) + 1
+        return resetsAt.addingTimeInterval(weeks * week)
     }
 }

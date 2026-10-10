@@ -77,4 +77,50 @@ final class ClaudeUsageClientTests: XCTestCase {
         XCTAssertNil(ClaudeUsageClient.organizationID(fromCookieHeader: "sessionKey=abc"))
         XCTAssertNil(ClaudeUsageClient.organizationID(fromCookieHeader: ""))
     }
+    /// Live payload shape for accounts whose `seven_day` is null: the weekly pool
+    /// is reported only in `limits`.
+    private let limitsFixture = Data("""
+    {
+      "five_hour": {"utilization": 14.0, "resets_at": "2026-10-10T20:20:00.143736+00:00"},
+      "seven_day": null,
+      "seven_day_opus": null,
+      "limits": [
+        {"kind": "session", "group": "session", "percent": 14, "resets_at": "2026-10-10T20:20:00.143736+00:00",
+         "scope": null, "is_active": true},
+        {"kind": "weekly_scoped", "group": "weekly", "percent": 3, "resets_at": "2026-10-11T08:00:00+00:00",
+         "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}, "is_active": false}
+      ]
+    }
+    """.utf8)
+
+    func testParseFallsBackToWeeklyLimitWhenSevenDayIsNull() throws {
+        let response = try ClaudeUsageResponse.parse(limitsFixture)
+        let weekly = try XCTUnwrap(response.sevenDay)
+        XCTAssertEqual(weekly.usedPercent, 3, accuracy: 0.001)
+        XCTAssertEqual(weekly.scopeName, "Fable")
+        XCTAssertEqual(weekly.resetsAt, ISO8601DateFormatter.parseFlexible("2026-10-11T08:00:00+00:00"))
+        XCTAssertEqual(response.fiveHour?.usedPercent ?? -1, 14, accuracy: 0.001)
+        let snapshot = ClaudeSnapshot(fetchedAt: Date(), fiveHour: response.fiveHour, sevenDay: weekly)
+        XCTAssertEqual(snapshot.weeklyLabel, "Weekly · Fable")
+    }
+
+    func testParsePrefersAccountWideWeeklyLimit() throws {
+        let data = Data("""
+        {"limits": [
+          {"group": "weekly", "percent": 80, "scope": {"model": {"display_name": "Fable"}}, "is_active": true},
+          {"group": "weekly", "percent": 20, "scope": null, "is_active": false}
+        ]}
+        """.utf8)
+        let weekly = try XCTUnwrap(ClaudeUsageResponse.parse(data).sevenDay)
+        XCTAssertEqual(weekly.usedPercent, 20, accuracy: 0.001)
+        XCTAssertNil(weekly.scopeName)
+        XCTAssertNil(weekly.resetsAt)
+    }
+
+    func testParseSevenDayObjectWinsOverLimits() throws {
+        let data = Data("""
+        {"seven_day": {"utilization": 40}, "limits": [{"group": "weekly", "percent": 5}]}
+        """.utf8)
+        XCTAssertEqual(try ClaudeUsageResponse.parse(data).sevenDay?.usedPercent ?? -1, 40, accuracy: 0.001)
+    }
 }
