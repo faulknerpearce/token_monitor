@@ -651,7 +651,6 @@ final class OpenCodeStatsTests: XCTestCase {
             claudeSharePercent: 0,
             grokbotSharePercent: 0,
             activity: 10.1,
-            costUSD: 0,
             openCodeGoTokens: 0,
             openCodeZenTokens: 0,
             cursorTokens: 0

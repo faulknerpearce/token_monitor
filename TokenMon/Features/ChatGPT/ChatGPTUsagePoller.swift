@@ -9,7 +9,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: ChatGPTAuthSession
@@ -20,9 +22,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     private let logger = Logger(category: "ChatGPT")
     private var cancellables = Set<AnyCancellable>()
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -43,11 +45,11 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -57,9 +59,14 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         lastRefreshedAt = nil
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsChatGPTPolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.chatgpt) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -68,29 +75,35 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             if snapshot == nil {
                 lastError = "Sign in to ChatGPT to load usage."
             }
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
             let fetch = try await fetchUsage(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             publish(fetch)
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let error as ProviderError {
             // A request that began under a previous credential state must not
             // tear down the current session.
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 tokenCache.clear()
                 auth.recordAuthFailure(reason: error.localizedDescription)
                 reportFailure(error)
+                return PollOutcome(error: error)
             default:
                 reportFailure(error)
+                return PollOutcome(error: error)
             }
         } catch {
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             reportFailure(error)
+            return PollOutcome(error: error)
         }
     }
 
@@ -121,7 +134,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsChatGPTPolling)
     }
 }

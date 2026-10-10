@@ -4,13 +4,17 @@ import SwiftUI
 
 /// Owns the menu bar status item and its dropdown panel.
 ///
-/// Replaces `MenuBarExtra` (so a click can be hit-tested against the rendered
-/// provider segments) and `NSPopover` (which always draws an arrow). The
-/// dropdown is a borderless `MenuBarPanel` positioned under the status item, so
-/// there is no arrow and the top edge stays put while the bottom grows with the
-/// provider content.
+/// A plain `NSStatusItem` lets a click be hit-tested against the rendered
+/// provider segments. The dropdown is a borderless `MenuBarPanel` positioned
+/// under the status item, so there is no popover arrow and the top edge stays
+/// put while the bottom grows with the provider content.
+///
+/// The status image re-renders only when an input it draws changes (settings,
+/// a provider snapshot, Grok sign-in state, the menu-bar appearance), at most
+/// once per `AppModel.changeCoalescing`, and the button image is reassigned
+/// only when the rendered image differs.
 @MainActor
-final class MenuBarController: NSObject, ObservableObject {
+final class MenuBarController: NSObject {
     private let model: AppModel
     private let statusItem: NSStatusItem
     private let panel = MenuBarPanel()
@@ -19,6 +23,9 @@ final class MenuBarController: NSObject, ObservableObject {
     private var regions: [MenuBarStatusRenderer.Region] = []
     private var escapeMonitor: Any?
     private var observers: [NSObjectProtocol] = []
+    private var appearanceObservation: NSKeyValueObservation?
+    /// Key of the image currently on the button.
+    private var statusKey: String?
 
     /// Gap between the status item and the top of the panel.
     private let panelGap: CGFloat = 4
@@ -62,21 +69,61 @@ final class MenuBarController: NSObject, ObservableObject {
             }
         }
 
+        observeStatusInputs()
+        observeAppearance()
+
+        // `AppModel` emits once per burst of changes, after the values are set.
+        // Content height can change (e.g. switching provider tabs), so re-fit
+        // the panel's bottom edge once SwiftUI has laid out.
         model.objectWillChange
             .sink { [weak self] _ in
-                // `@Published` emits in `willSet`, before the new value is
-                // assigned, so defer a tick to read the updated settings/snapshot
-                // (the panel resize below is deferred for the same reason).
-                DispatchQueue.main.async {
-                    self?.refreshStatusItem()
-                    // Content height can change (e.g. switching provider tabs);
-                    // re-fit the panel's bottom edge after SwiftUI lays out.
-                    self?.resizePanelIfNeeded()
-                }
+                DispatchQueue.main.async { self?.resizePanelIfNeeded() }
             }
             .store(in: &cancellables)
 
         refreshStatusItem()
+    }
+
+    /// Re-renders the status image when anything it draws changes. `@Published`
+    /// emits in `willSet`; the throttle delivers on a later run-loop pass, after
+    /// the new values are stored.
+    private func observeStatusInputs() {
+        let inputs: [AnyPublisher<Void, Never>] = [
+            model.settings.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            model.poller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.openCodePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.cursorPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.claudePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.chatGPTPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.openRouterPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.grokbotPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.auth.$isSignedIn.map { _ in () }.eraseToAnyPublisher(),
+            model.auth.$needsSignIn.map { _ in () }.eraseToAnyPublisher()
+        ]
+        Publishers.MergeMany(inputs)
+            .throttle(for: AppModel.changeCoalescing, scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] in self?.refreshStatusItem() }
+            .store(in: &cancellables)
+    }
+
+    /// The label bitmap bakes in the menu bar's label colour, so a light/dark
+    /// switch (or a wallpaper-driven menu bar tint change) re-renders it.
+    private func observeAppearance() {
+        appearanceObservation = statusItem.button?.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshStatusItem() }
+            }
+        }
+        observers.append(DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // The status bar adopts the new appearance after this notification.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshStatusItem() }
+            }
+        })
     }
 
     private func refreshStatusItem() {
@@ -100,9 +147,12 @@ final class MenuBarController: NSObject, ObservableObject {
             showGrokbotBar: settings.showGrokbotBarInMenuBar,
             providerOrder: settings.orderedUsageProviders,
             visibleProductIDs: settings.visibleProductIDs,
-            enabledProviders: settings.enabledProviderIDs
+            enabledProviders: settings.enabledProviderIDs,
+            appearance: statusItem.button?.effectiveAppearance
         )
         regions = rendered.regions
+        guard rendered.key != statusKey else { return }
+        statusKey = rendered.key
         // Keep `variableLength`: assigning an explicit length animates the status
         // item, which makes the whole menu bar shift when the label updates.
         statusItem.button?.image = rendered.image
@@ -142,14 +192,15 @@ final class MenuBarController: NSObject, ObservableObject {
 
         panel.setFrame(panelFrame(for: panelContentSize()), display: true)
         panel.makeKeyAndOrderFront(nil)
+        model.setMenuOpen(true)
     }
 
     private func hidePanel() {
         guard panel.isVisible else { return }
         panel.orderOut(nil)
-        // Detaching fires the panel content's `onDisappear` (menuIsOpen resets).
         panel.contentViewController = nil
         hosting = nil
+        model.setMenuOpen(false)
     }
 
     /// Fits the panel to the SwiftUI content via `panelFrame(for:)`, which clamps
@@ -222,13 +273,20 @@ final class MenuBarController: NSObject, ObservableObject {
 /// moment the window height can differ from the content height. Without this
 /// alignment SwiftUI centers the content in the taller window, which visibly
 /// moves the provider tabs. Anchoring to the top keeps them fixed.
+///
+/// The panel's height is clamped to the screen. Measured unconstrained (the
+/// hosting view's `fittingSize`) the content always fits and reports its full
+/// height; once the panel is shorter than that, the content scrolls instead of
+/// being clipped.
 private struct MenuBarPanelContent: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
+        ViewThatFits(in: .vertical) {
             MenuBarRoot(model: model)
-            Spacer(minLength: 0)
+            ScrollView(.vertical) {
+                MenuBarRoot(model: model)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

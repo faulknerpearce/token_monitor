@@ -71,6 +71,8 @@ enum ProviderError: LocalizedError, ProviderUsageError, Equatable {
         case .unauthorized: self = .unauthorized(context)
         case let .network(message): self = .network(context, message)
         case let .badResponse(message): self = .badResponse(context, message)
+        case .rateLimited:
+            self = .custom(message: "\(context.displayName) is rate limiting requests. Retrying later.", usage: usageError)
         }
     }
 

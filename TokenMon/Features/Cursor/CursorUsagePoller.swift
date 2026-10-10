@@ -12,7 +12,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
     @Published private(set) var dataSourceLabel: String?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: CursorAuthSession
@@ -44,9 +46,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// are paged at most every `CursorUsageClient.eventsRefreshInterval`.
     private let eventCache: CursorEventCache
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -71,11 +73,11 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -91,9 +93,14 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         daily.clear()
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsCursorPolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.cursor) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -102,13 +109,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             if snapshot == nil {
                 lastError = "Sign in to Cursor to load usage."
             }
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
             var (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             // No event aggregates this poll (events fetch failed): keep the
             // previous event-derived figures rather than publishing zeros.
             if snap.costStats == nil, let previous = snapshot {
@@ -119,7 +126,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             snapshot = snap
             dayHourlyUsage = hourly
             auth.recordAuthSuccess()
-            if let email = snap.accountEmail {
+            if let email = snap.accountEmail, email != auth.accountEmail {
                 auth.saveAccountEmail(email)
             }
             // The daily bars prefer the real day-over-day growth of the reported
@@ -160,11 +167,14 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             logger.info(
                 "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
             )
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let cursorError as ProviderError {
             // A request that began under a previous credential state must not
             // tear down the current session (sign-out → sign in as another
             // account while this fetch was in flight).
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             let usageError = cursorError.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
@@ -172,21 +182,19 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             default:
                 break
             }
-            if snapshot == nil {
-                lastError = cursorError.localizedDescription
-            }
+            lastError = cursorError.localizedDescription
             logger.error("Cursor refresh failed: \(cursorError.localizedDescription, privacy: .public)")
+            return PollOutcome(error: cursorError)
         } catch {
-            guard auth.isCurrent(generation) else { return }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            guard auth.isCurrent(generation) else { return .skipped }
+            lastError = error.localizedDescription
             logger.error("Cursor refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsCursorPolling)
     }
 
     /// `previous` when it covers the same calendar day as `fallback`, else `fallback`.

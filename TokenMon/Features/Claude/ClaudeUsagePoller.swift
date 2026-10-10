@@ -12,7 +12,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Daily bars for the current weekly window, anchored to the pool's actual
     /// `resets_at`: % of the weekly pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: ClaudeAuthSession
@@ -30,9 +32,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// the same window.
     private var budgetReferenceNow: Date?
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -57,11 +59,11 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -75,9 +77,14 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         daily.clear()
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsClaudePolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.claude) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -86,13 +93,13 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             if snapshot == nil {
                 lastError = "Sign in to Claude to load usage."
             }
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
         do {
             let (response, fetchedAt) = try await fetchUsage(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,
@@ -126,10 +133,13 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 interruptedWindowStart: daily.interruptedWindowStart,
                 now: fetchedAt
             )
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let error as ProviderError {
             // A request that began under a previous credential state must not
             // tear down the current session.
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             let usageError = error.usageError
             switch usageError {
             case .unauthorized, .notSignedIn:
@@ -141,17 +151,19 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 lastError = error.localizedDescription
             }
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         } catch {
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsClaudePolling)
     }
 
     /// Tracks the latest observed weekly `resets_at` to anchor the chart when a

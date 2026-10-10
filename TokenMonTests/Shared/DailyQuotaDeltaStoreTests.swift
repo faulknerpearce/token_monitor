@@ -420,4 +420,19 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         let creep = QuotaWindow(start: nil, resetsAt: date(dayOffset: 1, hour: 8))
         XCTAssertEqual(classify(previous: previous, previousUsed: 70, next: creep, used: 3, now: now), .none)
     }
+
+    func testUnchangedSampleDoesNotRewriteTheFile() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("activity_test_weekly_daily.dat")
+
+        store.record(windowUsedPercent: 10, at: date(dayOffset: 0, hour: 9))
+        try FileManager.default.removeItem(at: file)
+
+        store.record(windowUsedPercent: 10, at: date(dayOffset: 0, hour: 10))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path), "same state, no write")
+
+        store.record(windowUsedPercent: 14, at: date(dayOffset: 0, hour: 11))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
+    }
 }

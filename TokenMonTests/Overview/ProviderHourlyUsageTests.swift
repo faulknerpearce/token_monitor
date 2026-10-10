@@ -28,4 +28,18 @@ final class ProviderHourlyUsageTests: XCTestCase {
         XCTAssertEqual(usage.hours.count, 24)
         XCTAssertEqual(usage.hours[23].activity, 1, accuracy: 0.001)
     }
+
+    /// The Overview chart re-evaluates at each local midnight, so a panel left
+    /// open overnight rolls to the new day.
+    func testUpcomingMidnightsStartAtTheNextLocalMidnight() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Denver"))
+        let lateEvening = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 23, minute: 59)))
+        let midnights = OverviewPanelView.upcomingMidnights(after: lateEvening, calendar: calendar)
+        XCTAssertEqual(midnights.count, 7)
+        XCTAssertEqual(midnights.first, calendar.date(from: DateComponents(year: 2026, month: 3, day: 8)))
+        // DST starts on 2026-03-08 in Denver: still one entry per local midnight.
+        XCTAssertEqual(midnights[1], calendar.date(from: DateComponents(year: 2026, month: 3, day: 9)))
+        XCTAssertTrue(midnights.allSatisfy { calendar.component(.hour, from: $0) == 0 })
+    }
 }

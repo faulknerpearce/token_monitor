@@ -11,8 +11,15 @@ final class AppSupportTests: XCTestCase {
 
     func testDefaultUsesExpectedSubdirectory() {
         let dir = AppSupport.directory()
-        XCTAssertTrue(dir.path.contains("Application Support"))
         XCTAssertEqual(dir.lastPathComponent, AppSupport.directoryName)
+        XCTAssertEqual(dir.deletingLastPathComponent().standardizedFileURL, AppSupport.baseDirectory.standardizedFileURL)
+    }
+
+    func testTestHostUsesTemporaryBaseDirectory() {
+        let realBase = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        XCTAssertTrue(AppSupport.isRunningTests)
+        XCTAssertNotEqual(AppSupport.baseDirectory.standardizedFileURL, realBase?.standardizedFileURL)
+        XCTAssertTrue(AppSupport.baseDirectory.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     }
 
     func testMigratesLegacyDirectoryWhenCurrentIsAbsent() throws {
@@ -54,5 +61,17 @@ final class AppSupportTests: XCTestCase {
         let expected = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         let fromDetached = await Task.detached { OpenCodeLocalStats.realHomeDirectory.standardizedFileURL.path }.value
         XCTAssertEqual(fromDetached, expected)
+    }
+}
+
+@MainActor
+final class AppModelTestIsolationTests: XCTestCase {
+    func testTestHostUsesThrowawayDefaultsSuite() {
+        let defaults = AppModel.makeDefaults()
+        XCTAssertNotIdentical(defaults, UserDefaults.standard)
+        defaults.set(true, forKey: "probe")
+        XCTAssertNil(UserDefaults.standard.object(forKey: "probe"))
+        XCTAssertNotNil(UserDefaults(suiteName: AppModel.testDefaultsSuiteName)?.object(forKey: "probe"))
+        defaults.removePersistentDomain(forName: AppModel.testDefaultsSuiteName)
     }
 }

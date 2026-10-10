@@ -1,14 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// Renders the menu bar status as a single bitmap.
-/// MenuBarExtra drops GeometryReader / Circle SwiftUI, so drawing is explicit.
+/// Renders the menu bar status as a single bitmap for the `NSStatusItem` button.
 ///
-/// Composites enabled provider segments in `providerOrder`:
-/// Grok (always) + optional Cursor / OpenCode / Claude / Grokbot.
+/// Composites the enabled provider segments whose menu-bar graph is switched
+/// on, in `providerOrder`: Grok / Cursor / OpenCode / Claude / Grokbot.
 ///
-/// The mutable statics (image cache, cached appearance, observer) are isolated
-/// to the main actor since rendering drives off SwiftUI's main-actor label.
+/// Rendered images are cached by a key covering every input, including the
+/// menu-bar appearance, so a light/dark switch renders afresh. The mutable
+/// statics (image cache, appearance in effect while drawing) are isolated to
+/// the main actor, where the status item is updated.
 @MainActor
 enum MenuBarStatusRenderer {
     /// A provider's clickable span in the rendered status image, in image
@@ -23,6 +24,9 @@ enum MenuBarStatusRenderer {
     struct RenderedStatus {
         let image: NSImage
         let regions: [Region]
+        /// Cache key of the inputs this image was drawn from; equal keys mean
+        /// an identical image.
+        var key = ""
     }
 
     private final class CachedStatus: NSObject {
@@ -41,7 +45,13 @@ enum MenuBarStatusRenderer {
         return cache
     }()
 
-    private static var appearanceObserver: NSObjectProtocol?
+    /// Appearance the current `render` call draws against.
+    private static var renderAppearance: NSAppearance?
+
+    /// Drops every cached image (tests start from an empty cache).
+    static func resetCache() {
+        _cache.removeAllObjects()
+    }
 
     // Renders the status item plus the provider hit regions for the same layout,
     // so a status-item click maps back to the provider whose bar it landed on.
@@ -65,9 +75,11 @@ enum MenuBarStatusRenderer {
         showGrokbotBar: Bool,
         providerOrder: [MonitorProvider],
         visibleProductIDs: Set<String>,
-        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders),
+        appearance: NSAppearance? = nil
     ) -> RenderedStatus {
-        ensureAppearanceObserver()
+        renderAppearance = appearance ?? menuBarAppearance()
+        defer { renderAppearance = nil }
 
         let grokProducts: [ProductUsage] = {
             guard let snapshot else { return [] }
@@ -97,7 +109,7 @@ enum MenuBarStatusRenderer {
             enabledProviders: enabledProviders
         )
         if let cached = _cache.object(forKey: cacheKey as NSString) {
-            return RenderedStatus(image: cached.image, regions: cached.regions)
+            return RenderedStatus(image: cached.image, regions: cached.regions, key: cacheKey)
         }
 
         let status = _render(
@@ -125,7 +137,7 @@ enum MenuBarStatusRenderer {
             CachedStatus(image: status.image, regions: status.regions),
             forKey: cacheKey as NSString
         )
-        return status
+        return RenderedStatus(image: status.image, regions: status.regions, key: cacheKey)
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -579,7 +591,7 @@ enum MenuBarStatusRenderer {
     }
 
     /// Bake a bitmap via `NSBitmapImageRep`; `lockFocus` can produce an empty image
-    /// when MenuBarExtra has no focused graphics context.
+    /// when no graphics context is focused.
     private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
         let scale: CGFloat = 2
         let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
@@ -704,43 +716,32 @@ enum MenuBarStatusRenderer {
         token.sRGB.nsColor
     }
 
+    private static var currentAppearance: NSAppearance {
+        renderAppearance ?? menuBarAppearance()
+    }
+
     private static var chromeColor: NSColor {
         var cg: CGColor = .black
-        menuBarAppearance().performAsCurrentDrawingAppearance {
+        currentAppearance.performAsCurrentDrawingAppearance {
             cg = NSColor.labelColor.cgColor
         }
         return NSColor(cgColor: cg) ?? .labelColor
     }
 
     private static var menuBarAppearanceName: String {
-        let bestMatch = menuBarAppearance().bestMatch(from: [.darkAqua, .aqua])
-        return bestMatch?.rawValue ?? menuBarAppearance().name.rawValue
+        let appearance = currentAppearance
+        return appearance.bestMatch(from: [.darkAqua, .aqua])?.rawValue ?? appearance.name.rawValue
     }
 
+    /// Fallback when the caller passes no appearance: the status bar window's,
+    /// found by walking the app's windows.
     private static func menuBarAppearance() -> NSAppearance {
-        // Prefer the status item over the dropdown panel; matching "MenuBarExtra"
-        // first can pick up the panel appearance while the menu is open.
-        var extra: NSAppearance?
         for window in NSApp.windows {
             let name = window.className
             if name.contains("StatusBar") || name.contains("NSStatusItem") {
                 return window.effectiveAppearance
             }
-            if extra == nil, name.contains("MenuBarExtra") {
-                extra = window.effectiveAppearance
-            }
         }
-        return extra ?? NSApp.effectiveAppearance
-    }
-
-    private static func ensureAppearanceObserver() {
-        guard appearanceObserver == nil else { return }
-        appearanceObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { _ in
-            _cache.removeAllObjects()
-        }
+        return NSApp.effectiveAppearance
     }
 }

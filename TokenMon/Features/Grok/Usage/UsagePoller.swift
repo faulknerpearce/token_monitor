@@ -1,4 +1,3 @@
-import AppKit
 import Combine
 import Foundation
 import os
@@ -10,7 +9,9 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let auth: AuthSessionService
     private let history: HistoryStore
@@ -21,20 +22,10 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     private let fetchUsage: (String?, String?) async throws -> WeeklyUsageSnapshot
     private let logger = Logger(category: "Poller")
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in
-            guard let self else { return nil }
-            return self.currentInterval() + self.backoff.current
-        },
-        refresh: { [weak self] in
-            guard let self, !self.pausedForSleep else { return }
-            await self.refreshNow()
-        }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
-    private var backoff = BackoffTimer(initial: 30, maximum: 600)
-    private var sleepObserver: NSObjectProtocol?
-    private var wakeObserver: NSObjectProtocol?
-    private var pausedForSleep = false
     private var cancellables = Set<AnyCancellable>()
 
     init(
@@ -54,7 +45,6 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         history.setActiveAccount(auth.accountEmail)
-        observeSleep()
         // Signing out or switching accounts drops the snapshot and the
         // account-scoped hourly deltas immediately. An expired session keeps
         // them: the same account usually signs back in.
@@ -63,17 +53,12 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             .store(in: &cancellables)
     }
 
-    deinit {
-        if let sleepObserver { NSWorkspace.shared.notificationCenter.removeObserver(sleepObserver) }
-        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
-    }
-
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -83,11 +68,14 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         grokHourly.clear()
     }
 
+    /// Fetches now when Grok is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        // Poll only when Grok is visible (menu bar / panel tab) or a session exists;
-        // avoid idle churn while signed out.
-        guard settings.needsGrokPolling || auth.isSignedIn else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.grok) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -95,7 +83,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         // instead of spinning on empty cookies every poll interval.
         guard auth.isSignedIn, !auth.needsSignIn else {
             lastError = ProviderError.notSignedIn(.grok).localizedDescription
-            return
+            return .skipped
         }
 
         let generation = auth.sessionGeneration
@@ -104,70 +92,43 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
 
         do {
             var snap = try await fetchUsage(cookieHeader, accountEmail)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             if snap.accountEmail == nil {
                 snap.accountEmail = auth.accountEmail
             }
             snapshot = snap
             lastError = nil
             lastRefreshedAt = Date()
-            backoff.reset()
             auth.recordAuthSuccess()
             history.append(snap)
             grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
             notifier.evaluate(usedPercent: snap.usedPercent, settings: settings, account: auth.accountEmail)
             logger.info("Usage refreshed: \(snap.usedPercent, format: .fixed(precision: 1))% used")
+            return .success
+        } catch is CancellationError {
+            return .skipped
         } catch let error as ProviderError {
             // A request that began under a previous credential state must not
             // tear down the current session.
-            guard auth.isCurrent(generation) else { return }
+            guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
             }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
-            applyBackoff()
+            lastError = error.localizedDescription
             logger.error("Refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         } catch {
-            guard auth.isCurrent(generation) else { return }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
-            applyBackoff()
+            guard auth.isCurrent(generation) else { return .skipped }
+            lastError = error.localizedDescription
             logger.error("Refresh failed: \(error.localizedDescription, privacy: .public)")
+            return PollOutcome(error: error)
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
-    }
-
-    private func applyBackoff() {
-        backoff.recordFailure()
-    }
-
-    private func observeSleep() {
-        let center = NSWorkspace.shared.notificationCenter
-        sleepObserver = center.addObserver(
-            forName: NSWorkspace.willSleepNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.pausedForSleep = true }
-        }
-        wakeObserver = center.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.pausedForSleep = false
-                await self?.refreshNow()
-            }
-        }
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsGrokPolling)
     }
 }
