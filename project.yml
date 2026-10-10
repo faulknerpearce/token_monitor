@@ -4,6 +4,8 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  # Sets LastUpgradeCheck / the scheme's LastUpgradeVersion.
+  xcodeVersion: "26.0"
 settings:
   base:
     SWIFT_VERSION: "5.10"
@@ -33,13 +35,16 @@ targets:
         COMBINE_HIDPI_IMAGES: YES
         GENERATE_INFOPLIST_FILE: NO
         MARKETING_VERSION: "1.7.3"
+        # Release builds override this with the commit count (Makefile BUILD_NUMBER).
         CURRENT_PROJECT_VERSION: "21"
-        PRIVACY_MANIFEST_FILE: TokenMon/Resources/PrivacyInfo.xcprivacy
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
+    # XcodeGen writes this file from `properties` on every `make project`;
+    # add entitlements here, not in the .entitlements file.
     entitlements:
       path: TokenMon/Resources/TokenMon.entitlements
+      properties: {}
   TokenMonTests:
     type: bundle.unit-test
     platform: macOS
@@ -63,6 +68,10 @@ schemes:
         TokenMon: all
         TokenMonTests: [test]
     test:
+      # Coverage is gathered for the app target only, never the test bundle.
+      gatherCoverageData: true
+      coverageTargets:
+        - TokenMon
       targets:
         - TokenMonTests
     run:

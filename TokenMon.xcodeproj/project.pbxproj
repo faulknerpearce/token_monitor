@@ -797,7 +797,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					9180ECBDB83F7FBB6499CE82 = {
 						ProvisioningStyle = Automatic;
@@ -1150,7 +1150,6 @@
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.7.3;
-				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
 				PRODUCT_NAME = TokenMon;
@@ -1169,7 +1168,6 @@
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.7.3;
-				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
 				PRODUCT_NAME = TokenMon;
