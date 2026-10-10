@@ -126,6 +126,18 @@ final class CursorEventCacheTests: XCTestCase {
         XCTAssertEqual(poller.dayHourlyUsage, hourly)
     }
 
+    // MARK: - Sign-in
+
+    func testAuthPageMatchesIdentityHostsExactlyOrBySuffix() {
+        XCTAssertTrue(CursorSignInView.isAuthPage(host: "github.com", path: "/session"))
+        XCTAssertTrue(CursorSignInView.isAuthPage(host: "authenticator.cursor.sh", path: "/"))
+        XCTAssertTrue(CursorSignInView.isAuthPage(host: "accounts.google.com", path: "/o/oauth2"))
+        XCTAssertTrue(CursorSignInView.isAuthPage(host: "cursor.com", path: "/login"))
+        XCTAssertFalse(CursorSignInView.isAuthPage(host: "github.com.evil.example", path: "/"))
+        XCTAssertFalse(CursorSignInView.isAuthPage(host: "notgithub.com", path: "/"))
+        XCTAssertFalse(CursorSignInView.isAuthPage(host: "cursor.com", path: "/dashboard"))
+    }
+
     // MARK: - Helpers
 
     private func makeClient(
