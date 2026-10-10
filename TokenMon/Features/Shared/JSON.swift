@@ -4,17 +4,51 @@ import Foundation
 /// keeping numeric coercion, key-order fallback, and nested traversal
 /// consistent across providers.
 enum JSON {
-    /// Coerces a decoded JSON value to `Double`, descending into `["val": …]` /
-    /// `["value": …]` wrappers the server emits around scalar fields.
+    /// Coerces a decoded JSON value to a finite `Double`, descending into
+    /// `["val": …]` / `["value": …]` wrappers the server emits around scalar
+    /// fields. Booleans, NaN and infinities are rejected.
     static func number(_ any: Any?) -> Double? {
+        let value: Double?
         switch any {
-        case let double as Double: return double
-        case let int as Int: return Double(int)
-        case let number as NSNumber: return number.doubleValue
-        case let string as String: return Double(string)
-        case let dict as [String: Any]: return number(dict["val"]) ?? number(dict["value"])
-        default: return nil
+        case let number as NSNumber:
+            guard !isBoolean(number) else { return nil }
+            value = number.doubleValue
+        case let string as String:
+            value = Double(string.trimmingCharacters(in: .whitespaces))
+        case let dict as [String: Any]:
+            return number(dict["val"]) ?? number(dict["value"])
+        default:
+            return nil
         }
+        guard let value, value.isFinite else { return nil }
+        return value
+    }
+
+    /// Coerces a decoded JSON value to `Decimal` without a `Double` round trip,
+    /// so money values keep their written digits (`"19.99"` stays 19.99).
+    /// Accepts numbers and numeric strings, descends into `val`/`value`
+    /// wrappers, and rejects booleans, NaN and infinities.
+    static func decimal(_ any: Any?) -> Decimal? {
+        switch any {
+        case let number as NSNumber:
+            guard !isBoolean(number), number.doubleValue.isFinite else { return nil }
+            return number.decimalValue
+        case let string as String:
+            let trimmed = string.trimmingCharacters(in: .whitespaces)
+            guard let parsed = Double(trimmed), parsed.isFinite else { return nil }
+            return Decimal(string: trimmed, locale: posixLocale)
+        case let dict as [String: Any]:
+            return decimal(dict["val"]) ?? decimal(dict["value"])
+        default:
+            return nil
+        }
+    }
+
+    private static let posixLocale = Locale(identifier: "en_US_POSIX")
+
+    /// True for `true`/`false`, which Foundation bridges to `NSNumber`.
+    private static func isBoolean(_ number: NSNumber) -> Bool {
+        CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
     /// Coerces a decoded JSON value to `String`.
@@ -51,7 +85,7 @@ enum JSON {
     /// Returns the first `Decimal` among `keys`, in order.
     static func firstDecimal(_ dict: [String: Any], keys: [String]) -> Decimal? {
         for key in keys {
-            if let value = number(dict[key]) { return Decimal(value) }
+            if let value = decimal(dict[key]) { return value }
         }
         return nil
     }

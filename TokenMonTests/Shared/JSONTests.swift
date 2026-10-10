@@ -14,6 +14,22 @@ final class JSONTests: XCTestCase {
         XCTAssertNil(JSON.number("abc"))
     }
 
+    func testNumberRejectsBooleansAndNonFiniteValues() throws {
+        XCTAssertNil(JSON.number(true))
+        XCTAssertNil(JSON.number(false))
+        XCTAssertNil(JSON.number(Double.nan))
+        XCTAssertNil(JSON.number(Double.infinity))
+        XCTAssertNil(JSON.number("NaN"))
+        XCTAssertNil(JSON.number("inf"))
+        XCTAssertNil(JSON.number("1e400"))
+        let decoded = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(#"{"flag":true,"one":1}"#.utf8)) as? [String: Any]
+        )
+        XCTAssertNil(JSON.number(decoded["flag"]))
+        XCTAssertEqual(JSON.number(decoded["one"]), 1)
+        XCTAssertNil(JSON.firstDouble(decoded, keys: ["flag"]))
+    }
+
     func testNumberDescendsIntoValAndValueDicts() {
         let val = ["val": 12.0] as [String: Any]
         let value = ["value": 88.5] as [String: Any]
@@ -67,6 +83,22 @@ final class JSONTests: XCTestCase {
         let dict: [String: Any] = ["value": 12.0, "val": 99.0]
         let result = JSON.firstDecimal(dict, keys: ["value", "val"])
         XCTAssertEqual(result, Decimal(12.0))
+    }
+
+    /// Money values keep their written digits instead of a binary-double expansion.
+    func testFirstDecimalKeepsMoneyPrecision() throws {
+        let decoded = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(#"{"n":19.99,"s":"1234567.89","b":true,"bad":"1.5abc","w":{"val":"0.1"}}"#.utf8)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(JSON.firstDecimal(decoded, keys: ["n"]), Decimal(string: "19.99"))
+        XCTAssertEqual(JSON.firstDecimal(decoded, keys: ["s"]), Decimal(string: "1234567.89"))
+        XCTAssertEqual(JSON.firstDecimal(decoded, keys: ["w"]), Decimal(string: "0.1"))
+        XCTAssertNil(JSON.firstDecimal(decoded, keys: ["b"]))
+        XCTAssertNil(JSON.firstDecimal(decoded, keys: ["bad"]))
+        XCTAssertNil(JSON.decimal("NaN"))
+        XCTAssertEqual(JSON.firstDecimal(decoded, keys: ["missing", "n"]), Decimal(string: "19.99"))
     }
 
     func testFirstBool() {
