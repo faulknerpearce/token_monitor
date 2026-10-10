@@ -41,20 +41,25 @@ enum ExportService {
         }
     }
 
-    private static func csvEscape(_ value: String) -> String {
-        // Spreadsheet formula-injection guard: a cell starting with =, +, -, or
-        // @ is executed as a formula when the export is opened in Excel/Sheets.
+    /// Escapes one CSV cell. A cell whose first character is `=`, `+`, `-`, `@`,
+    /// tab or carriage return is prefixed with `'` so spreadsheets do not run it
+    /// as a formula. A cell containing a comma, quote, line feed or carriage
+    /// return is quoted, with inner quotes doubled.
+    static func csvEscape(_ value: String) -> String {
         let sanitized: String
-        if let first = value.first, "=+-@".contains(first) {
+        if let first = value.unicodeScalars.first, formulaTriggers.contains(first) {
             sanitized = "'" + value
         } else {
             sanitized = value
         }
-        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") {
+        if sanitized.unicodeScalars.contains(where: { quoteTriggers.contains($0) }) {
             return "\"\(sanitized.replacingOccurrences(of: "\"", with: "\"\""))\""
         }
         return sanitized
     }
+
+    private static let formulaTriggers = Set("=+-@\t\r".unicodeScalars)
+    private static let quoteTriggers = Set(",\"\n\r".unicodeScalars)
 
     private struct ExportRow: Encodable {
         var fetchedAt: Date
