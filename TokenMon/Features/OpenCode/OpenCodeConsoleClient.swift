@@ -41,7 +41,7 @@ enum OpenCodeConsoleError: Error {
 /// Response carries the account's subscription access meters:
 /// `access.meters.{fiveHour,week,month}` with `limitMicroCents`/`usedMicroCents`.
 struct OpenCodeConsoleClient: Sendable {
-    static let baseURL = URL(string: "https://opencode.ai")!
+    static let baseURL = URL(staticString: "https://opencode.ai")
 
     /// Network seam: GET a console path, optionally scoped to an org id.
     typealias Get = @Sendable (_ path: String, _ orgID: String?) async throws -> Data
@@ -153,7 +153,7 @@ struct OpenCodeConsoleClient: Sendable {
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         if let orgID { request.setValue(orgID, forHTTPHeaderField: "x-org-id") }
 
-        let (data, response) = try await ProviderURLSession.shared.data(for: request)
+        let (data, response) = try await AuthenticatedRequest.data(for: request, session: ProviderURLSession.shared)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.openCode, "invalid response")
         }

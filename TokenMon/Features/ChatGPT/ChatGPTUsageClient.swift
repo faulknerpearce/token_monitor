@@ -6,7 +6,7 @@ import Foundation
 /// access token at `/api/auth/session`, which authorizes the internal
 /// `/backend-api/wham/usage` endpoint.
 struct ChatGPTUsageClient: Sendable {
-    static let baseURL = URL(string: "https://chatgpt.com")!
+    static let baseURL = URL(staticString: "https://chatgpt.com")
 
     /// One usage refresh: the parsed payload plus any `Set-Cookie` the server
     /// returned. NextAuth renews the session cookie on `/api/auth/session`, so

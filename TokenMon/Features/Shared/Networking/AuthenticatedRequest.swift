@@ -112,6 +112,19 @@ enum AuthenticatedRequest {
     /// - Parameter forbidden: Thrown in place of the mapped `.unauthorized` for a
     ///   non-challenge 403, for endpoints whose 403 refuses one feature while the
     ///   session stays valid.
+    /// `session.data(for:)`, with a cancelled request (system sleep, loop
+    /// restart) thrown as `CancellationError` so pollers skip it.
+    static func data(for request: URLRequest, session: URLSession) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            throw error
+        }
+    }
+
     static func performWithResponse(
         _ request: URLRequest,
         session: URLSession = ProviderURLSession.shared,
@@ -121,12 +134,10 @@ enum AuthenticatedRequest {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await Self.data(for: request, session: session)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            // A cancelled poll (system sleep, loop restart) surfaces as cancellation.
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
-                throw CancellationError()
-            }
             throw map(.network(error.localizedDescription))
         }
         guard let http = response as? HTTPURLResponse else {

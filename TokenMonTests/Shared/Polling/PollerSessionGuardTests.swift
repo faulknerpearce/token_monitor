@@ -139,7 +139,7 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: HistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in
                 auth.signOut()
@@ -159,7 +159,7 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: HistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in throw ProviderError.unauthorized(.grok) }
         )
@@ -175,7 +175,7 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: HistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in
                 auth.signOut()
@@ -334,6 +334,30 @@ final class PollerSessionGuardTests: XCTestCase {
         XCTAssertTrue(auth.isSignedIn)
         XCTAssertFalse(auth.needsSignIn)
         XCTAssertNotNil(poller.snapshot)
+    }
+
+    /// A network failure after a successful poll keeps the snapshot and reports
+    /// the error, and leaves the session signed in.
+    func testChatGPTFailureAfterDataReportsError() async {
+        let auth = ChatGPTAuthSession(directory: dir)
+        auth.save(cookieHeader: "__Secure-next-auth.session-token=live")
+        let attempts = AttemptCounter()
+        let poller = ChatGPTUsagePoller(
+            settings: settings(.chatgpt),
+            auth: auth,
+            fetchUsage: { _, _ in
+                if attempts.next() == 2 { throw ProviderError.network(.chatGPT, "offline") }
+                return self.chatGPTFetch()
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertNil(poller.lastError)
+        await poller.refreshNow()
+        XCTAssertNotNil(poller.snapshot)
+        XCTAssertNotNil(poller.lastError)
+        XCTAssertFalse(auth.needsSignIn)
+        await poller.refreshNow()
+        XCTAssertNil(poller.lastError)
     }
 
     /// A renewed session cookie from `Set-Cookie` is folded into the stored jar.

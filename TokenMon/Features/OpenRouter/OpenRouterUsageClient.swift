@@ -9,7 +9,7 @@ import Foundation
 ///   they are requested only after `/key` reports one (or does not say), and a
 ///   failure on either degrades quietly.
 struct OpenRouterUsageClient: Sendable {
-    static let baseURL = URL(string: "https://openrouter.ai/api/v1")!
+    static let baseURL = URL(staticString: "https://openrouter.ai/api/v1")
 
     /// Endpoint paths, resolved under `baseURL`.
     enum Endpoint: String, CaseIterable, Sendable {

@@ -164,8 +164,6 @@ struct DailyUsageDay: Identifiable, Hashable, Sendable {
     var isToday: Bool
     /// True when a billing-period rollover or mid-period rebase started on this day.
     var isAfterReset: Bool
-    /// Exact reset time when this is the reset day.
-    var resetAt: Date?
 
     var totalPercent: Double {
         segments.reduce(0) { $0 + $1.percentOfWeekly }
@@ -177,15 +175,6 @@ struct DailyUsageLegendItem: Identifiable, Hashable, Sendable {
     var id: String
     var displayName: String
     var colorToken: ProductColor
-}
-
-/// Server-provided daily usage row (when a daily API is discovered).
-struct DailyUsageSnapshot: Identifiable, Hashable, Codable, Sendable {
-    var dayStart: Date
-    var percentOfWeekly: Double
-    var products: [ProductUsage]
-
-    var id: Date { dayStart }
 }
 
 /// Billing-period window for the daily use chart (e.g. Thu→Wed when the pool resets Thursday).
@@ -221,8 +210,6 @@ struct WeeklyUsageSnapshot: Codable, Identifiable, Hashable, Sendable {
     var products: [ProductUsage]
     var extraCreditsBalance: Decimal?
     var accountEmail: String?
-    /// Per-day series from the server when available; empty otherwise.
-    var dailySeries: [DailyUsageSnapshot]
 
     init(
         id: UUID = UUID(),
@@ -232,8 +219,7 @@ struct WeeklyUsageSnapshot: Codable, Identifiable, Hashable, Sendable {
         resetsAt: Date? = nil,
         products: [ProductUsage] = [],
         extraCreditsBalance: Decimal? = nil,
-        accountEmail: String? = nil,
-        dailySeries: [DailyUsageSnapshot] = []
+        accountEmail: String? = nil
     ) {
         self.id = id
         self.fetchedAt = fetchedAt
@@ -247,12 +233,6 @@ struct WeeklyUsageSnapshot: Codable, Identifiable, Hashable, Sendable {
         self.products = products
         self.extraCreditsBalance = extraCreditsBalance
         self.accountEmail = accountEmail
-        self.dailySeries = dailySeries
-    }
-
-    /// Products with non-zero contribution, preserving API order.
-    var visibleProducts: [ProductUsage] {
-        products.filter { $0.percentOfPool > 0.05 }
     }
 
     static let preview = WeeklyUsageSnapshot(

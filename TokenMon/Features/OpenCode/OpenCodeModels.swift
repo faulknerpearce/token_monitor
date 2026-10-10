@@ -57,6 +57,9 @@ struct OpenCodeModelUsage: Identifiable, Hashable, Sendable {
     var percentOfWindow: Double
     /// True when `costUSD` was derived from tokens (Zen $0 rows).
     var isCostEstimated: Bool = false
+    /// True when some of the model's `$0` usage has no published rate, so
+    /// `costUSD` leaves that usage out.
+    var isCostUnpriced: Bool = false
 
     var id: String { "\(providerID)/\(modelID)" }
 

@@ -64,6 +64,8 @@ struct UsageClient: Sendable {
             return try await fetchGRPCWebBilling()
         } catch let error as ProviderError where error.usageError == .unauthorized {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             logger.warning("gRPC-web billing failed: \(error.localizedDescription, privacy: .public)")
             if let rest = await fetchRESTBreakdown() {
@@ -78,7 +80,7 @@ struct UsageClient: Sendable {
     /// First REST probe that returns parseable usage, or `nil`. Every failure,
     /// including 401/403, only moves on to the next path.
     private func fetchRESTBreakdown() async -> WeeklyUsageSnapshot? {
-        for url in Self.restCandidates {
+        for url in Self.restCandidates where !Task.isCancelled {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.timeoutInterval = 15
@@ -116,7 +118,7 @@ struct UsageClient: Sendable {
         request.setValue("https://grok.com/?_s=usage", forHTTPHeaderField: "Referer")
         request.setValue(AppIdentity.userAgent, forHTTPHeaderField: "User-Agent")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AuthenticatedRequest.data(for: request, session: session)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.grok, "Invalid response")
         }

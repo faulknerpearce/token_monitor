@@ -9,7 +9,7 @@ import os
 /// re-fetched at most every ``eventsRefreshInterval``, or sooner when the day
 /// or billing cycle changes. A failed events fetch reuses the cached aggregates.
 struct CursorUsageClient: Sendable {
-    static let baseURL = URL(string: "https://cursor.com")!
+    static let baseURL = URL(staticString: "https://cursor.com")
     private static let log = Logger(category: "Cursor")
 
     /// Minimum age of cached event aggregates before events are paged again.

@@ -164,10 +164,8 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             if let hourly { dayHourlyUsage = hourly }
             guard let snap else {
                 // The hourly read may still have succeeded; only the snapshot is
-                // missing, so any prior card stays.
-                if snapshot == nil {
-                    lastError = "Could not read local OpenCode usage."
-                }
+                // missing, so any prior card stays with this error under it.
+                lastError = "Could not read local OpenCode usage."
                 return consoleOutcome
             }
             snapshot = snap
@@ -192,9 +190,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             // Compare the generation only. A poll that started signed out fails
             // `isCurrent`, and it still surfaces a local-read error.
             guard auth.sessionGeneration == generation else { return .skipped }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            lastError = error.localizedDescription
             logger.error("OpenCode local refresh failed: \(error.localizedDescription, privacy: .public)")
             return consoleOutcome
         }

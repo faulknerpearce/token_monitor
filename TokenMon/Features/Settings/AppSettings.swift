@@ -200,42 +200,42 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Whether Grok needs polling (panel tab, menu-bar graph, or the usage
-    /// threshold alert, which is evaluated on each Grok poll).
+    /// Whether Grok needs polling (panel tab, menu-bar graph, or the usage alert,
+    /// which is evaluated on each poll).
     var needsGrokPolling: Bool {
         isProviderEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar || thresholdEnabled)
     }
 
-    /// Whether OpenCode needs polling (panel tab or menu-bar graph).
+    /// Whether OpenCode needs polling (panel tab, menu-bar graph, or the usage alert).
     var needsOpenCodePolling: Bool {
-        isProviderEnabled(.opencode) && (selectedProvider.polls(.opencode) || showOpenCodeBarInMenuBar)
+        isProviderEnabled(.opencode) && (selectedProvider.polls(.opencode) || showOpenCodeBarInMenuBar || thresholdEnabled)
     }
 
-    /// Whether Cursor needs polling (panel tab or menu-bar graph).
+    /// Whether Cursor needs polling (panel tab, menu-bar graph, or the usage alert).
     var needsCursorPolling: Bool {
-        isProviderEnabled(.cursor) && (selectedProvider.polls(.cursor) || showCursorBarInMenuBar)
+        isProviderEnabled(.cursor) && (selectedProvider.polls(.cursor) || showCursorBarInMenuBar || thresholdEnabled)
     }
 
-    /// Whether Claude needs polling (panel tab or menu-bar graph).
+    /// Whether Claude needs polling (panel tab, menu-bar graph, or the usage alert).
     var needsClaudePolling: Bool {
-        isProviderEnabled(.claude) && (selectedProvider.polls(.claude) || showClaudeBarInMenuBar)
+        isProviderEnabled(.claude) && (selectedProvider.polls(.claude) || showClaudeBarInMenuBar || thresholdEnabled)
     }
 
-    /// Whether ChatGPT/Codex needs polling (panel tab).
+    /// Whether ChatGPT/Codex needs polling (panel tab or the usage alert).
     var needsChatGPTPolling: Bool {
-        isProviderEnabled(.chatgpt) && selectedProvider.polls(.chatgpt)
+        isProviderEnabled(.chatgpt) && (selectedProvider.polls(.chatgpt) || thresholdEnabled)
     }
 
-    /// Whether OpenRouter needs polling (panel tab).
+    /// Whether OpenRouter needs polling (panel tab or the usage alert).
     var needsOpenRouterPolling: Bool {
-        isProviderEnabled(.openrouter) && selectedProvider.polls(.openrouter)
+        isProviderEnabled(.openrouter) && (selectedProvider.polls(.openrouter) || thresholdEnabled)
     }
 
-    /// Whether Grokbot needs polling (panel tab or menu-bar graph). Gated on
+    /// Whether Grokbot needs polling (panel tab, menu-bar graph, or the usage alert). Gated on
     /// Grokbot being enabled so only an enabled Grokbot uses the shared Cursor
     /// session.
     var needsGrokbotPolling: Bool {
-        isProviderEnabled(.grokbot) && (selectedProvider.polls(.grokbot) || showGrokbotBarInMenuBar)
+        isProviderEnabled(.grokbot) && (selectedProvider.polls(.grokbot) || showGrokbotBarInMenuBar || thresholdEnabled)
     }
 
     /// Guards against recursive `didSet` when registration fails and the value is reverted.

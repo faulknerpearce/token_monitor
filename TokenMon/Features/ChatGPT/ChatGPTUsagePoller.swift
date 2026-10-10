@@ -133,9 +133,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func reportFailure(_ error: Error) {
-        if snapshot == nil {
-            lastError = error.localizedDescription
-        }
+        lastError = error.localizedDescription
         logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
     }
 

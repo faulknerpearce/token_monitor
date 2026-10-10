@@ -3,15 +3,23 @@ import Foundation
 import os
 import UserNotifications
 
-/// Fires one local notification per usage-threshold crossing.
+/// One usage-threshold crossing to deliver.
+struct ThresholdAlert: Equatable {
+    var provider: MonitorProvider
+    var usedPercent: Double
+    var threshold: Double
+}
+
+/// Fires one local notification per usage-threshold crossing, tracked
+/// separately for each provider and account.
 @MainActor
 final class ThresholdNotifier: ObservableObject {
     private let logger = Logger(category: "Alerts")
     private let defaults: UserDefaults
     /// Delivery seam (tests record calls); defaults to a local notification.
-    private let deliver: (Double, Double) -> Void
+    private let deliver: (ThresholdAlert) -> Void
 
-    init(defaults: UserDefaults = .standard, deliver: ((Double, Double) -> Void)? = nil) {
+    init(defaults: UserDefaults = .standard, deliver: ((ThresholdAlert) -> Void)? = nil) {
         self.defaults = defaults
         self.deliver = deliver ?? Self.postLocalNotification
     }
@@ -32,18 +40,25 @@ final class ThresholdNotifier: ObservableObject {
         }
     }
 
-    /// Records a threshold crossing for `account` and delivers once per threshold
-    /// within a billing period. `resetsAt` names the period: when it moves to a
-    /// later period than the one the last alert was recorded in, the record is
-    /// cleared, so the new period alerts whether or not a poll saw usage drop.
-    func evaluate(usedPercent: Double, settings: AppSettings, account: String?, resetsAt: Date? = nil) {
+    /// Records a threshold crossing for `provider` and `account` and delivers
+    /// once per threshold within a billing period. `resetsAt` names the period:
+    /// when it moves to a later period than the one the last alert was recorded
+    /// in, the record is cleared, so the new period alerts whether or not a poll
+    /// saw usage drop.
+    func evaluate(
+        provider: MonitorProvider = .grok,
+        usedPercent: Double,
+        settings: AppSettings,
+        account: String?,
+        resetsAt: Date? = nil
+    ) {
         guard settings.thresholdEnabled else { return }
         let threshold = settings.thresholdPercent
-        // Persisted and account-scoped, so an alert the user already saw stays
-        // suppressed across relaunches and account switches while usage remains
-        // above the threshold.
-        let key = Self.notifiedKey(account: account)
-        let periodKey = Self.notifiedPeriodKey(account: account)
+        // Persisted and scoped to provider and account, so an alert the user
+        // already saw stays suppressed across relaunches and account switches
+        // while usage remains above the threshold.
+        let key = Self.notifiedKey(provider: provider, account: account)
+        let periodKey = Self.notifiedPeriodKey(provider: provider, account: account)
         var last = defaults.object(forKey: key) as? Double
         if last != nil, let resetsAt {
             let recordedReset = defaults.object(forKey: periodKey) as? Double
@@ -71,15 +86,22 @@ final class ThresholdNotifier: ObservableObject {
         if let resetsAt {
             defaults.set(resetsAt.timeIntervalSince1970, forKey: periodKey)
         }
-        deliver(usedPercent, threshold)
+        deliver(ThresholdAlert(provider: provider, usedPercent: usedPercent, threshold: threshold))
     }
 
-    static func notifiedKey(account: String?) -> String {
-        "thresholdNotified.\(account ?? "default")"
+    /// Defaults key of the last notified threshold. Grok's keys carry no
+    /// provider segment.
+    static func notifiedKey(provider: MonitorProvider = .grok, account: String?) -> String {
+        "thresholdNotified.\(scope(provider: provider, account: account))"
     }
 
-    static func notifiedPeriodKey(account: String?) -> String {
-        "thresholdNotifiedResetsAt.\(account ?? "default")"
+    static func notifiedPeriodKey(provider: MonitorProvider = .grok, account: String?) -> String {
+        "thresholdNotifiedResetsAt.\(scope(provider: provider, account: account))"
+    }
+
+    private static func scope(provider: MonitorProvider, account: String?) -> String {
+        let account = account ?? "default"
+        return provider == .grok ? account : "\(provider.rawValue).\(account)"
     }
 
     /// True when `resetsAt` ends a later period than the recorded reset. An
@@ -100,17 +122,19 @@ final class ThresholdNotifier: ObservableObject {
         return true
     }
 
-    private static func postLocalNotification(usedPercent: Double, threshold: Double) {
+    /// Notification text for `alert`.
+    nonisolated static func body(for alert: ThresholdAlert) -> String {
+        let usage = alert.provider == .grok ? "Weekly SuperGrok usage" : "\(alert.provider.displayName) usage"
+        return String(format: "%@ is at %.0f%% (threshold %.0f%%).", usage, alert.usedPercent, alert.threshold)
+    }
+
+    private static func postLocalNotification(_ alert: ThresholdAlert) {
         let content = UNMutableNotificationContent()
         content.title = "TokenMon Alert"
-        content.body = String(
-            format: "Weekly SuperGrok usage is at %.0f%% (threshold %.0f%%).",
-            usedPercent,
-            threshold
-        )
+        content.body = body(for: alert)
         content.sound = .default
         let request = UNNotificationRequest(
-            identifier: "grok-usage-threshold-\(Int(threshold))",
+            identifier: "\(alert.provider.rawValue)-usage-threshold-\(Int(alert.threshold))",
             content: content,
             trigger: nil
         )

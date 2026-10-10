@@ -39,19 +39,15 @@ struct ChatGPTPanelView: View {
                     }
                 }
 
-                if auth.needsSignIn || poller.lastError != nil {
-                    if let err = poller.lastError {
-                        Text(err)
-                            .font(PanelTypography.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                    }
-                    ProviderSignInButton(
-                        provider: .chatgpt,
-                        title: auth.needsSignIn ? "Sign In to ChatGPT…" : "Sign In Again…",
-                        action: openSignIn
-                    )
-                    .padding(.top, 8)
+                if let err = poller.lastError {
+                    StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
+                        .padding(.top, 8)
+                }
+                // Only a rejected session needs a new sign-in; network and
+                // server errors clear on a later refresh.
+                if auth.needsSignIn {
+                    ProviderSignInButton(provider: .chatgpt, title: "Sign In Again…", action: openSignIn)
+                        .padding(.top, 8)
                 }
 
                 ProviderSignOutButton(provider: .chatgpt) {

@@ -34,7 +34,7 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: "1.8.0"
+        MARKETING_VERSION: "1.8.1"
         # Release builds override this with the commit count (Makefile BUILD_NUMBER).
         CURRENT_PROJECT_VERSION: "21"
       configs:

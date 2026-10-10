@@ -211,11 +211,3 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertEqual(URL(staticString: "https://grok.com/rest/usage").host, "grok.com")
     }
 }
-
-/// Accepts every request and never answers, so only cancellation ends it.
-private final class NeverRespondingURLProtocol: URLProtocol {
-    override static func canInit(with request: URLRequest) -> Bool { true }
-    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func startLoading() {}
-    override func stopLoading() {}
-}

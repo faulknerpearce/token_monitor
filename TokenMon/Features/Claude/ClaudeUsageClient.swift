@@ -2,7 +2,7 @@ import Foundation
 
 /// Fetches claude.ai rate-limit usage via the cookie-authenticated internal endpoint.
 struct ClaudeUsageClient: Sendable {
-    static let baseURL = URL(string: "https://claude.ai")!
+    static let baseURL = URL(staticString: "https://claude.ai")
 
     private let cookieHeader: String
 

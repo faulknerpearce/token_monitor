@@ -80,13 +80,23 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(settings.needsGrokPolling)
     }
 
-    /// The usage threshold alert is evaluated on Grok polls, so it keeps Grok polling.
-    func testThresholdAlertKeepsGrokPolling() {
+    /// The usage alert is evaluated on each provider's polls, so it keeps every
+    /// enabled provider polling.
+    func testThresholdAlertKeepsEveryProviderPolling() {
         let settings = makeSettings()
-        settings.selectedProvider = .cursor
+        settings.enabledProviderIDs = Set(MonitorProvider.allCases.filter { $0 != .overview })
+        settings.selectedProvider = .grok
         settings.showGrokBarInMenuBar = false
+        settings.showOpenCodeBarInMenuBar = false
+        settings.showCursorBarInMenuBar = false
+        settings.showClaudeBarInMenuBar = false
+        settings.showGrokbotBarInMenuBar = false
         settings.thresholdEnabled = true
-        XCTAssertTrue(settings.needsGrokPolling)
+        for provider in MonitorProvider.allCases where provider != .overview {
+            XCTAssertTrue(settings.needsPolling(provider), "\(provider)")
+        }
+        settings.thresholdEnabled = false
+        XCTAssertFalse(settings.needsPolling(.chatgpt))
     }
 
     func testNeedsOpenCodeAndCursorPollingOnOverview() {
@@ -99,6 +109,7 @@ final class AppSettingsTests: XCTestCase {
 
     func testNeedsPollingOffWhenBarsHiddenAndOtherTabSelected() {
         let settings = makeSettings()
+        settings.thresholdEnabled = false
         settings.selectedProvider = .grok
         settings.showCursorBarInMenuBar = false
         settings.showOpenCodeBarInMenuBar = false
@@ -110,6 +121,7 @@ final class AppSettingsTests: XCTestCase {
 
     func testNeedsGrokbotPollingFollowsBarAndProvider() {
         let settings = makeSettings()
+        settings.thresholdEnabled = false
         settings.selectedProvider = .cursor
         settings.showGrokbotBarInMenuBar = false
         XCTAssertFalse(settings.needsGrokbotPolling)
@@ -127,6 +139,7 @@ final class AppSettingsTests: XCTestCase {
 
     func testNeedsClaudePollingFollowsBarAndProvider() {
         let settings = makeSettings()
+        settings.thresholdEnabled = false
         settings.selectedProvider = .cursor
         settings.showClaudeBarInMenuBar = false
         XCTAssertFalse(settings.needsClaudePolling)
@@ -293,6 +306,7 @@ final class AppSettingsTests: XCTestCase {
 
     func testNeedsPollingMatchesTheProviderFlags() {
         let settings = makeSettings()
+        settings.thresholdEnabled = false
         settings.selectedProvider = .chatgpt
         XCTAssertEqual(settings.needsPolling(.grok), settings.needsGrokPolling)
         XCTAssertEqual(settings.needsPolling(.cursor), settings.needsCursorPolling)

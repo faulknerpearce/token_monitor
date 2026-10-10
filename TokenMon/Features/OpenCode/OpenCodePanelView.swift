@@ -51,19 +51,17 @@ struct OpenCodePanelView: View {
                     )
                 }
 
-                if auth.needsSignIn || poller.lastError != nil {
-                    if let err = poller.lastError {
-                        Text(err)
-                            .font(PanelTypography.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                    }
-                    ProviderSignInButton(
-                        provider: .opencode,
-                        title: auth.needsSignIn ? "Sign In to OpenCode…" : "Sign In Again…",
-                        action: openSignIn
-                    )
-                    .padding(.top, 8)
+                if let err = poller.lastError {
+                    Text(err)
+                        .font(PanelTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                }
+                // The local estimate shows without a console session; a sign-in
+                // is offered when there is none or it was rejected.
+                if auth.needsSignIn {
+                    ProviderSignInButton(provider: .opencode, title: "Sign In to OpenCode…", action: openSignIn)
+                        .padding(.top, 8)
                 }
 
                 ProviderSignOutButton(provider: .opencode) {
@@ -270,8 +268,11 @@ struct OpenCodeModelWeekRow: View {
     }
 
     private var costLabel: String {
+        if model.isCostUnpriced, model.costUSD == 0 {
+            return "No price"
+        }
         let formatted = Format.usdCurrency.string(from: NSNumber(value: model.costUSD)) ?? "$0"
-        if model.isCostEstimated {
+        if model.isCostEstimated || model.isCostUnpriced {
             return "~\(formatted)"
         }
         return formatted

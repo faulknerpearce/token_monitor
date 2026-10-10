@@ -128,7 +128,6 @@ The daily chart is therefore built from local samples (`DailyUsageBuilder`):
 2. Bars are deltas between successive local end-of-day samples in the same billing period. They stay empty until two same-period sample days exist.
 3. A period rollover advances the whole window; two periods never share a bar.
 4. Past weeks (chevron left) anchor to that week's own reset from local samples, so last week's bars remain after the weekly reset.
-5. A server daily series (`WeeklyUsageSnapshot.dailySeries`) is used only when local samples cannot paint bars.
 
 ### Expected JSON fields (defensive)
 
