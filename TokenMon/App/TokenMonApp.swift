@@ -218,6 +218,7 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _ in self?.updateChecker.settingChanged() }
             .store(in: &cancellables)
         observePollingInputs()
+        observeUsageAlerts()
         guard !Self.isRunningTests else { return }
         notifier.requestAuthorizationIfNeeded()
         providers.startAll()
@@ -285,6 +286,51 @@ final class AppModel: ObservableObject {
                 .filter { $0 }
                 .sink { _ in Task { await providerPoller.refreshNow() } }
                 .store(in: &cancellables)
+        }
+    }
+
+    /// Evaluates the usage alert on every published snapshot of the providers
+    /// other than Grok, whose poller evaluates it with its history write.
+    private func observeUsageAlerts() {
+        func watch<Snapshot>(
+            _ snapshots: Published<Snapshot?>.Publisher,
+            _ provider: MonitorProvider,
+            account: @escaping () -> String?,
+            reading: @escaping (Snapshot) -> (usedPercent: Double?, resetsAt: Date?)
+        ) {
+            snapshots
+                .compactMap { $0 }
+                .sink { [weak self] snapshot in
+                    guard let self else { return }
+                    let (usedPercent, resetsAt) = reading(snapshot)
+                    guard let usedPercent else { return }
+                    notifier.evaluate(
+                        provider: provider,
+                        usedPercent: usedPercent,
+                        settings: settings,
+                        account: account(),
+                        resetsAt: resetsAt
+                    )
+                }
+                .store(in: &cancellables)
+        }
+        watch(claudePoller.$snapshot, .claude, account: { [claudeAuth] in claudeAuth.accountEmail }) {
+            ($0.headlineUsedPercent, $0.resetsAt)
+        }
+        watch(chatGPTPoller.$snapshot, .chatgpt, account: { [chatGPTAuth] in chatGPTAuth.accountEmail }) {
+            ($0.headlineUsedPercent, $0.resetsAt)
+        }
+        watch(cursorPoller.$snapshot, .cursor, account: { [cursorAuth] in cursorAuth.accountEmail }) {
+            ($0.usedPercent, $0.resetsAt)
+        }
+        watch(grokbotPoller.$snapshot, .grokbot, account: { [cursorAuth] in cursorAuth.accountEmail }) {
+            ($0.usedPercent, $0.resetsAt)
+        }
+        watch(openCodePoller.$snapshot, .opencode, account: { [openCodeAuth] in openCodeAuth.accountEmail }) {
+            ($0.primaryUsedPercent, nil)
+        }
+        watch(openRouterPoller.$snapshot, .openrouter, account: { nil }) {
+            ($0.usedPercent, nil)
         }
     }
 

@@ -54,7 +54,7 @@ final class ThresholdNotifierTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = makeSettings(defaults, threshold: 80)
         let recorder = Recorder()
-        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
 
         notifier.evaluate(usedPercent: 85, settings: settings, account: "a@b.com")
         XCTAssertEqual(recorder.calls, [85])
@@ -72,12 +72,12 @@ final class ThresholdNotifierTests: XCTestCase {
         let settings = makeSettings(defaults, threshold: 80)
 
         let first = Recorder()
-        ThresholdNotifier(defaults: defaults) { used, _ in first.calls.append(used) }
+        ThresholdNotifier(defaults: defaults) { alert in first.calls.append(alert.usedPercent) }
             .evaluate(usedPercent: 85, settings: settings, account: "a@b.com")
         XCTAssertEqual(first.calls, [85])
 
         let second = Recorder()
-        ThresholdNotifier(defaults: defaults) { used, _ in second.calls.append(used) }
+        ThresholdNotifier(defaults: defaults) { alert in second.calls.append(alert.usedPercent) }
             .evaluate(usedPercent: 88, settings: settings, account: "a@b.com")
         XCTAssertTrue(second.calls.isEmpty)
     }
@@ -91,11 +91,42 @@ final class ThresholdNotifierTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = makeSettings(defaults, threshold: 80)
         let recorder = Recorder()
-        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
 
         notifier.evaluate(usedPercent: 85, settings: settings, account: "a@b.com")
         notifier.evaluate(usedPercent: 85, settings: settings, account: "c@d.com")
         XCTAssertEqual(recorder.calls.count, 2)
+    }
+
+    /// Each provider keeps its own record, so one provider's alert leaves
+    /// another's armed; Grok keeps its unprefixed keys.
+    @MainActor
+    func testEvaluateIsProviderScoped() {
+        let suite = "ThresholdNotifierTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = makeSettings(defaults, threshold: 80)
+        var alerts: [ThresholdAlert] = []
+        let notifier = ThresholdNotifier(defaults: defaults) { alerts.append($0) }
+
+        notifier.evaluate(provider: .grok, usedPercent: 85, settings: settings, account: "a@b.com")
+        notifier.evaluate(provider: .claude, usedPercent: 90, settings: settings, account: "a@b.com")
+        notifier.evaluate(provider: .claude, usedPercent: 92, settings: settings, account: "a@b.com")
+
+        XCTAssertEqual(alerts.map(\.provider), [.grok, .claude])
+        XCTAssertNotNil(defaults.object(forKey: "thresholdNotified.a@b.com"))
+        XCTAssertNotNil(defaults.object(forKey: "thresholdNotified.claude.a@b.com"))
+    }
+
+    func testNotificationBodyNamesTheProvider() {
+        XCTAssertEqual(
+            ThresholdNotifier.body(for: ThresholdAlert(provider: .grok, usedPercent: 85.4, threshold: 80)),
+            "Weekly SuperGrok usage is at 85% (threshold 80%)."
+        )
+        XCTAssertEqual(
+            ThresholdNotifier.body(for: ThresholdAlert(provider: .cursor, usedPercent: 91, threshold: 90)),
+            "Cursor usage is at 91% (threshold 90%)."
+        )
     }
 
     @MainActor
@@ -105,7 +136,7 @@ final class ThresholdNotifierTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = makeSettings(defaults, threshold: 75)
         let recorder = Recorder()
-        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
 
         notifier.evaluate(usedPercent: 81, settings: settings, account: nil)
         XCTAssertEqual(recorder.calls.count, 1)
@@ -126,7 +157,7 @@ final class ThresholdNotifierTests: XCTestCase {
         let settings = makeSettings(defaults, threshold: 80)
         settings.thresholdEnabled = false
         let recorder = Recorder()
-        ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
             .evaluate(usedPercent: 99, settings: settings, account: nil)
         XCTAssertTrue(recorder.calls.isEmpty)
     }
@@ -140,7 +171,7 @@ final class ThresholdNotifierTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = makeSettings(defaults, threshold: 80)
         let recorder = Recorder()
-        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
         let firstReset = Date(timeIntervalSince1970: 1_784_000_000)
         let nextReset = firstReset.addingTimeInterval(7 * 86_400)
 
@@ -171,7 +202,7 @@ final class ThresholdNotifierTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = makeSettings(defaults, threshold: 80)
         let recorder = Recorder()
-        let notifier = ThresholdNotifier(defaults: defaults) { used, _ in recorder.calls.append(used) }
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
         let reset = Date(timeIntervalSince1970: 1_784_000_000)
 
         notifier.evaluate(usedPercent: 85, settings: settings, account: nil)

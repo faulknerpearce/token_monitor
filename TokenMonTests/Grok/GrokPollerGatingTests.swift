@@ -32,7 +32,7 @@ final class GrokPollerGatingTests: XCTestCase {
             auth: auth,
             history: HistoryStore(inMemory: true),
             settings: settings,
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: HourlyDeltaActivityStore(
                 store: FileBackedStringStore(directory: dir, filenamePrefix: "hourly_"),
                 storageKey: "grok"

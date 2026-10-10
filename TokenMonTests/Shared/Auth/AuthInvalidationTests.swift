@@ -186,7 +186,7 @@ final class AuthInvalidationTests: XCTestCase {
             auth: auth,
             history: HistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _, _ in }),
+            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourly,
             fetchUsage: { _, _ in throw ProviderError.unauthorized(.grok) }
         )
