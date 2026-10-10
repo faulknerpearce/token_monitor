@@ -23,9 +23,9 @@ enum OpenCodeLocalStatsError: LocalizedError {
 enum OpenCodeLocalStats {
     static let rolling5hSeconds: TimeInterval = 5 * 3600
 
-    /// Real user home, not the sandbox container home (`NSHomeDirectory` would
-    /// resolve to the app container). Resolved once with the reentrant
-    /// `getpwuid_r`, so detached readers never share `getpwuid`'s static buffer.
+    /// Real user home outside the sandbox container (`NSHomeDirectory` resolves
+    /// to the app container). Resolved once with the reentrant `getpwuid_r`, so
+    /// detached readers avoid sharing `getpwuid`'s static buffer.
     static let realHomeDirectory: URL = {
         var record = passwd()
         var result: UnsafeMutablePointer<passwd>?
@@ -47,8 +47,8 @@ enum OpenCodeLocalStats {
         databaseDirectory.appendingPathComponent("opencode.db")
     }
 
-    /// OpenCode Go subscription usage only (`opencode-go`). Zen (`opencode`)
-    /// and direct provider keys do not count toward Go $12 / $30 / $60 limits.
+    /// OpenCode Go subscription usage only (`opencode-go`); only these count
+    /// toward the Go $12 / $30 / $60 limits.
     static func goEligibleProvider(_ providerID: String) -> Bool {
         providerID.lowercased() == "opencode-go"
     }
@@ -59,7 +59,7 @@ enum OpenCodeLocalStats {
         OpenCodeZenCostEstimate.isPlanProvider(providerID)
     }
 
-    /// Grok used through the OpenCode harness (counts toward Overview Grok, not OpenCode).
+    /// Grok used through the OpenCode harness (counts toward Overview Grok).
     static func grokViaOpenCode(providerID: String, modelID: String = "") -> Bool {
         let provider = providerID.lowercased()
         if provider == "xai" { return true }
@@ -534,7 +534,7 @@ enum OpenCodeLocalStats {
         var step = sqlite3_step(stmt)
         while step == SQLITE_ROW {
             // `defer` advances the cursor even on the `continue` path below, so
-            // a skipped row cannot leave the loop stepping forever.
+            // a skipped row still moves the loop forward.
             defer { step = sqlite3_step(stmt) }
             let providerID = text(2)
             let modelID = text(3)
@@ -552,7 +552,7 @@ enum OpenCodeLocalStats {
             ))
         }
         // A terminal error (e.g. SQLITE_BUSY past the timeout, or a corrupt page)
-        // must not be reported as a successful partial read that undercounts.
+        // throws, so a partial read that undercounts surfaces as a failure.
         guard step == SQLITE_DONE else {
             throw OpenCodeLocalStatsError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
@@ -611,7 +611,7 @@ enum OpenCodeLocalStats {
         var periodStart: Date
         /// Percent of the monthly pool, scaled so in-period days sum to the headline used %.
         var spentPercentByDay: [Date: Double]
-        /// Percent of the monthly limit for days before the period. Not scaled into the headline.
+        /// Percent of the monthly limit for days before the period, unscaled.
         var historyPercentByDay: [Date: Double]
         var knownStart: Date?
         var resetsAt: Date?
@@ -626,7 +626,7 @@ enum OpenCodeLocalStats {
     /// signal exists.
     ///
     /// `weekOffset` selects an earlier Monday week. Days before the billing
-    /// period come from local history and are not mixed into the headline scale.
+    /// period come from local history and stay outside the headline scale.
     static func monthDailyBudgetDays(
         limitUSD: Double,
         usedPercent: Double = 0,
@@ -637,10 +637,9 @@ enum OpenCodeLocalStats {
         dbURL: URL = databaseURL,
         calendar: Calendar = .current
     ) -> OpenCodeMonthBudget? {
-        // Prefer the console billing window when we have it. The per-day shares
-        // must cover exactly the days the monthly percent was measured over, or
-        // the rescale below spreads the console total across days outside the
-        // window and dilutes the days that are actually in it.
+        // Prefer the console billing window when present. The per-day shares
+        // cover exactly the days the monthly percent was measured over, so the
+        // rescale below spreads the console total only across days in the window.
         let consoleBounds = DailyBudget.subscriptionMonth(
             knownStart: nil,
             resetsAt: periodResetsAt,
@@ -673,8 +672,7 @@ enum OpenCodeLocalStats {
         var anchoredPercent = scaledSpendsPercent(spendsPercent, to: usedPercent)
         // No local rows for the console window (OpenCode not installed here, DB
         // path changed, or usage not flushed yet): spread the console total over
-        // the elapsed days so the bars do not read zero against a non-zero
-        // headline caption.
+        // the elapsed days so the bars match the headline caption.
         if anchoredPercent.isEmpty, usedPercent > 0, let consoleBounds {
             let elapsed = max(1, (calendar.dateComponents(
                 [.day],
@@ -741,8 +739,8 @@ enum OpenCodeLocalStats {
     /// horizon closely enough for four earlier weeks.
     private static let priorWeekHistoryDays = 28
 
-    /// Period spends stay inside the billing window so the headline percent is
-    /// not diluted. Earlier days are returned separately for week browsing.
+    /// Period spends stay inside the billing window so the headline percent
+    /// covers only that window. Earlier days are returned separately for week browsing.
     private static func spendHistory(
         periodStart: Date,
         periodEnd: Date,
@@ -783,7 +781,7 @@ struct OpenCodeLocalScan: Sendable {
 /// its WAL keep the same modification time and size.
 ///
 /// Every local figure in a poll (snapshot, hourly chart, daily bars) derives
-/// from one scan, and an idle database is not read again at all.
+/// from one scan, and an idle database is read only once.
 final class OpenCodeLocalScanCache: @unchecked Sendable {
     /// Modification time and size of the database and its `-wal` file.
     struct Fingerprint: Equatable {

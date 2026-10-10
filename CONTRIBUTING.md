@@ -4,7 +4,7 @@ Thanks for helping improve TokenMon. This project is a native macOS menu bar app
 
 ## Development setup
 
-1. Install [Xcode 15+](https://developer.apple.com/xcode/) on macOS 14+.
+1. Install [Xcode 16+](https://developer.apple.com/xcode/) on macOS 14+.
 2. Clone the repo and open `TokenMon.xcodeproj`.
 3. Select the **TokenMon** scheme → **My Mac** → Run.
 
@@ -30,15 +30,16 @@ swift Scripts/generate_icon.swift TokenMon/Resources/Assets.xcassets/AppIcon.app
 
 - Keep changes focused on one concern.
 - Prefer clear commit messages that explain *why*.
-- Run the full test suite. This is the required gate: it builds the app host and
-  covers Cursor usage, auth sessions, pollers, and UI behavior:
+- Run the checks CI runs: `make lint`, `make format`, `make secrets`, and the
+  full test suite. The test suite builds the app host and covers Cursor usage,
+  auth sessions, pollers, and UI behavior:
 
 ```bash
 make test
 ```
 
 - `make test-core` is an optional, fast CLT-only smoke. It compiles the Grok
-  parsers plus the Daily Budget preview/Thursday-week assert, and does **not**
+  parsers, CSV/JSON export, and the Daily Budget preview/Thursday-week assert, and does **not**
   cover Cursor daily quota, auth sessions, pollers, or UI. A green core run is
   not sufficient for billing or auth changes:
 
@@ -55,8 +56,8 @@ make test-core
 
 ## Scope notes
 
-- TokenMon is an **unofficial** client. It uses authenticated grok.com surfaces that can change without notice.
-- Avoid scraping that violates xAI terms; prefer the existing auth + endpoint approach documented in `Docs/AUTH_AND_ENDPOINTS.md`.
+- TokenMon is an **unofficial** client. It uses authenticated provider web surfaces (grok.com, cursor.com, opencode.ai, claude.ai, chatgpt.com) that can change without notice.
+- Avoid scraping that violates a provider's terms; prefer the existing auth + endpoint approach documented in `Docs/AUTH_AND_ENDPOINTS.md`.
 - Do not add telemetry or third-party analytics without discussion.
 
 ## Code of conduct

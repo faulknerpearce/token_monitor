@@ -1,8 +1,8 @@
 import Foundation
 import os
 
-/// One-time removal of the HTTP cache and shared cookie jar that `URLSession.shared`
-/// kept on disk for provider requests. The cache can hold authenticated JSON
+/// One-time removal of the on-disk HTTP cache and shared cookie jar of
+/// `URLSession.shared`. The cache can hold authenticated JSON
 /// responses and the jar provider session cookies; provider requests go
 /// through `ProviderURLSession`, which keeps neither.
 ///

@@ -32,7 +32,7 @@ struct FileBackedStringStore {
     }
 
     /// Writes `value` to a temporary file and renames it into place, so a
-    /// reader never sees a partial file. The staging file lives in the `0700`
+    /// reader always sees a complete file. The staging file lives in the `0700`
     /// directory and is created `0600`; the rename keeps that mode. Returns
     /// `false` (and logs) when either step fails.
     @discardableResult

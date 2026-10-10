@@ -8,8 +8,8 @@ struct SignInView: View {
     /// Identity providers that host the Grok/xAI sign-in flow.
     static let authHosts = ["accounts.x.ai", "auth.x.ai", "api.x.com", "twitter.com", "x.com"]
 
-    /// Exact-or-suffix host match (via `Domain.matches`) rather than a naive
-    /// `contains`, so e.g. `netflix.com` cannot satisfy `"x.com"`.
+    /// Exact-or-suffix host match (via `Domain.matches`), so `"x.com"` matches
+    /// `x.com` and its subdomains and rejects e.g. `netflix.com`.
     static func isAuthHost(_ host: String) -> Bool {
         Domain.matches(host, hosts: authHosts)
     }

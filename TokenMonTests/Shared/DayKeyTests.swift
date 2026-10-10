@@ -1,7 +1,7 @@
 @testable import TokenMon
 import XCTest
 
-/// Time-zone-independent day keys and the conversion of older start-of-day instants.
+/// Time-zone-independent day keys and the conversion of stored start-of-day instants.
 final class DayKeyTests: XCTestCase {
     private func calendar(_ identifier: String) throws -> Calendar {
         var calendar = Calendar(identifier: .gregorian)

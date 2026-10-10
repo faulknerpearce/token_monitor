@@ -21,7 +21,7 @@ struct OpenCodeGoMeters: Equatable {
 
 /// A 403 on an org-scoped console request: the workspace id was rejected
 /// (membership change, or a stale id from a previous account). Distinct from an
-/// expired session so the caller can re-resolve the org instead of signing out.
+/// expired session so the caller re-resolves the org and stays signed in.
 enum OpenCodeConsoleError: Error {
     case orgForbidden
 }
@@ -164,10 +164,9 @@ struct OpenCodeConsoleClient: Sendable {
     /// Maps a console response onto the client's errors.
     ///
     /// An expired console session redirects to the login page (URLSession
-    /// follows it) rather than returning 401. A 403 on an org-scoped request is
-    /// a rejected workspace, not an expired session, so the caller can try
-    /// another; a 403 without an org id is the session being refused outright.
-    /// Error bodies are logged privately and never shown to the user.
+    /// follows it). A 403 on an org-scoped request is a rejected workspace, so
+    /// the caller can try another; a 403 without an org id is the session being
+    /// refused outright. Error bodies are logged privately.
     static func check(_ http: HTTPURLResponse, data: Data, orgID: String?) throws {
         if ProviderHTTP.isBotChallenge(http, data: data) {
             throw ProviderError.badResponse(.openCode, ProviderHTTP.botChallengeMessage(status: http.statusCode))

@@ -95,7 +95,7 @@ struct TestFailure: Error, CustomStringConvertible {
     init(_ description: String) { self.description = description }
 }
 
-/// Hex decoder for the gRPC fixture; the app target has none.
+/// Test-only hex decoder for the gRPC fixture.
 extension Data {
     init?(hexString: String) {
         let chars = Array(hexString)

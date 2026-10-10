@@ -12,9 +12,9 @@ excluded:
   - .build
   - DerivedData
 
-# Length thresholds are set just above the current maxima, so `--strict`
-# (warning → error) fails on a regression. Largest file/type today:
-# OpenCodeStatsTests (~808 file / ~805 type lines); the worst functions live in
+# Length thresholds sit just above the codebase maxima, so `--strict`
+# (warning → error) fails on a regression. Largest file/type:
+# OpenCodeStatsTests (~808 file / ~805 type lines); the longest functions are in
 # DailyUsageBuilder (190 lines, complexity 25) and the menu-bar renderer.
 line_length:
   warning: 160
@@ -66,11 +66,11 @@ type_name:
   max_length: 60
 
 # Opt-in rules that match the project conventions.
-# Not enabled (do not fit this codebase): type_contents_order,
+# Left disabled as a poor fit for this codebase: type_contents_order,
 # switch_case_on_newline, vertical_whitespace_between_cases, required_deinit,
 # single_test_class, object_literal, attributes, implicit_return.
 # redundant_nil_coalescing: misfires on double optionals.
-# discouraged_optional_boolean and force_unwrapping: not enforced by the gate.
+# discouraged_optional_boolean and force_unwrapping: left out of the gate.
 opt_in_rules:
   - closure_spacing
   - contains_over_filter_count

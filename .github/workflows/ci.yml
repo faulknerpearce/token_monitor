@@ -24,8 +24,8 @@ concurrency:
 #
 # macos-26 ships Xcode 26.x — the same major toolchain used for local
 # development — so the full hosted XCTest suite (`make test`) runs there.
-# The macos-26 job uses the runner's selected Xcode rather than pinning an
-# exact point release (Xcode_26.6.app), so an image bump does not break it.
+# The macos-26 job uses the runner's selected Xcode, so it keeps working when
+# the image moves to a new point release.
 jobs:
   static-checks:
     name: Lint, format, and XcodeGen drift
@@ -81,8 +81,8 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/xcodegen/xcodegen/bin/xcodegen generate
-          # `git status --porcelain` also sees untracked generated files (e.g. a
-          # new .xcscheme), which `git diff --exit-code` would miss. The
+          # `git status --porcelain` covers untracked generated files too (e.g. a
+          # new .xcscheme), unlike `git diff --exit-code`. The
           # entitlements file is generated from project.yml too.
           paths=(TokenMon.xcodeproj TokenMon/Resources/TokenMon.entitlements)
           if [ -n "$(git status --porcelain "${paths[@]}")" ]; then
@@ -128,9 +128,9 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     # The committed TokenMon.xcodeproj is used as-is; static-checks fails the
-    # run when it differs from what project.yml generates. The project has no
-    # Swift packages to cache, and DerivedData is not cached because a fresh
-    # checkout's timestamps invalidate it.
+    # run when it differs from what project.yml generates. The job runs
+    # uncached: the project has no Swift packages, and a fresh checkout's
+    # timestamps invalidate DerivedData.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -144,8 +144,8 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # Compiles the host-free core sources on their own, which the app-hosted
-      # suite cannot show (it builds them inside the app target).
+      # Compiles the host-free core sources on their own, outside the app
+      # target that the app-hosted suite builds them in.
       - name: Core parser tests
         run: make test-core
 
@@ -166,7 +166,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.lcov
           disable_search: true
-          # Non-blocking until a CODECOV_TOKEN is configured; coverage is
+          # Fails the job only when a CODECOV_TOKEN is configured; coverage is
           # informational (codecov.yml).
           fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 

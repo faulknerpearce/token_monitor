@@ -26,7 +26,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private var cancellables = Set<AnyCancellable>()
 
     /// Last observed weekly `resets_at`; anchors the chart when a later payload
-    /// omits the reset time. A forward move does not clear accumulated day deltas.
+    /// omits the reset time. Accumulated day deltas survive a forward move.
     private var weeklyResetsAt: Date?
     /// Instant the current bars were built against, so earlier weeks shift from
     /// the same window.
@@ -52,7 +52,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             try await ClaudeUsageClient(cookieHeader: cookieHeader).fetchUsage()
         }
         // The persisted hourly and daily history is wiped only on sign-out or
-        // an account change, never because the session expired.
+        // an account change; an expired session keeps it.
         auth.accountReset
             .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
@@ -137,8 +137,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
+            // Only a request made under the current credential state tears down
+            // the session; a stale one is skipped.
             guard auth.isCurrent(generation) else { return .skipped }
             let usageError = error.usageError
             switch usageError {
@@ -169,9 +169,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Tracks the latest observed weekly `resets_at` to anchor the chart when a
     /// later payload omits the reset time.
     ///
-    /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
-    /// reported reset time can move without the used % dropping, so a forward
-    /// move alone is not a fresh period. Old-period days fall outside
+    /// Keeps accumulated day deltas when `resets_at` moves forward: the
+    /// reported reset time can move while the used % holds, so a forward
+    /// move alone continues the current period. Old-period days fall outside
     /// the anchored window and are hidden. A true reset is recognized by
     /// `DailyQuotaDeltaStore` only when the used % also drops (rollover, or an
     /// early provider reset); it then keeps earlier days as prior-window history.
@@ -181,9 +181,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// Daily bars for the current weekly window, anchored to the pool's actual reset
-    /// time; returns [] when no provider reset has ever been observed (a rolling
-    /// 7-day window is never substituted). The pool is split evenly across the period's
-    /// days, so each day's budget is 1/7th.
+    /// time; returns [] when no provider reset has ever been observed. The pool is
+    /// split evenly across the period's days, so each day's budget is 1/7th.
     ///
     /// `windowStart` / `interruptedWindowStart` come from the daily store after a
     /// rollover or early reset (see `DailyBudget.buildWeeklyWindowDays`).

@@ -42,8 +42,8 @@ enum ExportService {
     }
 
     /// Escapes one CSV cell. A cell whose first character is `=`, `+`, `-`, `@`,
-    /// tab or carriage return is prefixed with `'` so spreadsheets do not run it
-    /// as a formula. A cell containing a comma, quote, line feed or carriage
+    /// tab or carriage return is prefixed with `'` so spreadsheets read it as
+    /// text. A cell containing a comma, quote, line feed or carriage
     /// return is quoted, with inner quotes doubled.
     static func csvEscape(_ value: String) -> String {
         let sanitized: String

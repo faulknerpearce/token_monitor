@@ -22,7 +22,7 @@ final class AppSupportTests: XCTestCase {
         XCTAssertTrue(AppSupport.baseDirectory.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     }
 
-    func testMigratesLegacyDirectoryWhenCurrentIsAbsent() throws {
+    func testMovesModelMonitorDirectoryWhenCurrentIsAbsent() throws {
         let fm = FileManager.default
         let parent = fm.temporaryDirectory.appendingPathComponent("tokenmon-migrate-\(UUID().uuidString)", isDirectory: true)
         let legacy = parent.appendingPathComponent(AppSupport.legacyDirectoryName, isDirectory: true)

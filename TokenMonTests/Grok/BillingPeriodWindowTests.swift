@@ -47,7 +47,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: previousFromMorning.start), 2)
         XCTAssertEqual(cal.component(.day, from: previousFromMorning.end), 8)
 
-        // After reset fires (API may lag): roll entire window — single new Thursday, not two.
+        // After reset fires (API may lag): the entire window rolls to a single new Thursday.
         let afterReset = ISO8601DateFormatter().date(from: "2026-07-16T20:00:00Z")!
         let rolled = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
@@ -86,9 +86,8 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: previous.end), 8)
     }
 
-    /// A payload whose reset instant lagged more than one period must roll
-    /// forward by whole periods until the window contains today, instead of
-    /// returning a window entirely in the past.
+    /// A payload whose reset instant lags more than one period rolls forward by
+    /// whole periods until the window contains today.
     func testStaleResetRollsForwardToContainToday() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -112,8 +111,8 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(bounds.end, today)
     }
 
-    /// A snapshot without a provider reset must yield no chart window at all —
-    /// never a calendar Mon–Sun week invented from `now`.
+    /// A snapshot without a provider reset yields no chart window, including no
+    /// calendar Mon–Sun week derived from `now`.
     func testWeeklyChartRefusedWithoutResetsAt() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.firstWeekday = 2
@@ -216,7 +215,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertTrue(week.isEstimated)
     }
 
-    /// After weekly rollover, chevron-left (`weekOffset: -1`) must still show last period’s bars.
+    /// After weekly rollover, chevron-left (`weekOffset: -1`) shows last period’s bars.
     func testPreviousWeekKeepsPriorPeriodDailyUsageAfterRollover() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -276,7 +275,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: week.weekEnd), 15)
         let tueDay = week.days.first { cal.isDate($0.dayStart, inSameDayAs: tue) }
         let wedDay = week.days.first { cal.isDate($0.dayStart, inSameDayAs: wed) }
-        // Day-over-day growth from local samples must survive rollover when browsing back.
+        // Day-over-day growth from local samples survives rollover when browsing back.
         XCTAssertEqual(tueDay?.totalPercent ?? 0, 15, accuracy: 0.5)
         XCTAssertEqual(wedDay?.totalPercent ?? 0, 15, accuracy: 0.5)
         XCTAssertTrue(week.hasDailyData)
@@ -376,7 +375,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         let wedDay = fromServerOnly.days.first { cal.isDate($0.dayStart, inSameDayAs: wed) }
         XCTAssertEqual(wedDay?.totalPercent ?? 0, 10, accuracy: 0.2)
 
-        // Local deltas win when both are present (do not let sparse server rows wipe history).
+        // Local deltas win when both are present, so sparse server rows leave history intact.
         guard let tue = cal.date(byAdding: .day, value: 1, to: weekStart) else {
             return XCTFail("date math")
         }

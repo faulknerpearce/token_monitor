@@ -6,7 +6,7 @@ import SwiftUI
 ///
 /// A plain `NSStatusItem` lets a click be hit-tested against the rendered
 /// provider segments. The dropdown is a borderless `MenuBarPanel` positioned
-/// under the status item, so there is no popover arrow and the top edge stays
+/// under the status item, so the dropdown is arrow-less and the top edge stays
 /// put while the bottom grows with the provider content.
 ///
 /// The status image re-renders only when an input it draws changes (settings,
@@ -153,7 +153,7 @@ final class MenuBarController: NSObject {
         regions = rendered.regions
         guard rendered.key != statusKey else { return }
         statusKey = rendered.key
-        // Keep `variableLength`: assigning an explicit length animates the status
+        // The item stays `variableLength`: an explicit length animates the status
         // item, which makes the whole menu bar shift when the label updates.
         statusItem.button?.image = rendered.image
     }
@@ -183,9 +183,9 @@ final class MenuBarController: NSObject {
     // MARK: - Panel
 
     private func showPanel() {
-        // No `sizingOptions`: AppKit must not resize the window itself, or it
-        // grows from the wrong edge and the content shifts. The panel frame is
-        // set explicitly from the status item instead.
+        // `sizingOptions` stays at its default: a window AppKit resizes itself
+        // grows from the wrong edge and the content shifts, so the panel frame
+        // is set explicitly from the status item.
         let hosting = NSHostingController(rootView: MenuBarPanelContent(model: model))
         self.hosting = hosting
         panel.contentViewController = hosting
@@ -205,7 +205,7 @@ final class MenuBarController: NSObject {
 
     /// Fits the panel to the SwiftUI content via `panelFrame(for:)`, which clamps
     /// height to the visible screen and re-anchors under the status item so a
-    /// tall provider view cannot grow past the bottom of the display.
+    /// tall provider view stays above the bottom of the display.
     private func resizePanelIfNeeded() {
         guard panel.isVisible, hosting != nil else { return }
         let size = panelContentSize()
@@ -224,7 +224,7 @@ final class MenuBarController: NSObject {
     }
 
     /// Frame for `size`, anchored just under the status item and clamped to the
-    /// screen. Deterministic, so repeated calls never move the panel.
+    /// screen. Deterministic, so repeated calls keep the panel in place.
     private func panelFrame(for size: NSSize) -> NSRect {
         guard let button = statusItem.button, let buttonWindow = button.window else {
             return NSRect(origin: panel.frame.origin, size: size)
@@ -246,15 +246,14 @@ final class MenuBarController: NSObject {
     /// of `variableLength` button padding still select the adjacent provider.
     private func clickedProvider(in button: NSStatusBarButton) -> MonitorProvider? {
         guard let window = button.window else { return nil }
-        // `NSApp.currentEvent` is unreliable for status items: its
-        // `locationInWindow` reports the button's center rather than the click,
-        // so every segment would resolve to the same provider. Read the live
-        // pointer position instead and map it through the window.
+        // Reads the live pointer position and maps it through the window. For
+        // status items, `NSApp.currentEvent.locationInWindow` reports the
+        // button's center, which would resolve every click to one provider.
         let pointInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
         let pointInButton = button.convert(pointInWindow, from: nil)
-        // Map into the drawn bitmap's coordinate space. The button is wider than
-        // the image (AppKit pads it), so ask the cell where the image actually
-        // sits rather than assuming it is centered.
+        // Maps into the drawn bitmap's coordinate space. The button is wider than
+        // the image (AppKit pads it), so the cell reports where the image
+        // actually sits.
         let imageOriginX: CGFloat
         if let cell = button.cell as? NSButtonCell {
             imageOriginX = cell.imageRect(forBounds: button.bounds).minX
@@ -270,15 +269,14 @@ final class MenuBarController: NSObject {
 /// Top-aligned host for the dropdown content.
 ///
 /// The panel resizes to the content a tick after SwiftUI lays out, so for a
-/// moment the window height can differ from the content height. Without this
-/// alignment SwiftUI centers the content in the taller window, which visibly
-/// moves the provider tabs. Anchoring to the top keeps them fixed.
+/// moment the window height can differ from the content height. SwiftUI
+/// centers content in a taller window, which visibly moves the provider tabs;
+/// anchoring to the top keeps them fixed.
 ///
 /// The panel's height is clamped to the screen. The content sits in one
 /// scroll view: measured unconstrained (the hosting view's `fittingSize`) it
 /// reports the content's full height, it bounces only when the content is
-/// taller than the panel, and once the panel is shorter the content scrolls
-/// instead of being clipped.
+/// taller than the panel, and once the panel is shorter the content scrolls.
 private struct MenuBarPanelContent: View {
     let model: AppModel
 

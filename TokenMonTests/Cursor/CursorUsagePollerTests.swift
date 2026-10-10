@@ -60,7 +60,7 @@ final class CursorUsagePollerTests: XCTestCase {
     }
 
     /// The first day the app tracked is only partially covered, so it falls back to
-    /// the estimate instead of painting a misleading sliver.
+    /// the estimate.
     func testFirstTrackedDayUsesEstimate() throws {
         let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
             observedByDay: [day(2026, 8, 25): 1],
@@ -119,8 +119,8 @@ final class CursorUsagePollerTests: XCTestCase {
         ))
     }
 
-    /// When tracked daily deltas exceed the live pool %, rescale so chart bars
-    /// still sum to `usedPercent` instead of overshooting the headline.
+    /// When tracked daily deltas exceed the live pool %, they are rescaled so the
+    /// chart bars sum to `usedPercent`.
     func testTrackedExceedingPoolPercentIsRescaled() throws {
         // Two fully tracked days (first tracked day is dropped as partial).
         let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
@@ -160,7 +160,7 @@ final class CursorUsagePollerTests: XCTestCase {
             observedByDay: [
                 day(2026, 9, 29): 2, // old cycle
                 day(2026, 10, 1): 5, // old cycle
-                day(2026, 10, 2): 1, // new cycle (its first tracked day is estimated instead)
+                day(2026, 10, 2): 1, // new cycle (its first tracked day uses the estimate)
                 day(2026, 10, 3): 3 // new cycle
             ],
             interruptedWindowStart: date(2026, 9, 10, hour: 17),
@@ -189,8 +189,8 @@ final class CursorUsagePollerTests: XCTestCase {
         XCTAssertLessThanOrEqual(live, 4.001)
     }
 
-    /// With no early reset the displayed week behaves exactly as before: days
-    /// before the cycle start read 0 and nothing is flagged.
+    /// With no early reset, days of the displayed week before the cycle start
+    /// read 0 and nothing is flagged.
     func testWithoutEarlyResetOldDaysStayHidden() throws {
         let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
             observedByDay: [day(2026, 10, 1): 5, day(2026, 10, 3): 4],

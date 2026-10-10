@@ -1,9 +1,9 @@
 import Foundation
 
-/// What the sign-in Back button should do for the active web view.
+/// The action the sign-in Back button takes for the active web view.
 ///
 /// OAuth providers open a popup with little or no history, so Back dismisses the
-/// popup instead of doing nothing.
+/// popup.
 enum SignInBackAction: String, Codable, CaseIterable, Hashable, Sendable {
     case goBack
     case closePopup
@@ -36,9 +36,9 @@ enum SignInPopupStack {
 
 /// Auth-host then return-page detector for automatic cookie capture.
 ///
-/// Capture must not fire on the first load of the provider's start URL. The
-/// user has to visit an auth host (Google, GitHub, xAI, …) first; only then
-/// is a later return-page navigation treated as "signed in".
+/// Capture waits until the user has visited an auth host (Google, GitHub, xAI,
+/// …); only a return-page navigation after that counts as "signed in", so the
+/// first load of the provider's start URL is ignored.
 struct SignInReturnGate {
     var isAuthHost: (String, String) -> Bool
     var isReturnPage: (URL) -> Bool
@@ -59,7 +59,7 @@ struct SignInReturnGate {
         }
     }
 
-    /// Record a finished navigation and report whether capture should run.
+    /// Records a finished navigation and reports whether capture runs.
     ///
     /// - Parameter url: The URL that just finished loading.
     /// - Returns: `.authHost` on the first auth-host hit, `.returnPage` once

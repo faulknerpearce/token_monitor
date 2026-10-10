@@ -13,7 +13,7 @@ import Security
 /// untouched and still running.
 ///
 /// Quarantine attributes are left as they are. The download is written by this
-/// process, which does not quarantine its files, so the swapped-in app opens
+/// process, whose files carry no quarantine flag, so the swapped-in app opens
 /// without a Gatekeeper prompt; a quarantined ad-hoc build is refused because
 /// Gatekeeper would block its relaunch.
 enum AppInstaller {
@@ -53,7 +53,7 @@ enum AppInstaller {
     }
 
     /// App Translocation runs a downloaded app from a read-only copy. Replacing
-    /// that copy would not update the file the user actually opens.
+    /// that copy leaves the file the user actually opens unchanged.
     static var isRunningTranslocated: Bool {
         isTranslocated(Bundle.main.bundleURL)
     }
@@ -338,7 +338,7 @@ enum AppInstaller {
 
     // MARK: - Processes
 
-    /// Runs `executable` without blocking a thread while it works.
+    /// Runs `executable` and suspends, leaving the thread free, until it exits.
     static func run(_ executable: String, _ arguments: [String]) async throws -> (status: Int32, output: String) {
         let pipe = Pipe()
         let process = Process()

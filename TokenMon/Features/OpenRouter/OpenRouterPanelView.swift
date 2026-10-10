@@ -120,7 +120,7 @@ struct OpenRouterPanelView: View {
         }
     }
 
-    /// Signed-in escape hatch to swap an expired/rotated key without signing out first.
+    /// Signed-in escape hatch to swap an expired/rotated key in place.
     @ViewBuilder
     private var replaceKeyRow: some View {
         if isReplacingKey || auth.needsSignIn {

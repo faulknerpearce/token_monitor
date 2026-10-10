@@ -6,11 +6,11 @@ import SwiftUI
 @main
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    /// Process-lifetime services. Held as a plain reference: scenes observe the
-    /// individual objects they render, not the whole model.
+    /// Process-lifetime services. Held as a plain reference: scenes observe only
+    /// the individual objects they render.
     private let model: AppModel
-    /// Owns the `NSStatusItem` and its dropdown panel. Self-registers in `init`,
-    /// so it is retained for the app's lifetime and never read directly.
+    /// Owns the `NSStatusItem` and its dropdown panel. Self-registers in `init`;
+    /// this property retains it for the app's lifetime.
     private let menuBar: MenuBarController
 
     init() {
@@ -118,11 +118,11 @@ final class AppModel: ObservableObject {
     static let changeCoalescing: RunLoop.SchedulerTimeType.Stride = .milliseconds(100)
 
     /// A menu open refreshes a provider only when its data is older than this,
-    /// so quickly reopening the menu does not refetch.
+    /// so quickly reopening the menu reuses the loaded data.
     static let menuOpenFreshness: TimeInterval = 15
 
-    /// True when the process is the XCTest host — tests must not start pollers,
-    /// prompt for notifications, or touch live hosts / the real history store.
+    /// True when the process is the XCTest host. The test host skips pollers,
+    /// notification prompts, live hosts, and the real history store.
     /// Files land in a temporary directory (`AppSupport.baseDirectory`) and
     /// preferences in a throwaway defaults suite.
     nonisolated static var isRunningTests: Bool {
@@ -147,7 +147,7 @@ final class AppModel: ObservableObject {
         let defaults = Self.makeDefaults()
         settings = AppSettings(defaults: defaults)
         notifier = ThresholdNotifier(defaults: defaults)
-        // The test host must not read or migrate the user's credentials.
+        // The test host uses an in-memory store, leaving the user's credentials untouched.
         let store: () -> (any CredentialStore)? = { Self.isRunningTests ? InMemoryCredentialStore() : nil }
         let auth = AuthSessionService(directory: nil, store: store())
         let openCodeAuth = OpenCodeAuthSession(store: store())
@@ -236,7 +236,7 @@ final class AppModel: ObservableObject {
         for (_, providerPoller) in providers.all {
             providerPoller.menuIsOpen = isOpen
         }
-        // The test host never fetches (see `isRunningTests`).
+        // The test host skips fetching (see `isRunningTests`).
         guard isOpen, !Self.isRunningTests else { return }
         for (provider, providerPoller) in providers.all where settings.needsPolling(provider) {
             let loop = providerPoller.pollingLoop
@@ -288,7 +288,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Flush coalesced history writes on quit so the last samples are not lost.
+    /// Flushes coalesced history writes on quit so the last samples are saved.
     private func observeTermination() {
         terminateObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,

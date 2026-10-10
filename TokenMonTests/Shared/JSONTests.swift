@@ -85,7 +85,7 @@ final class JSONTests: XCTestCase {
         XCTAssertEqual(result, Decimal(12.0))
     }
 
-    /// Money values keep their written digits instead of a binary-double expansion.
+    /// Money values keep their written digits.
     func testFirstDecimalKeepsMoneyPrecision() throws {
         let decoded = try XCTUnwrap(
             JSONSerialization.jsonObject(

@@ -6,8 +6,8 @@ import SwiftUI
 /// providers than fit on one row, extra tabs wrap onto rows below. Every row
 /// holds `maxPerRow` equal flexible cells (empty slots included), so each row
 /// spans exactly the container width and columns line up across rows. Grid
-/// lines are overlays and never take part in layout, so the outer border
-/// matches the edges of the panel cards for any provider count.
+/// lines are overlays outside the layout, so the outer border matches the
+/// edges of the panel cards for any provider count.
 struct ProviderSwitcherView: View {
     var providers: [MonitorProvider]
     @Binding var selection: MonitorProvider

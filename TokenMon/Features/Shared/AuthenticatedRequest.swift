@@ -2,10 +2,10 @@ import Foundation
 
 /// The `URLSession` every provider API request goes through.
 ///
-/// Ephemeral, with no cookie jar and no response cache: requests carry the
+/// Ephemeral, with cookie storage and the URL cache disabled: requests carry the
 /// stored credential in an explicit `Cookie` / `Authorization` header, a
-/// provider's `Set-Cookie` never lands in a shared jar that outlives sign-out,
-/// and authenticated JSON is never written to a disk cache.
+/// provider's `Set-Cookie` stays out of any shared jar that outlives sign-out,
+/// and authenticated JSON stays in memory.
 enum ProviderURLSession {
     static let shared = URLSession(configuration: configuration)
 
@@ -49,8 +49,8 @@ enum AuthenticatedRequest {
 
     /// Maps an HTTP response to a shared `UsageError`, or `nil` on success.
     ///
-    /// The response body is not included in the user-facing message, since it can
-    /// echo credentials or internal identifiers.
+    /// The user-facing message omits the response body, since it can echo
+    /// credentials or internal identifiers.
     static func mapError(for response: HTTPURLResponse, data _: Data) -> UsageError? {
         if response.statusCode == 401 || response.statusCode == 403 {
             return .unauthorized
@@ -66,7 +66,7 @@ enum AuthenticatedRequest {
 
     /// Maps a response to a `UsageError`, or `nil` on success. A bot-protection
     /// challenge (see `ProviderHTTP.isBotChallenge`) is transient whatever its
-    /// status, so it never counts against the session.
+    /// status, so it leaves the session's auth-failure count unchanged.
     static func responseError(for response: HTTPURLResponse, data: Data) -> UsageError? {
         if ProviderHTTP.isBotChallenge(response, data: data) {
             return .badResponse(ProviderHTTP.botChallengeMessage(status: response.statusCode))
@@ -109,9 +109,9 @@ enum AuthenticatedRequest {
     /// As `perform`, but also returns the response so callers can persist
     /// refreshed credentials (e.g. a rolling session cookie in `Set-Cookie`).
     ///
-    /// - Parameter forbidden: Thrown for a non-challenge 403 instead of the
-    ///   mapped `.unauthorized`, for endpoints whose 403 refuses a feature
-    ///   rather than the session.
+    /// - Parameter forbidden: Thrown in place of the mapped `.unauthorized` for a
+    ///   non-challenge 403, for endpoints whose 403 refuses one feature while the
+    ///   session stays valid.
     static func performWithResponse(
         _ request: URLRequest,
         session: URLSession = ProviderURLSession.shared,
@@ -123,7 +123,7 @@ enum AuthenticatedRequest {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            // A cancelled poll (system sleep, loop restart) is not a network failure.
+            // A cancelled poll (system sleep, loop restart) surfaces as cancellation.
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
                 throw CancellationError()
             }

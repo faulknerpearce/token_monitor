@@ -109,7 +109,7 @@ struct GrokPanelView: View {
                 }
             }
 
-            // No provider reset → no billing window exists; refuse to paint one.
+            // The chart renders only when a provider reset defines a billing window.
             if let week {
                 PanelCard {
                     DailyUsageChartView(

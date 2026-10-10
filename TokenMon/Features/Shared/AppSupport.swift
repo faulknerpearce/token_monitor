@@ -6,15 +6,15 @@ enum AppSupport {
     /// Current Application Support folder name.
     static let directoryName = "TokenMon"
 
-    /// Legacy Model Monitor folder name, migrated into `directoryName`.
+    /// Model Monitor folder name; its contents move into `directoryName` at launch.
     static let legacyDirectoryName = "ModelMonitor"
 
     /// True when the process is the XCTest host.
     static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     /// Parent of the app's folder: the user's Application Support directory, or
-    /// a per-process temporary directory under XCTest so tests never read or
-    /// write the user's files.
+    /// a per-process temporary directory under XCTest so tests stay isolated
+    /// from the user's files.
     static let baseDirectory: URL = {
         let fm = FileManager.default
         if isRunningTests {

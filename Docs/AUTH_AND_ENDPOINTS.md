@@ -18,7 +18,7 @@ TokenMon reads usage from seven providers. None of them publishes a stable consu
 
 Every cookie-based provider signs in inside an embedded `WKWebView` (`ProviderSignInSheet` / `SignInBrowserView`). Each provider's session (`ProviderAuthSession` subclass) owns its own `WKWebsiteDataStore.nonPersistent()`, so a sign-in page only ever sees that provider's cookies and nothing is written to the default WebKit store.
 
-When the flow returns to the provider's own page, `WebKitCookieCapture` reads that isolated store and keeps only cookies whose domain matches the provider's hosts (`Domain.matches`: exact host or a dot-suffix, never a substring). It then narrows them to the provider's **essential cookie allowlist**, and capture succeeds only once the preferred session cookie is among them. A stored header is narrowed again on every read (`ProviderAuthSession.pruneCookieHeader`), so a jar saved before an allowlist existed loses its extra cookies.
+When the flow returns to the provider's own page, `WebKitCookieCapture` reads that isolated store and keeps only cookies whose domain matches the provider's hosts (`Domain.matches`: exact host or a dot-suffix, never a substring). It then narrows them to the provider's **essential cookie allowlist**, and capture succeeds only once the preferred session cookie is among them. A stored header is narrowed again on every read (`ProviderAuthSession.pruneCookieHeader`), so requests carry only allowlisted cookies.
 
 | Provider | Hosts the session belongs to | Essential cookies |
 |----------|------------------------------|-------------------|
@@ -63,7 +63,7 @@ Secrets live in the login Keychain; identifiers that cannot authenticate stay in
 
 - **Keychain** (`KeychainVault`, viewed per provider through `KeychainCredentialStore`): one generic-password item, service `com.modelmonitor.app.credentials`, account `vault`, holding a JSON object keyed by `<prefix><key>` (for example `chatgpt_auth_session`, `openrouter_auth_key`); accessible after first unlock, this device only, never synced. Secrets are each cookie provider's `session` header and OpenRouter's `key`. A single item means a new build triggers one access prompt, not one per provider. The vault is read once and cached, so polling does not touch the Keychain every tick. If the user refuses the read, every secret reads as missing and the vault is never written for the rest of the process. Secrets stored as separate per-account items under the same service are copied into the vault the first time their account is read; the separate item is deleted when the Keychain allows it, and each account is checked only once.
 - **Files** (`~/Library/Application Support/TokenMon/`, folder `0700`, files `0600`): the account email and identity, and OpenCode's workspace id, as `<prefix><key>.dat`.
-- **Migration** (`SecretRoutingCredentialStore`): a secret still held in a legacy `.dat` file is copied into the Keychain, read back to verify it, and only then deleted from disk. If the Keychain write fails, the file stays authoritative, so a Keychain problem never signs the user out.
+- **Migration** (`SecretRoutingCredentialStore`): a secret held in a `.dat` file is copied into the Keychain, read back to verify it, and only then deleted from disk. If the Keychain write fails, the file stays authoritative, so a Keychain problem never signs the user out.
 
 Release builds are ad-hoc signed, so macOS ties Keychain access to the exact binary. After each update macOS asks once whether the new build may read the TokenMon item; choosing **Always Allow** stops the prompt until the next update.
 
@@ -112,11 +112,9 @@ Product-type enums (field 1 inside each field-7 message):
 | 5 | Imagine | Live 2026-07-28 (12%) |
 | 6 | Voice | Inferred (sequential; 0% omitted from capture) |
 
-(Do not map 3→Imagine or 5→Voice — that swaps Imagine with Voice/Other.)
-
 ### Daily use
 
-No daily-series endpoint has been found. Probed (2026-07-11) with a live session:
+The billing API returns no per-day series:
 
 | Endpoint | Result |
 |----------|--------|
@@ -131,8 +129,6 @@ The daily chart is therefore built from local samples (`DailyUsageBuilder`):
 3. A period rollover advances the whole window; two periods never share a bar.
 4. Past weeks (chevron left) anchor to that week's own reset from local samples, so last week's bars remain after the weekly reset.
 5. A server daily series (`WeeklyUsageSnapshot.dailySeries`) is used only when local samples cannot paint bars.
-
-If xAI exposes a daily API, document and test it here before adding it to `UsageClient`. The app does not probe speculative endpoints.
 
 ### Expected JSON fields (defensive)
 
@@ -178,8 +174,7 @@ accepts the proto names):
 
 **One endpoint covers both purchase channels.** Grokbot is sold through Cursor
 *and* through SuperGrok; when a SuperGrok plan pays for it, the plan fields are
-populated and the rest of the payload is identical. There is no separate
-per-channel endpoint, so no source resolution is needed.
+populated and the rest of the payload is identical.
 
 **Signed-out behaviour:** an expired session returns `307` to
 `api.workos.com/user_management/authorize`. `URLSession` follows it and lands on
@@ -188,13 +183,12 @@ than a decode failure.
 
 **Usage window:** `next_reset_timestamp_utc` is the only anchor. When it is
 absent the snapshot carries `resetsAt == nil` and the panel withholds both the
-weekly caption and the Daily Budget bars — no calendar-derived substitute.
+weekly caption and the Daily Budget bars.
 
 **Early resets:** the provider may reset everyone mid-cycle. It shows up as
 `current_period_start` jumping forward to a date before the previous
 `next_reset_timestamp_utc`, together with a used-% drop of at least
-`Percent.resetDropFloor`. Detection uses only those two fields (never the
-calendar); see `QuotaWindowTransition` and the data-flow notes in
+`Percent.resetDropFloor`. Detection uses only those two fields; see `QuotaWindowTransition` and the data-flow notes in
 `ARCHITECTURE.md`. A payload whose reset instant stays put while the period
 start moves still anchors the bars to the new start, over 7 bars.
 

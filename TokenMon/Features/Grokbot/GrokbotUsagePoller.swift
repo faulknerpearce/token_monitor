@@ -18,7 +18,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private let settings: AppSettings
     /// Grok Bot authenticates against the Cursor account, so this borrows the
-    /// existing Cursor session rather than owning a second cookie store.
+    /// existing Cursor session and its cookie store.
     private let auth: CursorAuthSession
     private let hourly: HourlyDeltaActivityStore
     private let daily: DailyQuotaDeltaStore
@@ -138,13 +138,13 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
+            // A request that began under a previous credential state leaves the
+            // current session intact.
             guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:
                 // Counts toward the shared Cursor session's rejection streak;
-                // a Bot-only 403 maps to `.custom` and never reaches here.
+                // a Bot-only 403 maps to `.custom` and takes a separate branch.
                 auth.recordAuthFailure(reason: error.localizedDescription)
             default:
                 break
@@ -164,8 +164,8 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsGrokbotPolling)
     }
 
-    /// True when `nextResetsAt` represents a genuinely new allowance period
-    /// rather than the same period's reset instant creeping forward. Forwards to
+    /// True when `nextResetsAt` represents a genuinely new allowance period;
+    /// the same period's reset instant creeping forward returns false. Forwards to
     /// the shared rule used by `DailyQuotaDeltaStore`.
     static func isNewWindow(
         previousResetsAt: Date?,
@@ -181,8 +181,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     /// Daily bars for the current allowance period, anchored to the provider's
-    /// actual reset instant. Returns `[]` when no reset has ever been observed —
-    /// a rolling window is never substituted for the real period.
+    /// actual reset instant. Returns `[]` when no reset has ever been observed.
     ///
     /// `daysInPeriod` comes from the payload's own
     /// `current_period_start` → `next_reset_timestamp_utc` span (see

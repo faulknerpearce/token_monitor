@@ -40,11 +40,11 @@ xcodebuild -exportArchive -archivePath build/TokenMon.xcarchive \
 
 ## 3. Ship
 
-`make release` writes `dist/TokenMon-<version>.zip`, `.pkg`, and `-dSYM.zip`, and prints their SHA-256. Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`: every CI gate runs against the tagged commit, then the three files are attached to the GitHub release. The CI runner has no Developer ID certificate, so those files are **ad-hoc signed and not notarized**; Gatekeeper warns on a first manual download.
+`make release` writes `dist/TokenMon-<version>.zip`, `.pkg`, and `-dSYM.zip`, and prints their SHA-256. Pushing a `vX.Y.Z` tag that matches `MARKETING_VERSION` in `project.yml` runs `.github/workflows/release.yml`: it calls `ci.yml` (`static-checks`, `secrets`, `build-and-test`) against the tagged commit, then attaches the three files to the GitHub release. The CI runner has no Developer ID certificate, so those files are **ad-hoc signed and not notarized**; Gatekeeper warns on a first manual download.
 
 ## In-app updates
 
-TokenMon updates itself from GitHub releases (`UpdateChecker`, `ReleaseFeed`, `AppInstaller`); there is no Sparkle.
+TokenMon updates itself from GitHub releases (`UpdateChecker`, `ReleaseFeed`, `AppInstaller`).
 
 **Check.** Every 6 hours while automatic checks are on (Settings), and on demand from the menu or Settings, the app GETs `https://api.github.com/repos/<owner>/<repo>/releases/latest`. A release is offered when its tag parses as a version newer than the running `CFBundleShortVersionString` and is not a prerelease. Only assets whose download URL is one of this repository's `github.com/<owner>/<repo>/releases/download/…` URLs are considered; the zip and pkg named `TokenMon-*` are preferred and dSYM archives are skipped.
 
@@ -71,7 +71,7 @@ The checks run on a staged copy (`.TokenMon-update-<uuid>.app`) placed next to t
 
 ## Entitlements
 
-The current build intentionally uses an empty entitlements file and is not App Sandbox-enabled. This is required for the OpenCode local usage reader to access `~/.local/share/opencode/opencode.db` without a security-scoped file picker. The app uses hardened runtime and ad-hoc signing for local Debug builds; configure Developer ID signing before distribution.
+The app uses an empty entitlements file and is not App Sandbox-enabled, so the OpenCode local usage reader can read `~/.local/share/opencode/opencode.db` without a security-scoped file picker. The app uses hardened runtime and ad-hoc signing for local Debug builds; configure Developer ID signing before distribution.
 
 ## Gatekeeper check
 

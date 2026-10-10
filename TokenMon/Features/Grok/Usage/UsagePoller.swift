@@ -79,8 +79,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // needsSignIn means credentials were cleared after 401/403 — wait for re-auth
-        // instead of spinning on empty cookies every poll interval.
+        // needsSignIn means credentials were cleared after a 401/403; polling waits
+        // for re-auth.
         guard auth.isSignedIn, !auth.needsSignIn else {
             lastError = ProviderError.notSignedIn(.grok).localizedDescription
             return .skipped
@@ -113,8 +113,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
+            // A request that began under a previous credential state leaves the
+            // current session intact.
             guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:

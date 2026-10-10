@@ -38,9 +38,9 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     @Published private(set) var lastAuthError: String?
 
     /// Fires when locally stored usage history stops belonging to the session:
-    /// an explicit sign-out, or a capture for a different account. Invalidation
-    /// after rejected requests does not fire it, so history survives a re-login
-    /// to the same account.
+    /// an explicit sign-out, or a capture for a different account. Those are its
+    /// only triggers, so history survives invalidation after rejected requests
+    /// and a re-login to the same account.
     let accountReset = PassthroughSubject<Void, Never>()
 
     /// Consecutive rejections of the live session required before it is
@@ -54,7 +54,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// Monotonic counter identifying the current credential state. A poller
     /// captures it before a fetch and checks it after the await via
     /// `isCurrent(_:)`, so a refresh that completes after a sign-out or account
-    /// switch cannot publish data for the previous account.
+    /// switch publishes nothing for the previous account.
     private(set) var sessionGeneration = 0
 
     /// WebKit store isolated to this provider; sign-in and capture only see this
@@ -64,7 +64,7 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     private let store: any CredentialStore
     private let logger: Logger
     /// In-flight browser-cookie purge from a prior sign-out / invalidation.
-    /// Capture awaits it so a quick re-auth cannot race the late clear.
+    /// Capture awaits it so the clear finishes before a quick re-auth captures.
     private var clearTask: Task<Void, Never>?
 
     /// Store keys holding a credential; they live in the Keychain. The others
@@ -122,9 +122,9 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     }
 
     /// Marks the session invalid (e.g. repeated 401s) and clears both disk
-    /// credentials and browser cookies, so "Sign in again" cannot auto-capture
-    /// the same expired session. Usage history is kept: `accountReset` does not
-    /// fire, and the stored account identity survives for the next capture.
+    /// credentials and browser cookies, so "Sign in again" starts from a clean
+    /// session. Usage history is kept: `accountReset` stays
+    /// silent, and the stored account identity survives for the next capture.
     func markSessionInvalid(reason: String? = nil) {
         needsSignIn = true
         if let reason { lastAuthError = reason }
@@ -149,16 +149,16 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         guard let stored = readStore(key: "session") else { return nil }
         let pruned = Self.pruneCookieHeader(stored, policy: config.capturePolicy)
         if pruned != stored {
-            // A jar captured before the allowlist existed can still carry SSO
-            // cookies from another account (e.g. an X session in the Grok jar).
+            // A stored jar can carry SSO cookies from another account (e.g. an X
+            // session in the Grok jar).
             writeStore(key: "session", value: pruned)
         }
         return pruned
     }
 
     /// Narrows a stored `Cookie:` header to the provider's essential cookies.
-    /// Only narrows when one of them is present, so a stored jar without any
-    /// essential cookie is left for the server to accept or reject. Prefixed
+    /// Narrows only when one of them is present; a stored jar without any
+    /// essential cookie is sent as-is for the server to accept or reject. Prefixed
     /// families (NextAuth's chunked session cookie) are matched as a whole.
     static func pruneCookieHeader(
         _ header: String,
@@ -181,11 +181,10 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     }
 
     /// Folds refreshed `Set-Cookie` values for this provider's essential cookies
-    /// into the stored header. A rolling session cookie (NextAuth renews
-    /// `__Secure-next-auth.session-token` on every `/api/auth/session` call) is
-    /// otherwise only ever polled and never renewed, so it hard-expires while the
-    /// user is still signed in. Writes the store directly: it must not bump
-    /// `sessionGeneration`, or a poll in flight would invalidate its own session.
+    /// into the stored header, keeping a rolling session cookie (NextAuth renews
+    /// `__Secure-next-auth.session-token` on every `/api/auth/session` call)
+    /// valid while the user is signed in. Writes the store directly and leaves
+    /// `sessionGeneration` unchanged, so a poll in flight keeps its own session.
     ///
     /// Each value may hold several cookies folded into one comma-joined header,
     /// as `HTTPURLResponse` reports them; Foundation's parser splits them and
@@ -284,8 +283,8 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
 
     /// Captures the isolated store's session cookies; returns false and records `lastAuthError` when none qualify.
     func captureCookiesFromWebKit() async -> Bool {
-        // Finish any pending sign-out purge first so it cannot delete cookies
-        // being captured from a fresh sign-in.
+        // Finish any pending sign-out purge first so it completes before cookies
+        // from a fresh sign-in are captured.
         _ = await clearTask?.value
         guard let result = await WebKitCookieCapture.capture(policy: config.capturePolicy, dataStore: signInDataStore) else {
             lastAuthError = config.capturePolicy.failureMessage
@@ -299,10 +298,10 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     /// Stores a capture as the live session and records its account.
     func adopt(_ result: WebKitCookieCapture.CaptureResult) {
         save(cookieHeader: result.cookieHeader)
-        // Only the credential store keeps these; copying into
-        // `HTTPCookieStorage.shared` would leave the session in a shared jar
-        // that outlives sign-out and lets unrelated requests auto-attach it.
-        // Request paths send the captured Cookie header explicitly.
+        // Only the credential store keeps these, so the session stays out of
+        // `HTTPCookieStorage.shared`, a shared jar that outlives sign-out and
+        // auto-attaches cookies to unrelated requests. Request paths send the
+        // captured Cookie header explicitly.
         //
         // The email shown is the captured account's: a capture without one
         // drops the previous account's email until a poll supplies it.

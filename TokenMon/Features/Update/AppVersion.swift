@@ -1,7 +1,7 @@
 import Foundation
 
-/// A dotted release version (`1.4.2`), compared numerically rather than as a
-/// string so `1.10.0` sorts above `1.9.0`.
+/// A dotted release version (`1.4.2`), compared numerically so `1.10.0` sorts
+/// above `1.9.0`.
 ///
 /// Parses GitHub-style tags (`v1.4.2`, `1.4`, `1.4.2-beta.1`), tags carrying
 /// semver build metadata (`1.8.0+5`, ignored for ordering), and tags prefixed

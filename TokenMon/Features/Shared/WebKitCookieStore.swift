@@ -1,8 +1,9 @@
 import WebKit
 
 /// Provider-neutral access to a WebKit cookie store.
-/// Each provider session owns an isolated non-persistent store so cookies
-/// never leak between providers (e.g. X/Twitter sessions into the Grok jar).
+/// Each provider session owns an isolated non-persistent store so each
+/// provider's cookies stay in its own store (e.g. X/Twitter sessions stay out
+/// of the Grok jar).
 @MainActor
 enum WKWebsiteDataStoreBridge {
     static let shared = WKWebsiteDataStoreBridgeImpl()

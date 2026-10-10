@@ -141,7 +141,7 @@ final class AppSettingsTests: XCTestCase {
 
     // MARK: - Provider visibility
 
-    /// A disabled provider must not poll even when it is the selected tab or has
+    /// A disabled provider does not poll even when it is the selected tab or has
     /// a menu-bar bar: enablement is a lifecycle gate, not just a filter.
     func testDisabledProviderDoesNotPoll() {
         let settings = makeSettings()
@@ -153,7 +153,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(settings.needsCursorPolling)
     }
 
-    /// Grokbot being disabled must stop it polling the shared Cursor session even
+    /// A disabled Grokbot does not poll the shared Cursor session, even
     /// when its menu-bar bar is on.
     func testDisabledGrokbotDoesNotPollEvenWithBarEnabled() {
         let settings = makeSettings()

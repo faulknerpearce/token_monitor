@@ -49,7 +49,7 @@ final class AppVersionTests: XCTestCase {
     }
 
     /// Numeric pre-release identifiers compare numerically, so beta.10 sorts
-    /// above beta.2 (a plain string compare would put beta.10 first).
+    /// above beta.2.
     func testPrereleaseComparesNumericIdentifiersNumerically() {
         XCTAssertTrue(AppVersion("1.5.0-beta.2")! < AppVersion("1.5.0-beta.10")!)
         XCTAssertTrue(AppVersion("1.5.0-beta.1")! < AppVersion("1.5.0-beta.2")!)

@@ -10,7 +10,7 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     var spentUSD: Double
     var budgetUSD: Double
     /// True for a preserved day of the window an early provider reset cut short.
-    /// It is history only: it never counts toward the new window's pace or elapsed days.
+    /// It is history only: pace and elapsed days count the new window's days alone.
     var isPriorWindow = false
 
     var percentOfBudget: Double {
@@ -24,12 +24,12 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
 /// Chevron state for daily-budget week browsing.
 ///
 /// `0` is the window that contains today. Negative values are earlier windows.
-/// Forward never steps past today, matching the SuperGrok daily chart.
+/// Forward stops at the window that contains today, matching the SuperGrok daily chart.
 enum WeekOffset {
     /// One week further into the past. Unbounded, same as the Grok chart.
     static func previous(_ offset: Int) -> Int { offset - 1 }
 
-    /// One week toward the present. Never moves past the current week.
+    /// One week toward the present, stopping at the current week.
     static func next(_ offset: Int) -> Int { min(0, offset + 1) }
 
     /// The forward arrow is enabled only while a past week is showing.
@@ -60,7 +60,7 @@ enum DailyBudget {
     /// When `now` falls on the `periodEnd` calendar day *before* the reset instant,
     /// the running period still owns today, so that day is included as an extra
     /// bar (same rule as the weekly window). The daily share stays at the
-    /// period's regular day count, so the bars and pace do not shift on that day.
+    /// period's regular day count, so the bars and pace stay steady on that day.
     static func buildDays(
         periodStart: Date,
         periodEnd: Date,
@@ -99,7 +99,7 @@ enum DailyBudget {
             let end = min(all.count, start + 7)
             return Array(all[start..<end])
         }
-        // Today not in period (e.g. preview data) — just return last 7
+        // Today outside the period (e.g. preview data): the last 7 days.
         if all.count <= 7 { return all }
         return Array(all.suffix(7))
     }
@@ -260,7 +260,7 @@ enum DailyBudget {
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
             // Past weeks are the subject of the chart, so pre-period days draw at
-            // full strength from preserved history instead of the dimmed lead-in.
+            // full strength from preserved history.
             if weekOffset != 0, key < periodStartDay {
                 let spent = priorWindowSpentByDay[key] ?? historyByDay[key] ?? 0
                 return DailyBudgetDay(date: key, spentUSD: spent, budgetUSD: perDay)
@@ -274,11 +274,11 @@ enum DailyBudget {
 
     /// Even-pace headroom vs live period consumption.
     ///
-    /// `periodConsumed` is the pulled used % for the pool, not the sum of bar
+    /// `periodConsumed` is the pulled used % for the pool, independent of the bar
     /// spends. The allowance is credited in **whole calendar days** through today,
     /// so it grows one day's share at a time and the caption's "left today" is
     /// that allowance minus what has been used. `resetsAt`, when known, only names
-    /// the reset day in the caption; it does not change the day-based allowance.
+    /// the reset day in the caption; the allowance stays day-based.
     struct PaceHeadroom: Hashable, Sendable {
         var dailyBudget: Double
         /// Even-pace allowance accrued through today (elapsed days × daily share).
@@ -294,7 +294,7 @@ enum DailyBudget {
     ///
     /// - `weekly`: Claude / Grok — bars usually cover the full period.
     /// - `monthly`: Cursor / OpenCode — bars are a 7-day slice of a
-    ///   **subscription / billing** month (never the calendar month of `now`).
+    ///   **subscription / billing** month, anchored to the billing cycle.
     enum AllowancePeriod: String, Sendable {
         case weekly
         case monthly
@@ -313,7 +313,7 @@ enum DailyBudget {
         return gap + 1
     }
 
-    /// Subscription / billing month bounds, never the calendar month of `now`.
+    /// Subscription / billing month bounds, anchored to the billing cycle.
     ///
     /// With only one side, infers the other by shifting one calendar month
     /// (anniversary-style cycles). A stale ended cycle advances in whole months
@@ -369,7 +369,7 @@ enum DailyBudget {
     }
 
     /// Monday–Sunday bars for a subscription/billing month. Returns nil when
-    /// neither cycle start nor reset is known — refuses calendar-month guesses.
+    /// neither cycle start nor reset is known.
     /// A stale (already-ended) cycle advances to the running one before painting.
     /// `weekOffset` selects an earlier Monday week; `historyByDay` fills days
     /// before the period on those weeks.
@@ -417,7 +417,7 @@ enum DailyBudget {
     ///
     /// 1. `subscriptionMonth` (advances a stale cycle the same way bars do)
     /// 2. else `resetsAt − daysInPeriod` from the bar daily share
-    /// Never falls back to calendar month of `now`.
+    /// 3. else nil
     static func monthlyPacePeriodStart(
         days: [DailyBudgetDay],
         knownStart: Date? = nil,
@@ -479,8 +479,8 @@ enum DailyBudget {
     ///
     /// so the on-track allowance grows one day's share at a time: on day 1 of a
     /// weekly pool the allowance is 100/7 ≈ 14.3%, and 7% used leaves 7.3%. The
-    /// count is capped at the period length implied by the daily share so clock
-    /// skew cannot push `earned` above ~100%. Pass `elapsedDaysInPeriod` to match
+    /// count is capped at the period length implied by the daily share so
+    /// `earned` stays at or below ~100% under clock skew. Pass `elapsedDaysInPeriod` to match
     /// a full-period window; otherwise the budgets of the visible bars through
     /// today are summed.
     ///
@@ -489,7 +489,7 @@ enum DailyBudget {
     /// reset instant (e.g. a Thursday-evening reset with a Wednesday last bar).
     /// There the unspent pool is compared against the even share of the time
     /// actually left until reset, so a pool that cannot cover it reads as over
-    /// pace instead of "left today".
+    /// pace.
     static func paceHeadroom(
         days: [DailyBudgetDay],
         periodConsumed: Double,
@@ -529,12 +529,12 @@ enum DailyBudget {
     }
 
     /// Footer caption for a pace headroom. Shared by the Grok daily-use chart and
-    /// the weekly/monthly bars so the wording and thresholds cannot drift.
+    /// the weekly/monthly bars so the wording and thresholds stay in sync.
     ///
     /// A plain surplus reads "X% usage left today"; when the surplus exceeds one
     /// day's share the caption notes the extra banked from unused prior days.
-    /// An overrun reads "Usage X% over today's allowance" — the used amount is
-    /// never reported.
+    /// An overrun reads "Usage X% over today's allowance", stating the overrun
+    /// alone.
     static func paceCaption(_ pace: PaceHeadroom) -> String? {
         /// Headroom meaningfully above zero → otherwise call it on pace.
         let bankEpsilon = 0.05

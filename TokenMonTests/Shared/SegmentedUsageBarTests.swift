@@ -8,8 +8,8 @@ final class SegmentedUsageBarTests: XCTestCase {
         XCTAssertEqual(widths, [50, 25, 25])
     }
 
-    /// Several tiny slices each floored at the minimum would together exceed the
-    /// track; the floors are normalized down so the row still fits.
+    /// Several tiny slices each floored at the minimum are normalized down so
+    /// the row fits the track.
     func testFloorsAreNormalizedSoTheyDoNotOverflow() {
         let widths = SegmentedUsageBar.segmentWidths(percents: [0.1, 0.1, 0.1], usable: 5, minWidth: 3)
         XCTAssertEqual(widths.reduce(0, +), 5, accuracy: 0.0001)

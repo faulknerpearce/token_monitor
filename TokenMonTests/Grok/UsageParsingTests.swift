@@ -66,7 +66,7 @@ final class UsageParsingTests: XCTestCase {
         let data = try ExportService.export([snap], format: .csv)
         let text = String(data: data, encoding: .utf8)!
         // A leading =, +, -, or @ is prefixed with a quote so spreadsheets treat
-        // the cell as text rather than executing it as a formula.
+        // the cell as text.
         XCTAssertTrue(text.contains("'=cmd|"))
         XCTAssertFalse(text.contains(",=cmd|"))
     }
@@ -116,8 +116,7 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertTrue(parsed.products.contains { $0.id == "build" && abs($0.percentOfPool - 13) < 0.01 })
     }
 
-    /// An oversized/`UInt64.max` length varint is rejected, not converted to
-    /// `Int` (which would trap).
+    /// An oversized/`UInt64.max` length varint is rejected with a thrown error.
     func testOversizedLengthVarintDoesNotCrash() {
         var bytes: [UInt8] = [0x3A] // field 7, wire type 2 (length-delimited)
         bytes.append(contentsOf: Array(repeating: 0xFF, count: 9))
@@ -152,7 +151,7 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertEqual(parsed.products.map(\.id), ["chat", "build", "imagine", "other"])
     }
 
-    /// Voice enum present at 0% must not steal Imagine’s percent (sub-message pairing).
+    /// Voice enum present at 0% leaves Imagine its own percent (sub-message pairing).
     func testGRPCProductBreakdownWithVoiceGap() throws {
         let frame = makeCreditsConfigFrame(
             usedPercent: 64.0,
@@ -379,7 +378,7 @@ final class UsageParsingTests: XCTestCase {
         var cal = Calendar(identifier: .gregorian)
         cal.firstWeekday = 2
         // Sunday now with a Monday reset: the running billing window is Mon–Sun
-        // because the provider anchored it there, not because a calendar week was guessed.
+        // because the provider anchored it there.
         let now = ISO8601DateFormatter().date(from: "2026-07-12T10:00:00Z")!
         let today = cal.startOfDay(for: now)
         guard let yesterday = cal.date(byAdding: .day, value: -1, to: today) else {
@@ -446,7 +445,7 @@ final class UsageParsingTests: XCTestCase {
             calendar: cal,
             now: now
         ))
-        // Single sample: do not paint week-to-date product % onto "today".
+        // Single sample: week-to-date product % stays off "today".
         XCTAssertFalse(week.hasDailyData)
         XCTAssertTrue(week.isEstimated)
         XCTAssertTrue(week.days.allSatisfy(\.segments.isEmpty))
@@ -669,7 +668,7 @@ final class UsageParsingTests: XCTestCase {
             calendar: cal,
             now: now
         ))
-        // Prior period must not create a giant before-reset bar; single in-week sample → empty.
+        // Prior period adds no before-reset bar; single in-week sample → empty.
         XCTAssertTrue(week.days.allSatisfy(\.segments.isEmpty))
         XCTAssertTrue(week.isEstimated)
     }
@@ -683,8 +682,8 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertEqual(DailyUsageBuilder.fillFraction(forDayUsage: 0), 0, accuracy: 0.001)
     }
 
-    /// A lagging gRPC payload whose canonical reset already passed must keep
-    /// that timestamp — the window rolls instead of dropping the anchor.
+    /// A lagging gRPC payload whose canonical reset already passed keeps
+    /// that timestamp, and the window rolls forward from it.
     func testGRPCParseKeepsPastCanonicalReset() throws {
         // 2025-06-15T21:06:40Z — in the past relative to any realistic `now`.
         let pastResetUnix: UInt64 = 1_750_000_000

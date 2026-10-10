@@ -161,7 +161,7 @@ final class LegacyCacheCleanupTests: XCTestCase {
     }
 }
 
-/// Records the clear instead of touching a real cookie jar.
+/// Cookie jar fake that records the clear.
 private final class RecordingCookieStorage: HTTPCookieStorage {
     var removedSince: Date?
 

@@ -4,7 +4,7 @@ import os
 import WebKit
 
 /// Console session for opencode.ai (OpenAuth cookie `auth`).
-/// Separate from Grok WebKit cookies so the two providers do not clobber each other.
+/// Kept separate from Grok WebKit cookies so each provider keeps its own session.
 @MainActor
 final class OpenCodeAuthSession: ProviderAuthSession {
     private static let openCodeHosts = ["opencode.ai", "auth.opencode.ai"]
@@ -13,7 +13,7 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     @Published private(set) var workspaceID: String?
 
     /// Console session cookie. The console authenticates separately from the
-    /// site's `auth` cookie, so this must be captured and sent to `/console/api/*`.
+    /// site's `auth` cookie, so this is captured and sent to `/console/api/*`.
     static let consoleSessionCookieName = "__host-console_session"
 
     static func openCodePolicy() -> WebKitCookieCapture.Policy {
@@ -32,9 +32,8 @@ final class OpenCodeAuthSession: ProviderAuthSession {
             },
             includeAllDomainCookiesWhenSessionFound: true,
             // The console API request needs both the console session
-            // (`__Host-console_session`) and the site cookies (`auth=…; provider=…`);
-            // narrowing to `auth`/`provider` alone dropped the console session and
-            // broke workspace binding. Unrelated analytics cookies are still excluded.
+            // (`__Host-console_session`) and the site cookies (`auth=…; provider=…`)
+            // for workspace binding. Unrelated analytics cookies are excluded.
             essentialCookieNames: ["auth", "provider", Self.consoleSessionCookieName],
             maxAttempts: 4,
             failureMessage: "No OpenCode console session cookie found. Finish signing in until you see the console, then click Finish Sign-In."
@@ -67,8 +66,8 @@ final class OpenCodeAuthSession: ProviderAuthSession {
         workspaceID = id
     }
 
-    /// Clear the in-memory workspace id alongside the persisted key, so a
-    /// signed-out session cannot hand the previous account's org to the next poll.
+    /// Clears the in-memory workspace id alongside the persisted key, so the next
+    /// poll after sign-out resolves its org afresh.
     override func clearBrowserState() {
         super.clearBrowserState()
         workspaceID = nil

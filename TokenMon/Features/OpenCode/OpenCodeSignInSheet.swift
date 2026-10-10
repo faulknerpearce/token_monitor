@@ -23,7 +23,7 @@ struct OpenCodeSignInView: View {
                           !host.contains("auth.") else { return false }
                     let path = url.path
                     if path.hasPrefix("/console") {
-                        // Console landing page after sign-in, not the login form itself.
+                        // Console landing page after sign-in (past the login form).
                         return !path.hasPrefix("/console/login")
                     }
                     return path.contains("/workspace")

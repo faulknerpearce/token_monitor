@@ -1,8 +1,7 @@
 @testable import TokenMon
 import XCTest
 
-/// Week-arrow offsets for daily budget charts. Split from DailyBudgetTests so the
-/// length gates stay at the current maxima.
+/// Week-arrow offsets for daily budget charts.
 final class DailyBudgetWeekOffsetTests: XCTestCase {
     private var calendar: Calendar!
 

@@ -82,10 +82,9 @@ enum ProductCatalog {
 
     /// Products for a panel's bar and category rows: the snapshot's own products
     /// in canonical display order, limited to the user's visible set, keeping any
-    /// non-zero contribution (the menu bar applies a 0.05 floor instead). A
-    /// breakdown-less snapshot carries a synthesized `"other"` slice, which this
-    /// returns so the bar reflects the headline used% instead of painting an
-    /// empty track.
+    /// non-zero contribution (the menu bar applies a 0.05 floor). A breakdown-less
+    /// snapshot carries a synthesized `"other"` slice, which this returns so the
+    /// bar reflects the headline used%.
     static func panelProducts(_ products: [ProductUsage], visible: Set<String>) -> [ProductUsage] {
         filtered(products, visible: visible, threshold: 0)
     }
@@ -196,9 +195,9 @@ struct DailyUsageWeek: Hashable, Sendable {
     var days: [DailyUsageDay]
     /// Products that appear in any day (for legend).
     var legendProducts: [DailyUsageLegendItem]
-    /// True when at least one day has a real usage delta (not empty fallback).
+    /// True when at least one day has a real usage delta.
     var hasDailyData: Bool
-    /// True when fewer than two in-week samples exist (daily bars not yet day-over-day).
+    /// True when fewer than two in-week samples exist, so the daily bars are estimates.
     var isEstimated: Bool
 
     /// Chronological days for the chart (billing period start → +6 days).
@@ -222,7 +221,7 @@ struct WeeklyUsageSnapshot: Codable, Identifiable, Hashable, Sendable {
     var products: [ProductUsage]
     var extraCreditsBalance: Decimal?
     var accountEmail: String?
-    /// Per-day series from server when available (not required for Codable round-trip).
+    /// Per-day series from the server when available; empty otherwise.
     var dailySeries: [DailyUsageSnapshot]
 
     init(

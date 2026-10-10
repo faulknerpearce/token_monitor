@@ -37,7 +37,7 @@ struct OpenCodeWindowUsage: Identifiable, Hashable, Sendable {
         Self.clampedPercent(usedUSD: usedUSD, limitUSD: limitUSD)
     }
 
-    /// Spend as percent of limit; returns `0` when `limitUSD` is not positive.
+    /// Spend as percent of limit; returns `0` when `limitUSD` is zero or negative.
     static func clampedPercent(usedUSD: Double, limitUSD: Double) -> Double {
         guard limitUSD > 0 else { return 0 }
         return Percent.clamp(usedUSD / limitUSD * 100)
@@ -138,7 +138,7 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
         maxHourUSD <= 0 && hours.allSatisfy { $0.messageCount == 0 }
     }
 
-    /// Overview weights: keep Go and Zen separate; xAI/Grok-via-harness → Grok;
+    /// Overview weights: Go and Zen stay separate; xAI/Grok-via-harness → Grok;
     /// other BYOK providers are excluded.
     func overviewProviderHourWeights() -> (
         openCodeGo: [Double],
@@ -289,8 +289,8 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
     var primaryUsedPercent: Double { monthlyUsedPercent }
 
     /// True when the local session DB contributed model/token/spend stats. The
-    /// console snapshot alone carries none, so the Stats card is omitted rather
-    /// than rendered as `$0.00 / 0 tokens`.
+    /// console snapshot alone carries none, so the Stats card is shown only when
+    /// this is true.
     var hasLocalStats: Bool {
         !models.isEmpty || monthlyTokens > 0 || monthlyEstimatedUSD > 0
     }

@@ -4,7 +4,7 @@
 Usage: Scripts/xccov_to_lcov.py <Test.xcresult> [source-root] > coverage.lcov
 
 Reads `xcrun xccov view --archive --json`, keeps only files under
-<source-root>/TokenMon/ (the app target; test sources are never reported), and
+<source-root>/TokenMon/ (the app target only), and
 emits paths relative to <source-root> (default: the current directory).
 Exits non-zero when no app source has coverage data.
 """

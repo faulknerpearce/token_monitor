@@ -1,7 +1,7 @@
 @testable import TokenMon
 import XCTest
 
-/// Menu bar label rendering: the selected-provider mode must keep one fixed
+/// Menu bar label rendering: the selected-provider mode keeps one fixed
 /// geometry across providers and data states so the dropdown anchor never
 /// shifts on the x axis.
 @MainActor
@@ -39,7 +39,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
     }
 
     /// The label colour is baked into the bitmap, so light and dark menu bars
-    /// must render (and cache) separately; the same appearance reuses the key.
+    /// render (and cache) separately; the same appearance reuses the key.
     func testAppearanceIsPartOfTheRenderedKey() throws {
         let light = try renderStatus(appearance: .aqua)
         let dark = try renderStatus(appearance: .darkAqua)
@@ -215,7 +215,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
         )
     }
 
-    /// A disabled provider must not leave a frozen segment in the composite.
+    /// A disabled provider has no segment in the composite.
     func testCompositeOmitsDisabledProviderRegion() {
         let enabled = renderStatus(
             provider: .grok,
@@ -235,8 +235,7 @@ final class MenuBarStatusRendererTests: XCTestCase {
 
     // MARK: - Snapped hit-testing (live click path)
 
-    /// Clicks landing in the inter-segment gap still select the adjacent
-    /// provider instead of keeping a stale tab.
+    /// Clicks landing in the inter-segment gap select the adjacent provider.
     func testSnappedProviderResolvesGapClicks() {
         let status = renderStatus(provider: .grok, showSelectedProvider: false, showGrokbotBar: true)
         XCTAssertGreaterThanOrEqual(status.regions.count, 2)

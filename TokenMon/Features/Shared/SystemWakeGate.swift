@@ -6,8 +6,8 @@ import Network
 ///
 /// On wake the interfaces are usually still down, so refreshing straight away
 /// fails every provider at once. The gate waits for `NWPathMonitor` to report a
-/// satisfied path after the wake (or for `fallbackDelay`, in case the path never
-/// changed) before calling `onReady`.
+/// satisfied path after the wake (or for `fallbackDelay` when the path stays
+/// unchanged) before calling `onReady`.
 @MainActor
 final class SystemWakeGate {
     /// Suspends for the given number of seconds; throws when cancelled.

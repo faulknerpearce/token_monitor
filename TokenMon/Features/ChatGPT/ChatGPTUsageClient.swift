@@ -80,9 +80,9 @@ struct ChatGPTUsageClient: Sendable {
 
     /// Parses the `/api/auth/session` payload for the bearer access token.
     ///
-    /// A non-JSON body (an HTML edge challenge or the sign-in page) is not proof
-    /// that the stored session is dead, so it stays transient: mapping it to
-    /// `.unauthorized` would delete the credential the user just captured.
+    /// A non-JSON body (an HTML edge challenge or the sign-in page) maps to a
+    /// transient error, which keeps the stored credential: such a body also
+    /// appears while the session is still valid.
     static func parseSessionToken(_ data: Data) throws -> String {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             let message = ProviderHTTP.looksLikeHTML(data)
@@ -132,13 +132,13 @@ extension ChatGPTUsageClient.Transport {
 
 /// In-memory cache of the web access token exchanged for a session cookie.
 ///
-/// The token is reused until shortly before its JWT `exp`, and never longer
-/// than ``sessionRenewInterval``: the `/api/auth/session` exchange is also what
-/// renews the rolling session cookie, so it still runs regularly.
+/// The token is reused until shortly before its JWT `exp`, and for at most
+/// ``sessionRenewInterval``: the `/api/auth/session` exchange also renews the
+/// rolling session cookie, so it runs regularly.
 final class ChatGPTAccessTokenCache: @unchecked Sendable {
     /// Longest a token is reused before the session endpoint is called again.
     static let sessionRenewInterval: TimeInterval = 30 * 60
-    /// Margin before the token's own expiry from which it is not reused.
+    /// Margin before the token's own expiry at which reuse stops.
     static let expiryMargin: TimeInterval = 5 * 60
     /// Reuse period for a token whose expiry cannot be read.
     static let unknownExpiryLifetime: TimeInterval = 5 * 60

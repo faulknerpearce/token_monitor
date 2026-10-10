@@ -72,7 +72,7 @@ final class UpdateChecker: ObservableObject {
     }
 
     /// Re-reads the setting: turning checks off clears any pending banner so the
-    /// row disappears immediately rather than at the next poll.
+    /// row disappears immediately.
     func settingChanged() {
         if settings.checksForUpdates {
             loop.start()
@@ -223,8 +223,8 @@ final class UpdateChecker: ObservableObject {
             throw UpdateCheckError.badResponse("No HTTP response")
         }
         guard (200..<300).contains(http.statusCode) else {
-            // 403 is usually the unauthenticated rate limit, not a real
-            // failure.
+            // 403 is usually the unauthenticated rate limit, reported as a
+            // retry-later message.
             let detail = http.statusCode == 403
                 ? "GitHub rate limit reached; will retry later"
                 : "HTTP \(http.statusCode)"

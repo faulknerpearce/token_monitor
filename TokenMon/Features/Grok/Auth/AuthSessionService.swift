@@ -2,14 +2,13 @@ import Foundation
 
 /// Session for grok.com (`sso` / `sso-rw` cookies).
 ///
-/// Sign-in may pass through x.com / twitter.com (see `SignInView.authHosts`),
-/// but those hosts are not part of the session: their cookies are never
-/// captured or stored.
+/// Sign-in may pass through x.com / twitter.com (see `SignInView.authHosts`);
+/// the session captures and stores only the grok.com/xAI cookies.
 @MainActor
 final class AuthSessionService: ProviderAuthSession {
     private static let grokHosts = ["grok.com", "x.ai"]
 
-    /// Cookie names that indicate a real authenticated session (not anonymous browsing).
+    /// Cookie names present only in an authenticated session.
     private static let authCookieHints: Set<String> = [
         "sso", "session", "auth", "token", "jwt", "sid", "user", "account",
         "x-session", "xai", "oidc", "refresh", "access"

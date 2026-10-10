@@ -158,7 +158,7 @@ struct CursorUsageClient: Sendable {
         let pooledUsed = JSON.number(pooled?["used"])
         let pooledLimit = JSON.number(pooled?["limit"])
 
-        // Cursor percent fields are already in percentage units (0.36 means 0.36%, not 36%).
+        // Cursor percent fields are in percentage units: 0.36 means 0.36%, under one percent.
         let autoPercent = displayPercent(JSON.number(plan?["autoPercentUsed"]))
         let apiPercent = displayPercent(JSON.number(plan?["apiPercentUsed"]))
 
@@ -257,20 +257,20 @@ struct CursorUsageClient: Sendable {
         return nil
     }
 
-    /// Parses one usage-events page; a missing count yields `0` (unknown, not empty).
+    /// Parses one usage-events page; a missing count yields `0`, meaning unknown.
     static func parseUsageEventsPage(data: Data) throws -> (events: [[String: Any]], total: Int) {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError.badResponse(.cursor, "Expected events JSON object")
         }
         // Coerce strings and numbers alike; a missing/renamed field yields 0,
-        // which the pager treats as "unknown" rather than "no more pages".
+        // which the pager treats as unknown and keeps paging.
         let total = JSON.number(root["totalUsageEventsCount"]).map(safeInt) ?? 0
         let events = (root["usageEventsDisplay"] as? [[String: Any]]) ?? []
         return (events, total)
     }
 
-    /// Clamps a JSON number into `Int` without trapping on out-of-range/NaN;
-    /// compares against the `Double` bounds first to avoid the 2^63 rounding trap.
+    /// Clamps a JSON number into `Int` (NaN/infinity → 0, out-of-range → the bound);
+    /// compares against the `Double` bounds first because `Double(Int.max)` rounds up to 2^63.
     static func safeInt(_ value: Double) -> Int {
         guard value.isFinite else { return 0 }
         if value >= Double(Int.max) { return Int.max }
@@ -278,7 +278,7 @@ struct CursorUsageClient: Sendable {
         return Int(value)
     }
 
-    /// Clamps a JSON number into `Int64` without trapping on out-of-range/NaN.
+    /// Clamps a JSON number into `Int64` (NaN/infinity → 0, out-of-range → the bound).
     static func safeInt64(_ value: Double) -> Int64 {
         guard value.isFinite else { return 0 }
         if value >= Double(Int64.max) { return Int64.max }
@@ -287,8 +287,8 @@ struct CursorUsageClient: Sendable {
     }
 
     /// Cursor Bot (`grok-bot-*`) usage has its own allowance (tracked by the
-    /// Grokbot provider) and is not part of the Cursor plan pool, so it must be
-    /// excluded from every Cursor aggregation.
+    /// Grokbot provider) outside the Cursor plan pool; every Cursor aggregation
+    /// excludes it.
     static func isGrokBotEvent(_ event: [String: Any]) -> Bool {
         ((event["model"] as? String) ?? "").hasPrefix("grok-bot")
     }
@@ -411,8 +411,8 @@ struct CursorUsageClient: Sendable {
         return nil
     }
 
-    /// Accepts seconds or milliseconds (heuristic on magnitude) and rejects
-    /// implausible/negative values instead of returning a 1970 date.
+    /// Accepts seconds or milliseconds (heuristic on magnitude); returns nil for
+    /// implausible/negative values.
     private static func date(fromEpochNumber value: Double) -> Date? {
         guard value.isFinite, value > 0 else { return nil }
         let seconds = value > 1_000_000_000_000 ? value / 1000 : value
@@ -495,7 +495,7 @@ struct CursorUsageClient: Sendable {
 
     // MARK: - Helpers
 
-    /// Earliest event fetch date: the billing-cycle start, never more than 31
+    /// Earliest event fetch date: the billing-cycle start, capped at 31
     /// days back (the longest calendar-month cycle); 31 days back without a
     /// known cycle start.
     static func eventsWindowStart(cycleStart: Date?, now: Date, calendar: Calendar = .current) -> Date {
@@ -519,8 +519,8 @@ struct CursorUsageClient: Sendable {
     /// Per-day token weight for the pool-estimate back-fill.
     ///
     /// Excludes Cursor Bot (`grok-bot-*`) usage: it has its own allowance (tracked
-    /// by the Grokbot provider) and is not part of the Cursor plan pool, so mixing
-    /// it in would dilute the estimate on days with heavy Bot usage.
+    /// by the Grokbot provider) outside the Cursor plan pool, so the estimate
+    /// reflects plan-pool usage only.
     static func dailyEstimateWeightByDay(
         events: [[String: Any]],
         cycleStart: Date? = nil,

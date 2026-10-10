@@ -41,8 +41,7 @@ final class GrokbotUsagePollerTests: XCTestCase {
         ).isEmpty)
     }
 
-    /// On reset morning the first bar stays the day the pool opened (Thursday),
-    /// rather than sliding so today becomes the last bar.
+    /// On reset morning the first bar stays the day the pool opened (Thursday).
     func testResetMorningKeepsPeriodStartAsFirstBar() {
         let days = GrokbotUsagePoller.buildDailyBudgetDays(
             spentByDay: [:],
@@ -77,8 +76,7 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertEqual(days[0].budgetUSD, 100.0 / 7, accuracy: 1e-9)
     }
 
-    /// A 5-day start → reset span from the payload must not shrink the weekly
-    /// pool to 5 bars.
+    /// A 5-day start → reset span from the payload keeps the weekly pool at 7 bars.
     func testFiveDaySpanStillYieldsSevenBars() {
         let snapshot = GrokbotSnapshot(
             fetchedAt: date(2026, 8, 25),
@@ -99,7 +97,7 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertEqual(days[0].budgetUSD, 100.0 / 7, accuracy: 1e-9)
     }
 
-    /// A 7-day window that is a few hours short must not collapse to 6 bars.
+    /// A 7-day window that is a few hours short counts as 7 days.
     func testDaysInPeriodUsesCalendarDaysNotTruncatedHours() {
         let snapshot = GrokbotSnapshot(
             fetchedAt: date(2026, 8, 25),
@@ -111,7 +109,7 @@ final class GrokbotUsagePollerTests: XCTestCase {
     }
 
     /// A payload whose period start and reset land on the same day falls back
-    /// to a 7-day period rather than a one-day span.
+    /// to a 7-day period.
     func testSameDayStartAndResetFallsBackToAWeek() {
         let snapshot = GrokbotSnapshot(
             fetchedAt: date(2026, 9, 2, hour: 14),
@@ -161,7 +159,7 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertEqual(GrokbotEntitlement.superGrok(planLabel: "").captionText, "via SuperGrok")
     }
 
-    /// Grokbot is a real, pollable provider and must appear in the switcher.
+    /// Grokbot is a real, pollable provider and appears in the switcher.
     func testGrokbotIsARegisteredUsageProvider() {
         XCTAssertTrue(MonitorProvider.usageProviders.contains(.grokbot))
         XCTAssertEqual(MonitorProvider.grokbot.displayName, "Grokbot")

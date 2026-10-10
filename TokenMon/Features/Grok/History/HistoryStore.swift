@@ -13,9 +13,8 @@ final class UsageSnapshotRecord {
     var resetsAt: Date?
     var productsJSON: Data
     /// Stored as Double for SwiftData schema stability; domain model uses Decimal.
-    /// This is intentionally lossy (a display-only balance), so `4.10` may read
-    /// back as `4.0999…`. Persisting it as a string would require a SwiftData
-    /// schema migration for no user-visible benefit.
+    /// The conversion is lossy (a display-only balance), so `4.10` may read
+    /// back as `4.0999…`.
     var extraCredits: Double?
     var accountEmail: String?
 
@@ -53,10 +52,8 @@ final class UsageSnapshotRecord {
         accountEmail = snapshot.accountEmail
     }
 
-    /// `dailySeries` is deliberately not persisted: it is only ever non-empty
-    /// when the server supplies a per-day series, which the local-delta path
-    /// already supersedes, so round-tripping it would add schema weight for no
-    /// visible effect.
+    /// `dailySeries` is held in memory only: it is non-empty only when the
+    /// server supplies a per-day series, which the local-delta path supersedes.
     func toSnapshot() -> WeeklyUsageSnapshot {
         let products: [ProductUsage]
         if let decoded = try? Self.decoder.decode([ProductUsage].self, from: productsJSON) {
@@ -93,13 +90,13 @@ final class HistoryStore: ObservableObject {
     @Published private(set) var recent: [WeeklyUsageSnapshot] = []
 
     /// Account email whose rows `recent` holds and same-day collapsing
-    /// matches. Rows of other accounts stay on disk (and in exports) but never
-    /// feed this account's chart. `nil` is the account whose email is unknown.
+    /// matches. Rows of other accounts stay on disk (and in exports) and feed
+    /// only their own account's chart. `nil` is the account whose email is unknown.
     private(set) var activeAccount: String?
 
     /// True when the persistent store could not be opened. History then runs
-    /// session-only (in-memory) instead of silently no-oping forever; Settings
-    /// surfaces this so the user knows the data will not survive a relaunch.
+    /// session-only (in-memory); Settings surfaces this so the user knows the
+    /// data is lost on relaunch.
     @Published private(set) var storeFailed = false
 
     init(inMemory: Bool = false) {
@@ -197,7 +194,7 @@ final class HistoryStore: ObservableObject {
             && current.accountEmail == next.accountEmail
     }
 
-    /// Synchronous save — call on terminate so the coalesced write cannot be lost.
+    /// Synchronous save, called on terminate so the coalesced write reaches disk.
     func flush() {
         flushIfNeeded()
         saveTask?.cancel()
@@ -224,13 +221,13 @@ final class HistoryStore: ObservableObject {
             try context.save()
             dirty = false
         } catch {
-            // Keep `dirty` set so the next append/poll or terminate-flush retries;
-            // clearing it here would silently drop the last snapshots.
+            // `dirty` stays set so the next append/poll or terminate-flush retries
+            // the save of the last snapshots.
             Self.logger.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// Keep `recent` in sync without re-fetching (and re-decoding) up to 200 rows.
+    /// Updates `recent` in place, skipping a re-fetch (and re-decode) of up to 200 rows.
     private func upsertRecent(_ snapshot: WeeklyUsageSnapshot, replacingID: UUID? = nil) {
         if let replacingID, let index = recent.firstIndex(where: { $0.id == replacingID }) {
             recent[index] = snapshot
@@ -243,9 +240,9 @@ final class HistoryStore: ObservableObject {
     }
 
     /// Replace the same-day entry in `recent` in place, or insert at the front when
-    /// no same-day entry exists. Matching by calendar day — not snapshot id — keeps
-    /// `recent` aligned with the single per-day disk row even though every poll
-    /// produces a fresh snapshot id.
+    /// no same-day entry exists. Matching by calendar day keeps `recent` aligned
+    /// with the single per-day disk row even though every poll produces a fresh
+    /// snapshot id.
     private func upsertRecentForDay(_ snapshot: WeeklyUsageSnapshot, calendar: Calendar) {
         if let index = recent.firstIndex(where: { calendar.isDate($0.fetchedAt, inSameDayAs: snapshot.fetchedAt) }) {
             recent[index] = snapshot

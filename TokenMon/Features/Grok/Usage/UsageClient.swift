@@ -5,8 +5,8 @@ extension ProviderError {
     private static let logger = Logger(category: "UsageClient")
 
     /// Body-free error: the raw response body is logged privately (truncated) for
-    /// diagnostics but never placed in the user-facing message, which is logged at
-    /// `privacy: .public` and rendered in the panel.
+    /// diagnostics, and the user-facing message, which is logged at
+    /// `privacy: .public` and rendered in the panel, carries only the status code.
     static func grokHTTPStatus(_ code: Int, body: String) -> ProviderError {
         if !body.isEmpty {
             logger.debug("Grok HTTP \(code) body: \(String(body.prefix(400)), privacy: .private)")
@@ -31,8 +31,8 @@ extension ProviderError {
 ///
 /// The gRPC-web billing endpoint behind grok.com Settings → Usage is the
 /// source of truth and is called first. The REST paths are guesses, probed
-/// only when that call fails for a reason other than a rejected session, and
-/// their responses never decide whether the session is valid.
+/// only when that call fails for a reason other than a rejected session; only
+/// the billing endpoint decides whether the session is valid.
 struct UsageClient: Sendable {
     private let logger = Logger(category: "UsageClient")
 
@@ -160,7 +160,7 @@ struct UsageClient: Sendable {
         }
     }
 
-    /// When product breakdown is unavailable, keep a neutral "other" slice — never label as Build.
+    /// Without a product breakdown, attributes the pool to a neutral "other" slice.
     static func synthesizeProducts(usedPercent: Double) -> [ProductUsage] {
         guard usedPercent > 0.05 else { return [] }
         return [
@@ -178,9 +178,9 @@ struct UsageClient: Sendable {
 
 /// Parses REST usage JSON from a known set of usage keys and wrappers.
 ///
-/// Only usage-specific keys are read (no bare `percent` / `value`), and every
-/// percentage must lie in 0...100, so an unrelated 200 response cannot pass
-/// as usage.
+/// Reads only usage-specific keys (bare `percent` / `value` are ignored) and
+/// requires every percentage to lie in 0...100, so an unrelated 200 response
+/// fails to parse as usage.
 enum UsageResponseParser {
     /// Parses `data` as usage JSON, returning nil when no usable pool is present.
     static func parseJSON(_ data: Data, accountEmail: String?) -> WeeklyUsageSnapshot? {
@@ -357,10 +357,10 @@ enum GRPCWebParser {
             guard field.value >= 1_700_000_000, field.value <= 2_100_000_000 else { return nil }
             return (field.path, Date(timeIntervalSince1970: TimeInterval(field.value)))
         }
-        // Canonical reset field [1,5,1] is kept even when already past — a lagging
-        // payload must not lose the period anchor. `billingPeriodWeekBounds` rolls
-        // the window when now >= resetsAt. Non-canonical candidates stay future-only
-        // so unrelated old timestamps never invent an anchor.
+        // Canonical reset field [1,5,1] is kept even when already past, so a lagging
+        // payload keeps the period anchor. `billingPeriodWeekBounds` rolls the window
+        // when now >= resetsAt. Non-canonical candidates count only when in the
+        // future, so unrelated old timestamps are ignored.
         let canonical = resetCandidates.filter { $0.path == [1, 5, 1] }.map(\.date).min()
         let future = resetCandidates.filter { $0.date > now }
         let reset = canonical ?? future.map(\.date).min()
@@ -420,8 +420,8 @@ enum GRPCWebParser {
         return ProductCatalog.sortForDisplay(Array(seen.values))
     }
 
-    /// Recursively walk `bytes[start..<end]`.  Every time we hit a length‑delimited
-    /// field whose number is 7, treat its body as a product sub‑message.
+    /// Recursively walks `bytes[start..<end]`, treating the body of every
+    /// length‑delimited field 7 as a product sub‑message.
     private static func scanForField7Products(bytes: [UInt8], start: Int, end: Int) -> [ProductUsage] {
         var products: [ProductUsage] = []
         var index = start
@@ -495,7 +495,7 @@ enum GRPCWebParser {
                       let intNl = Int(exactly: nl) else { return nil }
                 index += intNl
             default:
-                // Unknown wire type — abort this product rather than spin.
+                // Unknown wire type: abandons this product.
                 return nil
             }
         }

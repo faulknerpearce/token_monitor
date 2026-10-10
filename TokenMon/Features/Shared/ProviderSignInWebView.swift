@@ -5,7 +5,7 @@ import WebKit
 /// popups as overlay tabs with Back, and fires when the return page loads.
 struct ProviderSignInWebView: NSViewRepresentable {
     var startURL: URL
-    /// Isolated store for this provider's sign-in (cookies never leak across providers).
+    /// Isolated store for this provider's sign-in (cookies stay with this provider).
     var dataStore: WKWebsiteDataStore
     var controller: SignInBrowserController
     var isAuthHost: (String, String) -> Bool

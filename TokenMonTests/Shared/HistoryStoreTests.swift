@@ -118,8 +118,8 @@ final class HistoryStoreTests: XCTestCase {
 
     // MARK: - Accounts
 
-    /// Another account's same-day poll gets its own row instead of overwriting
-    /// the first account's, and `recent` shows only the active account.
+    /// Another account's same-day poll gets its own row beside the first
+    /// account's, and `recent` shows only the active account.
     func testRowsAreKeyedByAccount() {
         let start = Calendar.current.startOfDay(for: Date())
         store.append(WeeklyUsageSnapshot(fetchedAt: start.addingTimeInterval(3600), usedPercent: 40, accountEmail: "a@example.com"))

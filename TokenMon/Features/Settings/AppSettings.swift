@@ -3,7 +3,7 @@ import ServiceManagement
 import SwiftUI
 
 /// The login-item registration `AppSettings` drives (`SMAppService.mainApp`
-/// in the app; tests inject a fake so they never touch the real login item).
+/// in the app; tests inject a fake in place of the real login item).
 @MainActor
 protocol LoginItemService: AnyObject {
     var status: SMAppService.Status { get }
@@ -76,8 +76,8 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// When on, the menu bar shows only the selected provider (icon + % + bar)
-    /// instead of the pinned graph composite.
+    /// When on, the menu bar shows only the selected provider (icon + % + bar);
+    /// when off, it shows the pinned graph composite.
     @Published var showSelectedProviderInMenuBar: Bool {
         didSet {
             guard showSelectedProviderInMenuBar != oldValue else { return }
@@ -152,7 +152,7 @@ final class AppSettings: ObservableObject {
                 return
             }
             defaults.set(enabledProviderIDs.map(\.rawValue).sorted(), forKey: Keys.enabledProviders)
-            // A disabled tab cannot stay selected; fall back to Overview.
+            // Selecting a disabled tab falls back to Overview.
             if selectedProvider != .overview, !enabledProviderIDs.contains(selectedProvider) {
                 selectedProvider = .overview
             }
@@ -179,15 +179,14 @@ final class AppSettings: ObservableObject {
     /// System Settings › General › Login Items.
     @Published private(set) var launchAtLoginNeedsApproval = false
 
-    /// A provider only polls when the user has it enabled. The selection and
-    /// menu-bar flags are visibility filters, not lifecycle switches; without
-    /// this gate a disabled provider (e.g. Grokbot) still runs and can invalidate
-    /// a shared session (e.g. Cursor's).
+    /// A provider polls only when the user has it enabled. The selection and
+    /// menu-bar flags filter visibility; this gate stops a disabled provider
+    /// (e.g. Grokbot) from running and invalidating a shared session (e.g. Cursor's).
     func isProviderEnabled(_ provider: MonitorProvider) -> Bool {
         enabledProviderIDs.contains(provider)
     }
 
-    /// Whether `provider` should be polled now (see the `needs*Polling` flags).
+    /// Whether `provider` needs polling now (see the `needs*Polling` flags).
     func needsPolling(_ provider: MonitorProvider) -> Bool {
         switch provider {
         case .overview: return false
@@ -201,40 +200,40 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Whether Grok should be polled (panel tab, menu-bar graph, or the usage
+    /// Whether Grok needs polling (panel tab, menu-bar graph, or the usage
     /// threshold alert, which is evaluated on each Grok poll).
     var needsGrokPolling: Bool {
         isProviderEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar || thresholdEnabled)
     }
 
-    /// Whether OpenCode should be polled (panel tab or menu-bar graph).
+    /// Whether OpenCode needs polling (panel tab or menu-bar graph).
     var needsOpenCodePolling: Bool {
         isProviderEnabled(.opencode) && (selectedProvider.polls(.opencode) || showOpenCodeBarInMenuBar)
     }
 
-    /// Whether Cursor should be polled (panel tab or menu-bar graph).
+    /// Whether Cursor needs polling (panel tab or menu-bar graph).
     var needsCursorPolling: Bool {
         isProviderEnabled(.cursor) && (selectedProvider.polls(.cursor) || showCursorBarInMenuBar)
     }
 
-    /// Whether Claude should be polled (panel tab or menu-bar graph).
+    /// Whether Claude needs polling (panel tab or menu-bar graph).
     var needsClaudePolling: Bool {
         isProviderEnabled(.claude) && (selectedProvider.polls(.claude) || showClaudeBarInMenuBar)
     }
 
-    /// Whether ChatGPT/Codex should be polled (panel tab).
+    /// Whether ChatGPT/Codex needs polling (panel tab).
     var needsChatGPTPolling: Bool {
         isProviderEnabled(.chatgpt) && selectedProvider.polls(.chatgpt)
     }
 
-    /// Whether OpenRouter should be polled (panel tab).
+    /// Whether OpenRouter needs polling (panel tab).
     var needsOpenRouterPolling: Bool {
         isProviderEnabled(.openrouter) && selectedProvider.polls(.openrouter)
     }
 
-    /// Whether Grokbot should be polled (panel tab or menu-bar graph). Gated on
-    /// Grokbot being enabled so a disabled Grokbot cannot invalidate the shared
-    /// Cursor session.
+    /// Whether Grokbot needs polling (panel tab or menu-bar graph). Gated on
+    /// Grokbot being enabled so only an enabled Grokbot uses the shared Cursor
+    /// session.
     var needsGrokbotPolling: Bool {
         isProviderEnabled(.grokbot) && (selectedProvider.polls(.grokbot) || showGrokbotBarInMenuBar)
     }
@@ -253,7 +252,7 @@ final class AppSettings: ObservableObject {
         showGrokbotBarInMenuBar = defaults.object(forKey: Keys.showGrokbotBar) as? Bool ?? false
         showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
         checksForUpdates = defaults.object(forKey: Keys.checksForUpdates) as? Bool ?? true
-        // Clamp on load — didSet does not run during init.
+        // Clamps on load, since `didSet` runs only after init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? true
@@ -276,8 +275,8 @@ final class AppSettings: ObservableObject {
                 // The user explicitly deselected every product — keep it empty.
                 visibleProductIDs = []
             } else {
-                // Drop retired/renamed ids; if nothing survives, fall back to all
-                // known products rather than hiding the breakdown.
+                // Drops retired/renamed ids; if nothing survives, falls back to all
+                // known products so the breakdown stays visible.
                 let sanitized = parsed.intersection(known)
                 visibleProductIDs = sanitized.isEmpty ? known : sanitized
             }

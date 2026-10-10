@@ -89,7 +89,7 @@ final class CredentialStoreTests: XCTestCase {
 
     // MARK: - Secret routing and migration
 
-    /// A legacy secret file is moved into the secure store and deleted.
+    /// A secret in the file store is moved into the secure store and deleted from the file.
     func testMigrationMovesSecretFileIntoSecureStore() {
         let files = InMemoryStore()
         files.values = ["session": "sid=abc", "email": "user@example.com"]

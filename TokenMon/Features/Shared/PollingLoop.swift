@@ -22,7 +22,7 @@ enum PollOutcome: Equatable, Sendable {
     /// Nothing was fetched (not needed, signed out, already refreshing).
     case skipped
 
-    /// Classifies a thrown fetch error. Task cancellation is `.skipped`, not a failure.
+    /// Classifies a thrown fetch error. Task cancellation is `.skipped`.
     init(error: Error) {
         if error is CancellationError {
             self = .skipped
@@ -89,7 +89,7 @@ final class PollingLoop {
         self.refresh = refresh
     }
 
-    /// A loop whose refreshes report no outcome, so it never backs off.
+    /// A loop whose refreshes report no outcome, so it always waits the plain interval.
     convenience init(
         interval: @escaping @MainActor () -> TimeInterval?,
         refresh: @escaping @MainActor () async -> Void
@@ -135,9 +135,9 @@ final class PollingLoop {
         schedule()
     }
 
-    /// Refreshes immediately and restarts the wait from this refresh, so a
-    /// manual refresh is never followed by an early scheduled one. No-op while
-    /// a refresh is already in flight.
+    /// Refreshes immediately and restarts the wait from this refresh, so the
+    /// next scheduled refresh comes a full interval after a manual one. No-op
+    /// while a refresh is already in flight.
     func refreshNow() async {
         guard !isRefreshing else { return }
         cancelWait()

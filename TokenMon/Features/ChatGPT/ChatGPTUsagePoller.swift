@@ -92,8 +92,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
+            // Only a request made under the current credential state tears down
+            // the session; a stale one is skipped.
             guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:

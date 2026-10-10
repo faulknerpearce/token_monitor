@@ -38,7 +38,7 @@ struct FileBackedCredentialStore: CredentialStore {
 }
 
 /// Credentials held in process memory only. The XCTest host uses it, so a
-/// test run never reads, migrates, or writes the user's real credentials.
+/// test run stays isolated from the user's real credentials.
 final class InMemoryCredentialStore: CredentialStore {
     private var values: [String: String] = [:]
 
@@ -64,7 +64,7 @@ final class InMemoryCredentialStore: CredentialStore {
 // MARK: - Keychain
 
 /// The `SecItem` calls `KeychainCredentialStore` makes, behind a seam so tests
-/// run against an in-memory fake instead of the user's Keychain.
+/// run against an in-memory fake.
 protocol KeychainBackend {
     func read(service: String, account: String) -> (status: OSStatus, data: Data?)
     func add(service: String, account: String, data: Data) -> OSStatus
@@ -74,11 +74,12 @@ protocol KeychainBackend {
 
 /// Generic-password items in the login Keychain.
 ///
-/// Items are `kSecClassGenericPassword`, readable after first unlock and never
-/// synced or migrated to another device. The data-protection keychain is not
-/// used: it requires a `keychain-access-groups` / application-identifier
-/// entitlement backed by a team ID, which an ad-hoc-signed build cannot carry
-/// (`SecItemAdd` fails with `errSecMissingEntitlement`).
+/// Items are `kSecClassGenericPassword`, readable after first unlock and kept
+/// on this device only. They live in the file-based login Keychain because the
+/// data-protection keychain requires a `keychain-access-groups` /
+/// application-identifier entitlement backed by a team ID, which an
+/// ad-hoc-signed build cannot carry (`SecItemAdd` fails with
+/// `errSecMissingEntitlement`).
 struct SecItemKeychainBackend: KeychainBackend {
     private func baseQuery(service: String, account: String) -> [String: Any] {
         [
@@ -120,21 +121,21 @@ struct SecItemKeychainBackend: KeychainBackend {
 ///
 /// An ad-hoc-signed build is identified by its code hash, so the Keychain asks
 /// each new build for access to every item it reads. One item means one prompt
-/// per build instead of one per provider.
+/// per build, shared by every provider.
 ///
 /// Secrets saved as separate items (one per account, same service) are copied
 /// in the first time their account is read, and the separate item is deleted
 /// when the Keychain allows it. Each account is checked once; the checked list
-/// is stored in the item, so a signed-out account is not restored from an old
-/// separate item.
+/// is stored in the item, so a signed-out account stays signed out even when an
+/// old separate item remains.
 ///
 /// The item is loaded on first use and cached. When the read fails for any
 /// reason other than "not found" (for example the user denied access), the
 /// vault reports every account as missing and refuses writes for the rest of
-/// the process, so it never overwrites secrets it could not read. A removal
-/// made meanwhile (sign-out, session invalidation) is recorded in
-/// `pendingRemovals` and applied the next time the item loads, so the removed
-/// secret does not come back.
+/// the process, so secrets it could not read stay intact. A removal made
+/// meanwhile (sign-out, session invalidation) is recorded in `pendingRemovals`
+/// and applied the next time the item loads, so the removed secret stays
+/// removed.
 final class KeychainVault {
     static let shared = KeychainVault(pendingRemovals: .standard)
 
@@ -246,7 +247,7 @@ final class KeychainVault {
     }
 
     /// Removes accounts recorded while the vault was unavailable; the record is
-    /// cleared once the vault no longer holds them.
+    /// cleared once the vault holds none of them.
     private func applyPendingRemovals() {
         let accounts = storedPendingRemovals()
         guard !accounts.isEmpty, case var .loaded(payload) = state else { return }
@@ -289,7 +290,7 @@ final class KeychainVault {
         case errSecItemNotFound:
             value = nil
         default:
-            // Denied or failed: the account reads as signed out and is not asked for again.
+            // Denied or failed: the account reads as signed out and is marked checked.
             logger.error("Keychain read failed for \(account, privacy: .public): \(status, privacy: .public)")
             value = nil
         }
@@ -369,8 +370,8 @@ final class KeychainCredentialStore: CredentialStore {
 ///
 /// Migration copies the file value into the secure store, which verifies it by
 /// reading it back, and only then deletes the file. When the secure write
-/// fails the file is kept and keeps serving reads and writes, so a Keychain
-/// problem never signs the user out.
+/// fails the file is kept and keeps serving reads and writes, so the user
+/// stays signed in through a Keychain problem.
 final class SecretRoutingCredentialStore: CredentialStore {
     private let secure: any CredentialStore
     private let files: any CredentialStore

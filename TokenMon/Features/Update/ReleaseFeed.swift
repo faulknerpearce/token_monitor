@@ -94,8 +94,8 @@ enum ReleaseFeed {
     }
 
     /// Assets whose download URL is one of this repository's release
-    /// downloads. Others are dropped so a release payload cannot point the
-    /// download at an unrelated site.
+    /// downloads. Others are dropped, so downloads stay on this repository's
+    /// releases whatever the payload lists.
     static func releaseAssets(in root: [String: Any]) -> [ReleaseAsset] {
         guard let assets = root["assets"] as? [[String: Any]] else { return [] }
         return assets.compactMap { asset in

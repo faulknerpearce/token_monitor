@@ -127,7 +127,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
     }
 
-    /// The raw response body must never reach the user-facing error message.
+    /// The raw response body never reaches the user-facing error message.
     func testNon2xxDoesNotLeakResponseBody() throws {
         let body = Data("{\"token\":\"secret-value\"}".utf8)
         guard case let .badResponse(message)? = AuthenticatedRequest.mapError(for: self.response(500), data: body) else {
@@ -166,7 +166,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
     }
 
-    /// A JSON 403 and any 401 still reject the session.
+    /// A JSON 403 and any 401 reject the session.
     func testForbiddenJSONAndUnauthorizedStillRejectSession() {
         XCTAssertEqual(
             AuthenticatedRequest.responseError(for: response(403), data: Data("{\"error\":\"forbidden\"}".utf8)),

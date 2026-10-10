@@ -73,8 +73,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             return .skipped
         }
 
-        // A rejected key must stop the poller until the user saves a new one,
-        // instead of re-sending the same bearer token every interval.
+        // A rejected key stops the poller until the user saves a new one.
         guard auth.isSignedIn, !auth.needsSignIn else { return .skipped }
 
         let generation = auth.sessionGeneration
@@ -95,8 +94,8 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let error as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session.
+            // Only a request made under the current credential state tears down
+            // the session; a stale one is skipped.
             guard auth.isCurrent(generation) else { return .skipped }
             switch error.usageError {
             case .unauthorized, .notSignedIn:

@@ -81,8 +81,8 @@ struct MonthlyDailyBudgetBarsView: View {
     }
 }
 
-/// Shared stem chart + pace footer. Prefer `WeeklyDailyBudgetBarsView` or
-/// `MonthlyDailyBudgetBarsView` at call sites.
+/// Shared stem chart + pace footer behind `WeeklyDailyBudgetBarsView` and
+/// `MonthlyDailyBudgetBarsView`.
 struct DailyBudgetBarsView: View {
     let days: [DailyBudgetDay]
     var accent: Color
@@ -153,7 +153,7 @@ struct DailyBudgetBarsView: View {
         if let pace {
             return DailyBudget.paceCaption(pace)
         }
-        // Fallback when no live used % was passed.
+        // Without a live used %, the caption comes from the bars themselves.
         if days.allSatisfy({ $0.spentUSD <= 0.001 }) {
             return String(format: "No usage yet · %.1f%%/day", dailyBudget)
         }
@@ -219,7 +219,7 @@ struct DailyBudgetBarsView: View {
 
                 if fraction > 0.005 && !isFuture {
                     // Prior-window history is dimmed: it belongs to the pool an
-                    // early provider reset ended, not the one being paced.
+                    // early provider reset ended.
                     accent
                         .opacity(day.isPriorWindow ? 0.45 : 1)
                         .frame(height: min(trackHeight, fillHeight))

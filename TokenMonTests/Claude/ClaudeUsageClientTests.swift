@@ -58,8 +58,8 @@ final class ClaudeUsageClientTests: XCTestCase {
         }
     }
 
-    /// A malformed body must stay transient so the poller keeps the last-good
-    /// snapshot instead of signing the user out.
+    /// A malformed body is transient, so the poller keeps the last-good snapshot
+    /// and the user stays signed in.
     func testParseMalformedBodyIsBadResponse() {
         XCTAssertThrowsError(try ClaudeUsageResponse.parse(Data("not json".utf8))) { error in
             guard let providerError = error as? ProviderError, case .badResponse = providerError else {

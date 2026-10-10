@@ -4,9 +4,8 @@ import os
 
 /// Stores the user's OpenRouter API key.
 ///
-/// OpenRouter authenticates with a plain bearer key (`sk-or-…`) rather than a
-/// browser session, so this session skips the WebKit cookie machinery other
-/// providers need and persists only the key, in the Keychain.
+/// OpenRouter authenticates with a plain bearer key (`sk-or-…`), so this
+/// session persists only the key, in the Keychain.
 @MainActor
 final class OpenRouterAuthSession: ObservableObject {
     @Published private(set) var isSignedIn = false

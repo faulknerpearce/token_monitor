@@ -51,7 +51,7 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights[9], 0, accuracy: 0.001)
     }
 
-    /// A small downward tick must not be credited as a full window reset.
+    /// A small downward tick is not credited as a full window reset.
     func testSmallDownwardNoiseIsNotCreditedAsReset() {
         let (activity, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -79,7 +79,7 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(storeB.hourWeights[8], 1, accuracy: 0.001)
     }
 
-    /// Sign-out / account switch must wipe the series and baseline so one
+    /// Sign-out / account switch wipes the series and baseline so one
     /// account's growth never appears in the next account's chart.
     func testClearResetsSeriesAndBaseline() {
         let (activity, dir) = makeStore()
@@ -140,7 +140,7 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
     }
 
-    // MARK: - Midnight, time zones, and older payloads
+    // MARK: - Midnight, time zones, and instant-keyed payloads
 
     private func denver() throws -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -155,7 +155,7 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
     }
 
     /// Growth between the last sample before midnight and the first after it is
-    /// credited to the new day's first hour instead of being dropped.
+    /// credited to the new day's first hour.
     func testFirstDeltaAfterMidnightIsCredited() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -170,8 +170,7 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights.reduce(0, +), 7, accuracy: 0.001)
     }
 
-    /// After a gap of more than a day, the first sample sets a new baseline
-    /// instead of crediting days of growth to one hour.
+    /// After a gap of more than a day, the first sample only sets a new baseline.
     func testGapOfSeveralDaysStartsWithoutBaseline() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -186,9 +185,9 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights.reduce(0, +), 3, accuracy: 0.001)
     }
 
-    /// The older payload shape (day named by its start instant only) restores
+    /// The instant-keyed payload shape (day named by its start instant only) restores
     /// today's hours and is rewritten with a day key.
-    func testOlderPayloadRestoresTodayAndIsRewritten() throws {
+    func testInstantKeyedPayloadRestoresTodayAndIsRewritten() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
         var weights = Array(repeating: 0.0, count: 24)
@@ -213,8 +212,8 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertTrue(rewritten.contains("\"dayKey\":\"2026-10-10\""), rewritten)
     }
 
-    /// An older payload from a previous day starts today empty, with no baseline.
-    func testOlderPayloadFromAnotherDayStartsFresh() throws {
+    /// An instant-keyed payload from a previous day starts today empty, with no baseline.
+    func testInstantKeyedPayloadFromAnotherDayStartsFresh() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
         let list = Array(repeating: "1", count: 24).joined(separator: ",")

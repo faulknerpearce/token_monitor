@@ -19,8 +19,7 @@ enum WebKitCookieCapture {
         var essentialCookieNames: Set<String>
         /// Lowercased name prefixes whose whole family is sent. NextAuth chunks a
         /// large session JWT into `__Secure-next-auth.session-token.0`, `.1`, …,
-        /// so matching on the exact name would drop the session and keep only an
-        /// unrelated cookie that happens to share the allowlist.
+        /// so the family matches by prefix and keeps every chunk of the session.
         var essentialCookiePrefixes: Set<String>
         var maxAttempts: Int
         var retryDelayNanoseconds: UInt64
@@ -104,8 +103,8 @@ enum WebKitCookieCapture {
     ///
     /// A provider with an allowlist stores only its essential cookies, and only
     /// once the session cookie is among them; until then capture keeps waiting
-    /// rather than storing the rest of the jar (analytics, another account's
-    /// SSO). Without an allowlist the domain-wide rules apply.
+    /// and leaves the rest of the jar (analytics, another account's SSO)
+    /// unstored. Without an allowlist the domain-wide rules apply.
     static func select(from cookies: [HTTPCookie], policy: Policy) -> [HTTPCookie]? {
         let relevant = cookies.filter { policy.isDomain($0.domain) }
         guard !relevant.isEmpty else { return nil }

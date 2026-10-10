@@ -14,7 +14,7 @@ enum Format {
     /// Compact human-readable token count (K / M / B).
     ///
     /// Each unit rounds half away from zero, and a value that rounds up to 1000
-    /// of one unit is shown in the next (999,500 → "1.0M", not "1000K").
+    /// of one unit is shown in the next (999,500 → "1.0M").
     static func tokens(_ count: Int64) -> String {
         let value = Double(count)
         guard value >= 1_000 else { return "\(count)" }

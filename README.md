@@ -29,7 +29,7 @@ Adding a provider is a registry entry away: `ProviderRegistry` wires each `Monit
 | **OpenRouter** | Account credits (management key) or per-key spending cap with provider-declared reset window | — |
 | **SuperGrok** | Rolling weekly pool ending at the provider's reset instant; per-product breakdown (Chat, Build, API, Imagine, …) | Billing-period week (`100/7` per day) |
 
-Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). TokenMon never substitutes a calendar-derived guess when a provider payload is incomplete — the affected section simply waits for the next complete refresh.
+Every window is anchored to the provider's own reset metadata (`resetsAt`, billing-cycle dates, or declared reset period). When a provider payload lacks that metadata, the affected section waits for the next complete refresh.
 
 ## Features
 
@@ -50,7 +50,7 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 ## Requirements
 
 - macOS 14 Sonoma or later
-- [Xcode 15.3+](https://developer.apple.com/xcode/) (Swift 5.10; the full app — Command Line Tools alone are not enough)
+- [Xcode 16+](https://developer.apple.com/xcode/) (Swift 5.10 language mode; the full app — Command Line Tools alone are not enough)
 - A signed-in account for at least one supported provider
 
 ## Getting started
@@ -98,18 +98,18 @@ All targets are listed below (`make help` also shows your detected signing ident
 | `make run` | Build Debug and launch the app in the menu bar |
 | `make install` | Build **Release** and install into `/Applications` (default; override with `INSTALL_DIR=…`) |
 | `make uninstall` | Remove the app from `/Applications` |
-| `make release` | Full release into `dist/`: signed `.app` + `.pkg` + `.zip` |
+| `make release` | Full release into `dist/`: `.app` + `.pkg` + `.zip` + dSYM zip (Developer ID signed when a certificate is available, ad-hoc otherwise) |
 | `make pkg` | Build only the installer `.pkg` into `dist/` |
 | `make archive` | Create an `.xcarchive` (Xcode Organizer-compatible) |
 | `make export` | Export a Developer ID `.app` from the archive into `build/export` |
 | `make notarize` | Notarize the `dist/` app via `notarytool` profile |
 | `make test` | Run the full Xcode unit test suite |
 | `make test-core` | Run the CLT-only parser/builder tests (no app host) |
-| `make lint` | **SwiftLint strict gate** — every warning is an error; must be clean before handoff/PR |
+| `make lint` | **SwiftLint strict gate** — every warning is an error; must be clean before a PR |
 | `make lint-fix` | Auto-correct autocorrectable SwiftLint violations, then enforce the strict gate |
 | `make format` | **SwiftFormat gate** — fails on formatting drift (config: `.swiftformat`) |
 | `make format-fix` | Auto-format all Swift sources |
-| `make secrets` | **gitleaks secret scan** of the working tree **and** full git history — must be clean before handoff/PR |
+| `make secrets` | **gitleaks secret scan** of the working tree **and** full git history — must be clean before a PR |
 | `make project` | Regenerate `TokenMon.xcodeproj` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) |
 | `make icon` | Regenerate the app icon asset catalog |
 | `make check` | Verify the Xcode toolchain (`xcode-select`, versions) |
@@ -130,13 +130,13 @@ After adding or removing source files: `make project` (requires [XcodeGen](https
 ```bash
 make test        # full Xcode unit test suite
 make test-core   # CLT-only parsers/builders (no app host)
-make lint        # SwiftLint strict gate (must pass before handoff/PR)
+make lint        # SwiftLint strict gate (must pass before a PR)
 make lint-fix    # auto-fix issues, then re-run the strict gate
 make format      # SwiftFormat drift gate
 make secrets     # gitleaks secret scan (working tree + full history)
 ```
 
-`make lint` runs `swiftlint lint --strict`, so **every warning is treated as an error**. Configuration lives in `.swiftlint.yml`. Keep it green before opening a PR or handing off work.
+`make lint` runs `swiftlint lint --strict`, so **every warning is treated as an error**. Configuration lives in `.swiftlint.yml`. Keep it green before opening a PR.
 
 ## Project layout
 
@@ -159,7 +159,7 @@ TokenMon/
     Update/      GitHub release check and verified in-place install
   Resources/     Info.plist, entitlements, assets
 Docs/            Architecture, auth/endpoints, notarization
-Scripts/         Icon generator, core tests, notarize
+Scripts/         Icon generator, core tests, notarize, coverage conversion
 TokenMonTests/  XCTest suite
 Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 ```
@@ -194,7 +194,7 @@ For a signed, notarized release build, see [Docs/NOTARIZATION.md](Docs/NOTARIZAT
 
 Each provider defines its own consumption pool: ChatGPT and Claude pair a 5-hour session with a weekly pool, Cursor uses a monthly billing cycle, Grokbot and SuperGrok anchor a rolling week to the provider's reset instant, OpenCode Go stacks 5-hour/weekly/monthly limits, and OpenRouter uses credits or a per-key cap with a declared reset period. Daily Budget charts always pace against the same pool the provider reports — the bars are shaped by local history while the consumed % comes straight from the provider snapshot.
 
-TokenMon never invents a usage period. If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh rather than substituting a calendar-derived guess. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
+If a payload arrives without the reset metadata that defines the current pool, the affected chart or pace caption is withheld until the next complete refresh. Where providers expose multiple pools (e.g. OpenCode's weekly and monthly limits), each gets its own Daily Budget section paced to its matching pool.
 
 ## Contributing
 

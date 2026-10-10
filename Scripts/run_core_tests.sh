@@ -2,7 +2,7 @@
 # Compiles the host-free core sources with Tests/Manual/CoreTestsMain.swift and
 # runs the result. The list below is every app source CoreTestsMain needs; the
 # script fails with the missing path when a listed file has moved or been
-# removed, so the list cannot silently drift from the tree.
+# removed, so the list stays in sync with the tree.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/.build/manual"
@@ -36,9 +36,9 @@ for source in "${CORE_SOURCES[@]}"; do
   SOURCES+=("$ROOT/$source")
 done
 
-# Prefer the active developer directory (Xcode on CI after xcode-select).
-# Hardcoding CommandLineTools/SDKs/MacOSX.sdk breaks when that SDK is newer
-# than the Swift compiler on PATH.
+# Uses the compiler and SDK of the active developer directory (Xcode on CI
+# after xcode-select), so the SDK matches the Swift compiler on PATH even when
+# CommandLineTools/SDKs/MacOSX.sdk is newer.
 SWIFTC="${SWIFTC:-$(xcrun --find swiftc)}"
 SDK="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
 TARGET="${SWIFT_TARGET:-$(uname -m)-apple-macos14.0}"

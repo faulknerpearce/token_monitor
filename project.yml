@@ -40,8 +40,8 @@ targets:
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
-    # XcodeGen writes this file from `properties` on every `make project`;
-    # add entitlements here, not in the .entitlements file.
+    # XcodeGen writes this file from `properties` on every `make project`, so
+    # entitlements are declared here.
     entitlements:
       path: TokenMon/Resources/TokenMon.entitlements
       properties: {}
@@ -68,7 +68,7 @@ schemes:
         TokenMon: all
         TokenMonTests: [test]
     test:
-      # Coverage is gathered for the app target only, never the test bundle.
+      # Coverage is gathered for the app target only.
       gatherCoverageData: true
       coverageTargets:
         - TokenMon

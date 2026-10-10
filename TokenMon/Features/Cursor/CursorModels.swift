@@ -95,8 +95,8 @@ struct CursorEventAggregates: Sendable {
     }
 }
 
-/// In-memory cache of the last event aggregates, keyed by session so a
-/// different account never sees another account's figures.
+/// In-memory cache of the last event aggregates, keyed by session so each
+/// account sees only its own figures.
 final class CursorEventCache: @unchecked Sendable {
     private let lock = NSLock()
     private var entry: (key: String, value: CursorEventAggregates)?

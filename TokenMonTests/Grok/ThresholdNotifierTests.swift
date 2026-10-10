@@ -14,7 +14,7 @@ final class ThresholdNotifierTests: XCTestCase {
     }
 
     func testDoesNotRefireAtSameThreshold() {
-        // Already notified at 80: staying above 80 must not refire at 80.
+        // Already notified at 80: staying above 80 does not refire at 80.
         XCTAssertFalse(ThresholdNotifier.shouldNotify(usedPercent: 90, threshold: 80, lastNotifiedThreshold: 80))
         // A raised threshold (90) above the last notified value (80) still fires.
         XCTAssertTrue(ThresholdNotifier.shouldNotify(usedPercent: 95, threshold: 90, lastNotifiedThreshold: 80))
@@ -162,8 +162,8 @@ final class ThresholdNotifierTests: XCTestCase {
         XCTAssertEqual(recorder.calls, [85, 82])
     }
 
-    /// A record written without a period adopts the first period it sees rather
-    /// than firing again inside it.
+    /// A record written without a period adopts the first period it sees and
+    /// stays quiet inside it.
     @MainActor
     func testEvaluateAdoptsPeriodForRecordWithoutOne() throws {
         let suite = "ThresholdNotifierTests-\(UUID().uuidString)"

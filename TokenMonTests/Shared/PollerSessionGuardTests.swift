@@ -3,11 +3,11 @@ import XCTest
 
 /// Poller ↔ session-generation contract.
 ///
-/// Every poller captures `auth.sessionGeneration` before its fetch and must:
-///  - drop a result that lands after a sign-out / account switch (success path);
-///  - NOT tear down the current session when a request that began under a
+/// Every poller captures `auth.sessionGeneration` before its fetch and:
+///  - drops a result that lands after a sign-out / account switch (success path);
+///  - keeps the current session when a request that began under a
 ///    previous credential state returns 401/403 (error path);
-///  - DO invalidate the session once the live session itself is rejected
+///  - invalidates the session once the live session itself is rejected
 ///    `ProviderAuthSession.authFailureThreshold` times in a row.
 ///
 /// These use the injected fetch seams; no network or WebKit is touched.
@@ -448,7 +448,7 @@ final class PollerSessionGuardTests: XCTestCase {
         XCTAssertTrue(auth.isSignedIn)
     }
 
-    /// A late success must not rewrite the workspace id after sign-out cleared it.
+    /// After sign-out clears the workspace id, a late success leaves it cleared.
     func testOpenCodeLateSuccessDoesNotRestoreWorkspaceID() async {
         let auth = OpenCodeAuthSession(directory: dir)
         auth.save(cookieHeader: "auth=old")
@@ -514,7 +514,7 @@ final class PollerSessionGuardTests: XCTestCase {
         XCTAssertEqual(poller.dataSourceLabel, "Local estimate")
     }
 
-    /// A sign-out while a local estimate poll is in flight must not republish.
+    /// A sign-out while a local estimate poll is in flight discards that poll's result.
     func testOpenCodeLocalEstimateSuppressedAfterMidPollSignOut() async {
         let auth = OpenCodeAuthSession(directory: dir)
         let poller = OpenCodeUsagePoller(

@@ -4,7 +4,7 @@ import SwiftUI
 /// Dropdown panel switching between Overview and provider tabs.
 ///
 /// Observes only `settings` (tab list and selection); each tab view observes
-/// its own pollers and sessions, so a poll of a hidden provider does not
+/// its own pollers and sessions, so only polls of the visible provider
 /// re-render the visible tab.
 struct MenuBarPanelView: View {
     let model: AppModel
@@ -12,7 +12,7 @@ struct MenuBarPanelView: View {
     let openWindow: (AppWindowID) -> Void
 
     /// Fixed dropdown width. The panel host sizes only its height, so the
-    /// provider tabs never move horizontally.
+    /// provider tabs keep a fixed horizontal position.
     static let panelWidth: CGFloat = 420
 
     var body: some View {

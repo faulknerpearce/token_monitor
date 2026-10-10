@@ -59,8 +59,8 @@ struct PreferencesView: View {
                         )
                     )
                 }
-                // Reordering uses the explicit drop delegate above; `onMove` is
-                // effectively inert on a macOS `List` and duplicated the drag path.
+                // Reordering uses the explicit drop delegate above, since `onMove`
+                // is effectively inert on a macOS `List`.
             } header: {
                 Text("Providers")
             } footer: {
@@ -253,8 +253,8 @@ struct PreferencesView: View {
     }
 
     private func export(_ format: ExportService.Format) {
-        // Clear any prior failure so the red banner does not persist after a
-        // later successful export.
+        // Clears any prior failure so a successful export dismisses the red
+        // banner.
         exportError = nil
         do {
             let data = try ExportService.export(history.allSnapshots(), format: format)
@@ -329,7 +329,7 @@ private struct ProviderAccountSection: View {
     }
 }
 
-/// OpenRouter connects with an API key rather than a browser session.
+/// OpenRouter account rows; OpenRouter connects with an API key.
 private struct OpenRouterAccountSection: View {
     @ObservedObject var auth: OpenRouterAuthSession
     let poller: OpenRouterUsagePoller

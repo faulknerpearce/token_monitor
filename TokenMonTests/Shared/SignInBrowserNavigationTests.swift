@@ -94,7 +94,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
     }
 
     /// The Clerk SSO host is an auth host, never a return page; a navigation to
-    /// `clerk.claude.ai/sign-in` must not trigger capture/dismiss.
+    /// `clerk.claude.ai/sign-in` does not trigger capture/dismiss.
     func testClaudeReturnPageExcludesClerkAndAuthPaths() {
         var gate = SignInReturnGate(
             isAuthHost: ClaudeSignInView.isAuthHost,
@@ -114,7 +114,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
 
     // MARK: - Controller publishing
 
-    /// Re-applying unchanged state must not publish `objectWillChange`.
+    /// Re-applying unchanged state publishes no `objectWillChange`.
     @MainActor
     func testApplyDoesNotPublishWhenNothingChanged() {
         let controller = SignInBrowserController()
@@ -226,7 +226,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
         )
 
         // The live load + JS probe spins up a real WKWebView (slow, can flake in
-        // CI); opt in explicitly rather than on every run.
+        // CI), so it runs only when explicitly opted in.
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment["TOKENMON_RUN_WEBKIT_TESTS"] == "1",
             "Real WKWebView user-agent probe; set TOKENMON_RUN_WEBKIT_TESTS=1 to run"
@@ -286,7 +286,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
         XCTAssertTrue(SignInView.isAuthHost("accounts.x.ai"))
         XCTAssertTrue(SignInView.isAuthHost("x.com"))
         XCTAssertTrue(SignInView.isAuthHost("api.x.com"))
-        // A naive `contains` would wrongly accept these.
+        // Hosts that only contain an auth host's name are rejected.
         XCTAssertFalse(SignInView.isAuthHost("netflix.com"))
         XCTAssertFalse(SignInView.isAuthHost("x.com.evil.example"))
     }

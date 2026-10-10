@@ -3,7 +3,7 @@ import SwiftUI
 /// Used-percent track: label left, percent right, 8px fill (matches Grok weekly bar).
 ///
 /// Set `showsLabel` to `false` when the enclosing card's header already names
-/// the pool and shows the percent in a pill, so the figure is not repeated.
+/// the pool and shows the percent in a pill, so the figure appears once.
 struct SlimUsageTrack: View {
     let label: String
     let percent: Double

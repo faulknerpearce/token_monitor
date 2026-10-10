@@ -1,8 +1,8 @@
 @testable import TokenMon
 import XCTest
 
-/// `ProviderDayHourlyUsage.build` must degrade gracefully on short/long input
-/// arrays rather than trapping on a precondition.
+/// `ProviderDayHourlyUsage.build` degrades gracefully on short/long input
+/// arrays.
 final class ProviderHourlyUsageTests: XCTestCase {
     func testShortArraysArePaddedToTwentyFourHours() {
         let usage = ProviderDayHourlyUsage.build(

@@ -8,11 +8,11 @@ name: Release
 # SHA-256 digest GitHub records for the asset.
 #
 # The runner has no Developer ID certificate, so these files are ad-hoc signed.
-# Gatekeeper will warn on a first download. An already-installed copy can still
+# Gatekeeper warns on a first download. An already-installed copy can still
 # replace itself from the zip.
 #
-# Assets already attached to the release are never replaced on the first run.
-# Re-running the workflow run (run attempt 2 or later) replaces them.
+# The first run keeps assets already attached to the release; re-running the
+# workflow run (run attempt 2 or later) replaces them.
 
 on:
   push:
@@ -89,8 +89,8 @@ jobs:
           for file in "${files[@]}"; do
             test -f "$file"
           done
-          # A tag push does not create a release. Keep notes that were written
-          # by hand; only create the release when the tag has none yet.
+          # A tag push alone creates no release. This step creates one when the
+          # tag has none yet and keeps hand-written notes on an existing one.
           if gh release view "$tag" >/dev/null 2>&1; then
             existing="$(gh release view "$tag" --json assets --jq '.assets[].name')"
             clashes=()

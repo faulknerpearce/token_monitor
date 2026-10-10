@@ -27,8 +27,8 @@ final class HourlyDeltaActivityStore: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    /// `dayKey` names the day. `dayStart` is kept for readers of the older
-    /// format, which named the day by its start-of-day instant only.
+    /// `dayKey` names the day. `dayStart` names it by its start-of-day instant,
+    /// the format of payloads without `dayKey`.
     private struct Payload: Codable, Equatable {
         var dayKey: String?
         var dayStart: Date
@@ -88,8 +88,8 @@ final class HourlyDeltaActivityStore: ObservableObject {
     /// treated as rounding noise and ignored.
     ///
     /// On a new day the previous sample stays the baseline only when it was
-    /// taken the day before; after a longer gap there is no baseline, so growth
-    /// over several days is not credited to a single hour.
+    /// taken the day before; after a longer gap the sample only sets a new
+    /// baseline, keeping growth over several days out of a single hour.
     func record(usedPercent: Double, at date: Date = Date()) {
         let key = DayKey.key(for: date, calendar: calendar)
         if key != dayKey {
@@ -115,14 +115,13 @@ final class HourlyDeltaActivityStore: ObservableObject {
             } else if previous - usedPercent >= Percent.resetDropFloor {
                 delta = usedPercent
             } else {
-                // A small downward tick is noise, not a reset.
+                // A small downward tick is noise and credits nothing.
                 delta = 0
             }
         } else {
             return
         }
 
-        // Ignore tiny noise.
         guard delta >= Percent.noiseFloor else { return }
 
         let hour = calendar.component(.hour, from: date)
@@ -178,7 +177,7 @@ final class HourlyDeltaActivityStore: ObservableObject {
             hourWeights = Array(repeating: 0, count: 24)
             lastUsedPercent = nil
         }
-        // An older-format payload is rewritten once with its `dayKey`.
+        // A payload without `dayKey` is rewritten once with it.
         persist()
     }
 

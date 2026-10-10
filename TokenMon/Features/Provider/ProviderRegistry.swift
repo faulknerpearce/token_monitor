@@ -2,8 +2,8 @@ import Foundation
 
 /// Model-layer registry mapping each `MonitorProvider` to its live poller.
 ///
-/// App wiring iterates the registry instead of hardcoding each provider; adding
-/// a provider means adding one registry entry.
+/// App wiring iterates the registry, so adding a provider means adding one
+/// registry entry.
 @MainActor
 struct ProviderRegistry {
     private let pollers: [MonitorProvider: any ProviderUsagePoller]

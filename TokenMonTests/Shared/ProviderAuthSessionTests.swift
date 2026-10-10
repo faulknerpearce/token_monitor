@@ -67,13 +67,13 @@ final class ProviderAuthSessionTests: XCTestCase {
         XCTAssertFalse(auth.isSignedIn)
         XCTAssertTrue(auth.needsSignIn)
         XCTAssertEqual(auth.lastAuthError, "401")
-        // Disk key is removed, so the in-memory email must be cleared too —
-        // otherwise stale PII remains readable while signed out.
+        // Disk key is removed and the in-memory email is cleared with it, so no
+        // PII stays readable while signed out.
         XCTAssertNil(auth.accountEmail)
     }
 
     /// A refresh captures `sessionGeneration` before its await; a sign-out or
-    /// account switch must make that capture stale so it cannot publish.
+    /// account switch makes that capture stale so it cannot publish.
     func testGenerationInvalidatesInFlightRefresh() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -106,9 +106,9 @@ final class ProviderAuthSessionTests: XCTestCase {
         XCTAssertFalse(auth.isCurrent(auth.sessionGeneration))
     }
 
-    /// A jar written before the allowlist existed is narrowed on load, so an
-    /// unrelated SSO session cannot survive in the file store.
-    func testLoadNarrowsLegacyCookieJarToAllowlist() {
+    /// A stored jar holding cookies outside the allowlist is narrowed on load, so
+    /// only the essential cookies stay in the file store.
+    func testLoadNarrowsStoredCookieJarToAllowlist() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -134,8 +134,8 @@ final class ProviderAuthSessionTests: XCTestCase {
     }
 
     /// A prefixed essential family is kept whole: NextAuth chunks a large session
-    /// JWT into `…session-token.0`, `.1`, and an exact-name match would drop the
-    /// session while keeping an unrelated cookie that shares the allowlist.
+    /// JWT into `…session-token.0`, `.1`, …, and every chunk is kept while the
+    /// CSRF and analytics cookies are dropped.
     func testLoadKeepsChunkedEssentialFamily() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -341,8 +341,7 @@ final class ProviderAuthSessionTests: XCTestCase {
         )
     }
 
-    /// A deletion cookie (`Max-Age=0`) removes the stored cookie instead of
-    /// storing an empty value.
+    /// A deletion cookie (`Max-Age=0`) removes the stored cookie.
     func testRefreshedDeletionCookieRemovesChunk() {
         let (auth, _) = chatGPTSession(
             "__Secure-next-auth.session-token.0=a; __Secure-next-auth.session-token.1=b"

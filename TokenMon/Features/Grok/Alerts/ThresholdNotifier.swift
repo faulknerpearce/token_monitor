@@ -35,12 +35,13 @@ final class ThresholdNotifier: ObservableObject {
     /// Records a threshold crossing for `account` and delivers once per threshold
     /// within a billing period. `resetsAt` names the period: when it moves to a
     /// later period than the one the last alert was recorded in, the record is
-    /// cleared, so the new period alerts even if no poll saw usage drop.
+    /// cleared, so the new period alerts whether or not a poll saw usage drop.
     func evaluate(usedPercent: Double, settings: AppSettings, account: String?, resetsAt: Date? = nil) {
         guard settings.thresholdEnabled else { return }
         let threshold = settings.thresholdPercent
-        // Persisted, account-scoped so a relaunch (or account switch) does not
-        // re-fire an alert the user already saw while still above the threshold.
+        // Persisted and account-scoped, so an alert the user already saw stays
+        // suppressed across relaunches and account switches while usage remains
+        // above the threshold.
         let key = Self.notifiedKey(account: account)
         let periodKey = Self.notifiedPeriodKey(account: account)
         var last = defaults.object(forKey: key) as? Double

@@ -151,7 +151,7 @@ final class UsageClientTests: XCTestCase {
         XCTAssertNil(UsageResponseParser.parseJSON(Data(#"{"usedPercent":-3}"#.utf8), accountEmail: nil))
     }
 
-    /// Product rows must carry a usage-specific percent key.
+    /// Product rows count only with a usage-specific percent key.
     func testProductsWithoutUsageKeysAreIgnored() {
         let json = Data(#"{"products":[{"id":"chat","value":30},{"id":"build","percent":20}]}"#.utf8)
         XCTAssertNil(UsageResponseParser.parseJSON(json, accountEmail: nil))

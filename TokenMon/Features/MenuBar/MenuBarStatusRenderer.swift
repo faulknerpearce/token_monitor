@@ -243,8 +243,8 @@ enum MenuBarStatusRenderer {
 
         var pieces: [CompositePiece] = []
         for provider in MonitorProvider.normalizedOrder(providerOrder) {
-            // A disabled provider must not leave a frozen "—/last %" segment:
-            // polling is gated, so its snapshot would never update.
+            // Disabled providers are skipped: their polling is gated, so their
+            // segment would show a frozen "—/last %" snapshot.
             guard enabledProviders.contains(provider) else { continue }
             switch provider {
             case .grok:
@@ -342,9 +342,9 @@ enum MenuBarStatusRenderer {
             .foregroundColor: textColor
         ]
 
-        // Fixed text slots. The status item width must not depend on the value,
-        // or the icon resizes (and drags the dropdown with it) whenever data
-        // changes, which shows up as the dropdown moving on a provider switch.
+        // Fixed text slots keep the status item width independent of the value.
+        // A value-dependent width resizes the icon (and drags the dropdown with
+        // it) whenever data changes, moving the dropdown on a provider switch.
         let percentSlotWidth = ceil("100%".size(withAttributes: usedAttrs).width)
         let grokTextSlot = ceil(max("Grok".size(withAttributes: usedAttrs).width, percentSlotWidth))
 
@@ -368,8 +368,8 @@ enum MenuBarStatusRenderer {
         }
 
         var grokBlockWidth = iconSize + gap + grokTextSlot
-        // Keep the bar slot even before the first snapshot / after sign-out so
-        // the status item width does not collapse.
+        // The bar slot is reserved even before the first snapshot / after
+        // sign-out so the status item width stays constant.
         if showGrokBar { grokBlockWidth += gap + barWidth }
         if grokSigned, showGrokCategories {
             for item in categoryLabels {
@@ -492,9 +492,8 @@ enum MenuBarStatusRenderer {
     /// The composite layout leaves a `segmentGap` between provider spans plus a
     /// couple points of trailing image padding, and a `variableLength` status
     /// item can add a few points of button padding around the bitmap. A click
-    /// landing in one of those dead zones should still select the adjacent
-    /// provider rather than keeping a stale tab. Far misses (beyond
-    /// `tolerance`) still return nil so stray clicks do not switch tabs.
+    /// landing in one of those dead zones selects the adjacent provider. Far
+    /// misses (beyond `tolerance`) return nil, so stray clicks keep the current tab.
     static func providerSnapped(atX x: CGFloat, in regions: [Region], tolerance: CGFloat = 8) -> MonitorProvider? {
         if let exact = provider(atX: x, in: regions) { return exact }
         var bestProvider: MonitorProvider?
@@ -519,8 +518,8 @@ enum MenuBarStatusRenderer {
 
     /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
     ///
-    /// All selections render through this template so the status item width never
-    /// changes and the dropdown keeps one x position when switching providers.
+    /// All selections render through this template so the status item width stays
+    /// constant and the dropdown keeps one x position when switching providers.
     /// Overview shows the TokenMon mark over an empty track. Grok category labels
     /// are composite-only because their variable widths would break the fixed anchor.
     private static func renderSelectedProvider(
@@ -590,8 +589,8 @@ enum MenuBarStatusRenderer {
         )
     }
 
-    /// Bake a bitmap via `NSBitmapImageRep`; `lockFocus` can produce an empty image
-    /// when no graphics context is focused.
+    /// Bakes a bitmap via `NSBitmapImageRep`, which draws reliably without a focused
+    /// graphics context (where `lockFocus` can produce an empty image).
     private static func makeImage(size: NSSize, draw: () -> Void) -> NSImage {
         let scale: CGFloat = 2
         let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
@@ -646,8 +645,7 @@ enum MenuBarStatusRenderer {
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {
         drawBarTrack(in: barRect)
-        // Keep a 2pt sliver at 0% so the brand fill never collapses to nothing
-        // after a weekly reset.
+        // A 2pt sliver at 0% keeps the brand fill visible after a weekly reset.
         let raw = barRect.width * CGFloat(Percent.clamp(usedPercent) / 100)
         let fillWidth = max(2, raw)
         let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
@@ -671,7 +669,7 @@ enum MenuBarStatusRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(rect: drawRect).addClip()
         // `from: .zero` draws the full glyph; a destination-sized source rect
-        // cropped large SVGs (OpenCode 300×300, Cursor ~65×68) to empty corners.
+        // crops large SVGs (OpenCode 300×300, Cursor ~65×68) to empty corners.
         icon.draw(
             in: drawRect,
             from: .zero,

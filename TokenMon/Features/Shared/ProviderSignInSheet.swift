@@ -210,7 +210,7 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
         if config.returnDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: config.returnDelayNanoseconds)
         }
-        // The user may have finished manually while we waited.
+        // The user may have finished manually during the wait.
         guard !isDismissed, !isBusy, !isSignedIn else { return }
 
         phase = .finishing

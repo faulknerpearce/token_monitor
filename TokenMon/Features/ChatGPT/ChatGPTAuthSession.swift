@@ -19,11 +19,9 @@ final class ChatGPTAuthSession: ProviderAuthSession {
     /// the session credential.
     static let sessionTokenPrefix = "__secure-next-auth.session-token"
 
-    /// The cookies the usage token exchange actually sends. Only the session
-    /// family: the CSRF cookie is always present on the sign-in page and is not
-    /// a credential, so treating it as one let capture report success with no
-    /// session at all (and, because the match was exact, discarded a chunked
-    /// session in favour of that CSRF cookie).
+    /// The cookies the usage token exchange sends: the session family only.
+    /// The CSRF cookie is present on the sign-in page before sign-in, so it is
+    /// excluded from the credential.
     static let essentialCookiePrefixes: Set<String> = [sessionTokenPrefix]
 
     static func chatgptPolicy() -> WebKitCookieCapture.Policy {
@@ -34,9 +32,9 @@ final class ChatGPTAuthSession: ProviderAuthSession {
                 return name == Self.sessionTokenPrefix || name.hasPrefix(Self.sessionTokenPrefix + ".")
             },
             looksLikeAuthCookie: { cookie in
-                // Only a session token counts. Analytics and the CSRF cookie must
-                // not let capture succeed without the real session (which would
-                // sign the user out on the first poll).
+                // Only a session token counts, so capture succeeds once the real
+                // session cookie exists; analytics and CSRF cookies alone would
+                // sign the user out on the first poll.
                 let name = cookie.name.lowercased()
                 if name.contains("csrf") { return false }
                 return name.contains("session-token") || name.contains("session_token")

@@ -24,7 +24,7 @@ final class SignInBrowserController: ObservableObject {
     fileprivate weak var browser: SignInBrowserView?
 
     /// Wires this controller to its AppKit browser. Idempotent: re-attaching the
-    /// same view does not publish.
+    /// same view is a no-op.
     func attach(_ browser: SignInBrowserView) {
         guard self.browser !== browser else { return }
         self.browser = browser
@@ -84,9 +84,9 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     private var returnGate: SignInReturnGate
     private var didFireReturn = false
     /// Set once the *main* page reaches the provider return state after the user
-    /// passed through an auth host. Guards the popup-close auto-capture so a
-    /// popup that was merely opened and cancelled (which sets `didSeeAuth`) does
-    /// not fire capture against the still-start-page main view.
+    /// passed through an auth host. Guards the popup-close auto-capture: a popup
+    /// that was merely opened and cancelled sets `didSeeAuth` but leaves this
+    /// unset, so capture waits for the main view to reach the return page.
     private var didNavigateMainAfterAuth = false
 
     init(
@@ -108,8 +108,8 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
 
-        // No `customUserAgent`: this is an interactive browser and OAuth
-        // providers expect WebKit's default Safari User-Agent (Google refuses
+        // The web view keeps WebKit's default Safari User-Agent: this is an
+        // interactive browser and OAuth providers expect it (Google refuses
         // other UAs). `AppIdentity.userAgent` is for API calls.
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
@@ -239,10 +239,10 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
             onAuthHostSeen()
         case .returnPage:
             // The main page itself returned to the provider page after the auth
-            // host — evidence of a real sign-in, unlike a cancelled popup.
+            // host — evidence of a real sign-in.
             if !isPopup { didNavigateMainAfterAuth = true }
             // Wait until the OAuth popup is gone so cookies are committed and
-            // window.opener can finish. Manual Capture Session still works.
+            // window.opener can finish. Manual Capture Session stays available.
             guard !isPopup, popups.isEmpty else { return }
             fireReturn(url)
         case .none:
@@ -253,7 +253,7 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     /// Fire the return callback once the popup is gone and the main page is the return page.
     private func fireReturnIfOnReturnPage() {
         // Require the main page to have reached the return state *after* auth, so
-        // closing an opened-then-cancelled popup cannot auto-capture.
+        // only a real sign-in auto-captures when a popup closes.
         guard didNavigateMainAfterAuth,
               popups.isEmpty,
               let url = mainWebView.url,
@@ -265,8 +265,8 @@ final class SignInBrowserView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// Delivers `onReturned` at most once per sign-in; the gate reports
-    /// `.returnPage` on every finished navigation. The latch lives here, not in
-    /// the gate, so the popup-dismiss paths can fire a swallowed return later.
+    /// `.returnPage` on every finished navigation. The latch lives here so the
+    /// popup-dismiss paths can fire a swallowed return later.
     private func fireReturn(_ url: URL) {
         guard !didFireReturn else { return }
         didFireReturn = true

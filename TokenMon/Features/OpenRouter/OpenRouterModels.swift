@@ -155,9 +155,9 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         } else if let limit = key.limit, limit > 0 {
             snapshot.budgetSource = .keyLimit
             snapshot.budgetUSD = limit
-            // Window selection follows the provider's `limit_reset`, not the local
-            // calendar: inside a reset window the bar shows spend against the current
-            // window; without one, `/key` usage is all-time.
+            // Window selection follows the provider's `limit_reset`: inside a reset
+            // window the bar shows spend against the current window; without one,
+            // `/key` usage is all-time.
             let windowUsage = key.limitReset.flatMap { reset in
                 key.limitRemaining.map { max(0, limit - $0) }
                     ?? Self.windowUsage(key: key, reset: reset.lowercased())
@@ -170,7 +170,7 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
 
         snapshot.models = OpenRouterModelUsage.models(from: activity ?? [])
 
-        // Negative balances (overdraft) clamp so the bar never underfills.
+        // Negative usage (overdraft) clamps to zero.
         snapshot.usedUSD = max(0, snapshot.usedUSD)
         return snapshot
     }

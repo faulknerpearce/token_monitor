@@ -26,5 +26,5 @@ auth.json
 *.provisionprofile
 /ExportOptions.plist
 
-# Local-only plan (never committed)
+# Local-only plan
 PLAN.md

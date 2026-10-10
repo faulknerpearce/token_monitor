@@ -58,8 +58,8 @@ final class GrokbotUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.entitlement, .superGrok(planLabel: "super_grok"))
     }
 
-    /// A payload without the reset instant must not invent one — the snapshot
-    /// carries `nil` and the panel withholds the weekly section.
+    /// A payload without the reset instant gives a snapshot whose reset is `nil`,
+    /// and the panel withholds the weekly section.
     func testMissingResetYieldsNilRatherThanSubstitutedDate() throws {
         let snapshot = try parse("""
         { "usagePercent": 30, "currentPeriodStart": "2026-08-20T11:00:00Z" }
@@ -68,7 +68,7 @@ final class GrokbotUsageClientTests: XCTestCase {
         // The bars-withheld consequence is covered in GrokbotUsagePollerTests.
     }
 
-    /// Accept the proto field names too, so a transport change does not blank the panel.
+    /// The proto field names parse too, so either transport spelling fills the panel.
     func testAcceptsSnakeCaseProtoFieldNames() throws {
         let snapshot = try parse("""
         {
@@ -118,8 +118,8 @@ final class GrokbotUsageClientTests: XCTestCase {
     }
 
     /// proto3 JSON drops default-valued fields, so an unused period arrives with
-    /// no `usagePercent` at all. That is 0% — the section must still draw its
-    /// (empty) bars rather than falling back to the no-data placeholder.
+    /// no `usagePercent` at all. That is 0%, and the section draws its
+    /// (empty) bars.
     func testMissingUsagePercentWithAllowanceFieldsIsZero() throws {
         let snapshot = try parse("""
         {

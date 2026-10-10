@@ -72,8 +72,7 @@ struct OverviewPanelView: View {
     /// Local midnights from the start of `date`'s day through the next week.
     ///
     /// `TimelineView` renders the latest entry at or before the current time,
-    /// so the first entry must be today's midnight; an all-future schedule
-    /// renders with the first future date and shows tomorrow's empty day.
+    /// so the first entry is today's midnight and the first render shows today.
     static func midnightSchedule(from date: Date, calendar: Calendar = .current) -> [Date] {
         let today = calendar.startOfDay(for: date)
         return (0...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }

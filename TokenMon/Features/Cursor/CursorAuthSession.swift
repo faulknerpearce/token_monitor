@@ -1,7 +1,7 @@
 import Foundation
 
 /// Session for cursor.com (`WorkosCursorSessionToken`).
-/// Separate cookie store from Grok / OpenCode so providers do not clobber each other.
+/// Uses its own cookie store, isolated from the Grok / OpenCode sessions.
 @MainActor
 final class CursorAuthSession: ProviderAuthSession {
     private static let cursorHosts = [

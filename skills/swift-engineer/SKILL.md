@@ -131,7 +131,7 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 - `autoreleasepool { }` around big AppKit/Foundation loops.
 - `os.Logger` interpolation is evaluated eagerly — gate expensive string builds behind a level check or `#if DEBUG`.
 - Main actor is precious: parse/aggregate/DB off the UI thread, publish one coalesced delta (`AppModel.forwardChanges`).
-- **Cache rule (hard-won):** an `NSCache` key must encode EVERY input that changes the output — including the appearance — or a stale bitmap is served after a theme flip (`MenuBarStatusRenderer._cache`).
+- **Cache rule:** an `NSCache` key must encode EVERY input that changes the output — including the appearance — or a stale bitmap is served after a theme flip (`MenuBarStatusRenderer._cache`).
 
 ### Project hot paths (token_monitor)
 
@@ -147,8 +147,7 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 Disciplined performance review of Swift/macOS code through the lens of Jeff Dean
 & Sanjay Ghemawat's **Performance Hints** (Abseil, 2025 —
 https://abseil.io/fast/hints.html), translated to idiomatic Swift, SwiftUI, and
-AppKit. Rust and PHP siblings exist as `rust-performance-reviewer` and
-`php-performance-reviewer`.
+AppKit.
 
 **Scope:** menu bar apps, CLI tools, and libraries — CPU, memory, COW behavior,
 allocations, cache, locks, async/actor hops, and API shape. Not distributed
@@ -263,7 +262,7 @@ Swift notes:
 - `Dictionary(grouping:)` is the one-liner for "bucket an array by a key" (e.g. bucket usage rows by hour/day instead of `if byHour[h] == nil`).
 - `Set`/`Dictionary` membership over `array.contains` on any hot look-up loop.
 - `reduce(into:)` over `reduce` when building a collection — no intermediate.
-- `sorted(by:)` with a comparator that calls `array.firstIndex(of:)` per comparison is O(k² log k): build `let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })` and compare ranks. (This repo does this in `ProductCatalog.sortForDisplay` and `DailyUsageBuilder.finalize`.)
+- `sorted(by:)` with a comparator that calls `array.firstIndex(of:)` per comparison is O(k² log k): build `let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })` and compare ranks. (`ProductCatalog.sortForDisplay` and `DailyUsageBuilder.finalize` sort with `firstIndex(of:)` over ≤ 6 products; see Performance field notes.)
 - For sorted lookups on moderate N, `partition(by:)` / `partitioningIndex(where:)` (or a small `binarySearch` extension) on a sorted `Array` often beats `Dictionary` on cache behavior.
 - `remove(at:)` is O(n); for front-removal use `ArraySlice`/`Deque` (swift-collections) or index math.
 - Swift's `sort()` is in-place and stable; prefer it to building a new array via `sorted()` when the original can be consumed.
@@ -336,7 +335,7 @@ Often the biggest win: don't do it.
 
 #### Precompute once
 - Expensive properties, lookup tables, rank maps, static regexes, static formatters — `static let` (lazy, thread-safe in Swift).
-- This repo already does this well in places: `ISO8601DateFormatter.flexible`, `productEnumMap`, `colorCache`. Extend the pattern.
+- Examples in this repo: `ISO8601DateFormatter.flexible`, `productEnumMap`, `colorCache`.
 
 #### Hoist from loops / renders
 - Date formats, config flags, fonts, colors, attribute dictionaries, `ProductCatalog.displayOrder` lookups
@@ -344,7 +343,7 @@ Often the biggest win: don't do it.
 
 #### Defer
 - Don't compute legend/heatmap/daily series until a consumer needs them
-- Don't build debug field dumps outside `#if DEBUG` (this repo already gates `debugFieldDump` correctly)
+- Don't build debug field dumps outside `#if DEBUG` (`UsageClient` gates its `debugFieldDump` log this way)
 
 #### Specialize
 - Hot call site may not need full generality: `hasPrefix`/`range(of:)` over a regex; `Set` over `[String]`; manual parse over `JSONDecoder` when the shape is unstable (this repo's hand-rolled gRPC-web parser is the right call).
@@ -369,7 +368,7 @@ Techniques:
 - Avoid protocol `P` method calls in the hottest inner loop when monomorphization is possible (use generics)
 - Keep hot kernels small and inlinable; `@inline(__always)` sparingly (helps tiny getters, hurts when code size explodes)
 - `@_transparent` / `@usableFromInline` for internal hot helpers only
-- Reserve `try!`/`!` for provable invariants (repo convention already)
+- Reserve `try!`/`!` for provable invariants (repo convention)
 - Watch heavy `Codable` synthesized `init(from:)` on huge types — the compiler builds a lot; hand-written decoding can win when measured
 
 #### Build flags (Xcode, system-wide, cheap)
@@ -393,7 +392,7 @@ Especially important for widely-used generics and `Codable`/`SwiftUI` bodies.
 
 See also `@MainActor`/actor guidance above and the repo's `PollingLoop` + `AppModel.forwardChanges` patterns.
 
-- **Main actor is precious.** Every `await` to a `@MainActor`-isolated function can hop. Do parsing, DB reads, and aggregation off the main actor; publish one coalesced snapshot to the UI (this repo already does: pollers fetch/parse off the view, `AppModel.forwardChanges` coalesces).
+- **Main actor is precious.** Every `await` to a `@MainActor`-isolated function can hop. Do parsing, DB reads, and aggregation off the main actor; publish one coalesced snapshot to the UI (pollers fetch/parse off the view, and `AppModel.forwardChanges` coalesces).
 - Don't hold a lock or a synchronous `@MainActor` call across network I/O.
 - `withThrowingTaskGroup` / `TaskGroup` for batching independent I/O; avoid `Task {}` per item when a loop inside one task suffices (task spawn is not free; context switches are).
 - Prefer `os_unfair_lock` (`OSAllocatedUnfairLock`, macOS 13+) over `NSLock` for perf-critical short critical sections; never across an `await`.
@@ -407,7 +406,7 @@ See also `@MainActor`/actor guidance above and the repo's `PollingLoop` + `AppMo
 
 Heavy schema frameworks are convenient and **expensive**. In Swift the tiers are:
 
-1. **`Codable`/`JSONDecoder`** — cleanest, but slowest per byte; synthesized decoding builds dictionaries and does key lookup with overhead. `JSONDecoder` was historically not thread-safe; prefer a per-thread or a shared instance confined to one actor. Use for cold/rarely-called decoding and for *stable* shapes.
+1. **`Codable`/`JSONDecoder`** — cleanest, but slowest per byte; synthesized decoding builds dictionaries and does key lookup with overhead. Keep each `JSONDecoder` instance confined to one actor or thread. Use for cold/rarely-called decoding and for *stable* shapes.
 2. **`JSONSerialization`** — faster for ad-hoc `[String: Any]` probing when the shape is unstable or multi-shaped (this repo's `UsageResponseParser` is a legitimate use — it must accept many server shapes).
 3. **Manual scanning** — fastest. When the wire format is unstable but the fields you need are few, scan the bytes directly: `data.range(of:)` for ASCII keys + index math, `String` slicing, or a tiny state machine. The repo's `GRPCWebParser` (raw protobuf scan) is exactly right — keep that instinct, but cut the per-call `[UInt8](data)` copies (see Lens 3).
 
@@ -415,7 +414,7 @@ General rules:
 - Re-encoding/decoding the same blob repeatedly is waste — decode once, keep the typed value.
 - Avoid `JSONSerialization` of large blobs when you only need 3 fields; avoid `Codable` of the same.
 - `Data` → `String` → `Data` round trips are pure waste; read the bytes once.
-- Dates: `ISO8601DateFormatter` static instances (already done here); `Date.FormatStyle`/`.formatted()` for display formatting (thread-safe, modern). Avoid a fresh `DateFormatter` per value.
+- Dates: `ISO8601DateFormatter` static instances (`ISO8601DateFormatter.flexible`); `Date.FormatStyle`/`.formatted()` for display formatting (thread-safe, modern). Avoid a fresh `DateFormatter` per value.
 
 ### Lens 9 — Swift container & idiom cheat sheet (Abseil → Swift)
 
@@ -468,12 +467,12 @@ read-only via the C API (`SQLITE_OPEN_READONLY`). It is re-read when the file
 changes, so a scan runs at most once per change rather than once per view.
 
 Checklist:
-- [ ] **`=` not `LIKE`** for exact keys — `LIKE` without wildcards still forces different plans (measured on the Rust sibling: 75× on 1.1M rows)
+- [ ] **`=` not `LIKE`** for exact keys — `LIKE` without wildcards still forces different plans
 - [ ] **`EXPLAIN QUERY PLAN`** on every new/changed query against a realistic DB
 - [ ] **Composite indexes match real predicates** — single-column indexes on `year`/`month`/`day` are often dead weight
 - [ ] **Prepare statements once**, `reset` + re-bind in the loop
 - [ ] **One transaction per batch** where you write (this repo is read-only — still, `PRAGMA query_only=ON` on readers)
-- [ ] **`PRAGMA busy_timeout` on every connection** (this repo already sets 2000 — good; the Rust sibling hit `database is locked` at default 0)
+- [ ] **`PRAGMA busy_timeout` on every connection** (`OpenCodeLocalStats` sets 2000 ms; the default of 0 fails with `database is locked` while a writer holds the lock)
 - [ ] **WAL-friendly**: a read-only open is correct for readers concurrent with a writer — keep it
 - [ ] **Avoid DISTINCT/GROUP BY when a bare filter returns one row/key**
 - [ ] **N+1 point queries** → bulk `IN (...)` or a single ranged scan
@@ -487,13 +486,13 @@ The repo is a poll-driven menu bar app. Cadence multiplies waste.
 
 Checklist:
 - [ ] **Order work cheapest → dearest**: settings/throttle/`isSignedIn` gates before network I/O; the `PollingLoop` checks `Task.isCancelled` — keep that
-- [ ] **Fail fast on auth**: `401/403` → surface re-auth immediately, don't fall through 4 candidate endpoints (this repo does this for `.unauthorized` — keep it)
+- [ ] **Fail fast on auth**: `401/403` → surface re-auth immediately, don't fall through 4 candidate endpoints (Grok's billing call does this for `.unauthorized`)
 - [ ] **Candidate probing**: Grok calls the gRPC-web billing endpoint first and probes its 4 REST candidates (sequential, 15 s timeouts) only when billing fails transiently — keep the probes off the common path, and bound their total time if they ever move onto it
 - [ ] **Don't pay N× external I/O over the whole queue when one poll advances one item**
 - [ ] **Never poll hot against a throttling server** — a refresh returns `PollOutcome`; `.failure` grows the wait through `BackoffTimer` (30 s → 10 min) and a 429's `Retry-After` (`UsageError.rateLimited`) sets the earliest next refresh. Report `.failure` for real fetch errors and `.skipped` for cancellation or nothing-to-do, or the backoff never engages
 - [ ] **Don't wake parked loops for nothing** — a provider that is not needed returns a nil interval (`PollInterval.seconds(menuIsOpen:settings:needed:)`) and its loop holds no timer; `AppModel` calls `wake()` only when an input to `interval()` changes (menu opened, polling settings edited)
 - [ ] **Cache discovery results** — e.g. the OpenCode workspace id is stored after sign-in and tried first; don't re-resolve per poll what rarely changes
-- [ ] **Logging**: per-item `info!` × N polls is disk + I-cache tax; summary once, `debug` for detail (repo already mostly does this)
+- [ ] **Logging**: per-item `logger.info` × N polls is disk + I-cache tax; summary once, `debug` for detail
 - [ ] **Sleep/wake handling**: `SystemWakeGate` pauses every loop on system sleep and resumes them once `NWPathMonitor` reports a satisfied path (or after a fallback delay), so a wake does not fail every provider at once
 
 ### Review output format
@@ -595,12 +594,12 @@ Push back on "optimize everything" — prioritize the critical 3%.
 
 ## Hard-Earned Lessons (token_monitor workspace)
 
-Repo rules distilled from real fixes. These override generic best practices when they conflict.
+Repo rules. These override generic best practices when they conflict.
 
-1. **The menu bar is not SwiftUI.** It is an `NSStatusItem` whose label is one AppKit bitmap (`MenuBarStatusRenderer`) and whose dropdown is a borderless `MenuBarPanel`; a status-item click is hit-tested from the status image's x to a provider region, and the event's own location is unreliable for that (`MenuBarController` reads `NSEvent.mouseLocation`). Do not reintroduce `MenuBarExtra`/`NSPopover`.
+1. **The menu bar is not SwiftUI.** It is an `NSStatusItem` whose label is one AppKit bitmap (`MenuBarStatusRenderer`) and whose dropdown is a borderless `MenuBarPanel`; a status-item click is hit-tested from the status image's x to a provider region, and the event's own location is unreliable for that (`MenuBarController` reads `NSEvent.mouseLocation`). Do not use `MenuBarExtra`/`NSPopover`.
 2. **Never hardcode menu bar text color, and never cache an appearance value.** Resolve `NSColor.labelColor` against the status bar's *live* `effectiveAppearance` on every render; key cached images by the resolved appearance and clear the cache on `AppleInterfaceThemeChangedNotification`. Account for wallpaper-tinted menu bars, where the status bar appearance differs from the system theme.
 3. **A cache key must encode every input that changes the output.** If it affects the pixels (appearance) or the text (time zone, locale), it is part of the key, or the cache is cleared when it changes.
-4. **Credentials go in the Keychain through `SecretRoutingCredentialStore`, never in new files.** Only identifiers that cannot authenticate (email, account identity, workspace id) stay in `0600` files. Legacy file secrets are migrated only after a verified Keychain write.
+4. **Credentials go in the Keychain through `SecretRoutingCredentialStore`, never in new files.** Only identifiers that cannot authenticate (email, account identity, workspace id) stay in `0600` files. A secret found in a `.dat` file moves into the Keychain only after a verified Keychain write.
 5. **Provider requests use `ProviderURLSession.shared`.** It has no cookie jar and no cache; send the stored credential in an explicit header.
 6. **`project.yml` is the only source of truth.** A Swift file added without `make project` never compiles, and CI rejects an uncommitted project diff.
 7. **Menu bar labels only observe `AppModel`.** Forward each child's `objectWillChange` into `AppModel` (see `AppModel.forwardChanges`) or labels go stale.
@@ -626,7 +625,6 @@ Principles and structure adapted from:
 > Jeffrey Dean & Sanjay Ghemawat, *Performance Hints*, 2025,
 > https://abseil.io/fast/hints.html
 
-Swift/macOS mappings, severity taxonomy, review workflow, and **field lessons
-(token_monitor 2026-08)** are project-specific for agent use in this workspace
-and related Swift codebases. Update the field lessons section when a measured
+Swift/macOS mappings, severity taxonomy, review workflow, and the performance
+field notes are specific to this workspace. Add a field note when a measured
 production win or footgun is confirmed (with numbers).

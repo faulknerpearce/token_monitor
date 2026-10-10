@@ -1,8 +1,7 @@
 @testable import TokenMon
 import XCTest
 
-/// Exercises the *real* provider capture allowlists rather than a synthetic
-/// policy.
+/// Exercises the *real* provider capture allowlists.
 @MainActor
 final class ProviderCookieAllowlistTests: XCTestCase {
     private func cookie(_ name: String, value: String, domain: String) -> HTTPCookie {
@@ -43,7 +42,7 @@ final class ProviderCookieAllowlistTests: XCTestCase {
     }
 
     /// The console API sends the console session (`__Host-console_session`) plus
-    /// the site cookies; all must be kept while analytics cookies are dropped.
+    /// the site cookies; all are kept and analytics cookies are dropped.
     func testOpenCodePolicyKeepsConsoleAndSiteCookies() {
         let cookies = [
             cookie("__Host-console_session", value: "console", domain: "opencode.ai"),
@@ -96,8 +95,8 @@ final class ProviderCookieAllowlistTests: XCTestCase {
     }
 
     /// NextAuth chunks a large session JWT into `…session-token.0`, `.1`, …. The
-    /// whole family must be captured, and the CSRF cookie that shares the sign-in
-    /// page must not be mistaken for the session.
+    /// whole family is captured, and the CSRF cookie that shares the sign-in
+    /// page is not taken for the session.
     func testChatGPTPolicyKeepsChunkedSessionAndDropsCSRF() {
         let cookies = [
             cookie("__Host-next-auth.csrf-token", value: "csrf", domain: "chatgpt.com"),
@@ -111,8 +110,8 @@ final class ProviderCookieAllowlistTests: XCTestCase {
         )
     }
 
-    /// The CSRF-only jar present while the sign-in page renders must not capture
-    /// as a session — that signed the user out on the first poll.
+    /// The CSRF-only jar present while the sign-in page renders is not captured
+    /// as a session.
     func testChatGPTPolicyRejectsCSRFOnlyJar() {
         let cookies = [
             cookie("__Host-next-auth.csrf-token", value: "csrf", domain: "chatgpt.com"),

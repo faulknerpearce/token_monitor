@@ -26,7 +26,7 @@ struct SRGB {
 /// Canonical brand accent per provider.
 ///
 /// Single source of truth for every surface (SwiftUI panels/rings and the AppKit
-/// menu-bar renderer), so a recolor is one edit and the renderers cannot drift.
+/// menu-bar renderer), so a recolor is one edit and the renderers stay in sync.
 enum ProviderAccent {
     static let grok = SRGB(red: 0.11, green: 0.38, blue: 0.82)
     static let openCode = SRGB(red: 1.0, green: 0.55, blue: 0.0)

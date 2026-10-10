@@ -12,8 +12,8 @@ extension EnvironmentValues {
     }
 }
 
-/// One-line "update available" row for the menu-bar panel. Shows nothing
-/// until the environment's update checker has found a newer release.
+/// One-line "update available" row for the menu-bar panel. Appears once the
+/// environment's update checker has found a newer release.
 struct UpdateAvailableIndicator: View {
     @Environment(\.updateChecker) private var checker
 

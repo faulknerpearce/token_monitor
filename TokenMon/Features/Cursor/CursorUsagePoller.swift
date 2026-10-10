@@ -122,8 +122,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
                 auth.saveAccountEmail(email)
             }
             // No event aggregates this poll (events fetch failed): keep the
-            // previous event-derived figures for the same billing cycle rather
-            // than publishing zeros.
+            // previous event-derived figures for the same billing cycle.
             if snap.costStats == nil, let previous = snapshot,
                previous.billingCycleStart == snap.billingCycleStart {
                 snap.costStats = previous.costStats
@@ -134,8 +133,8 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             dayHourlyUsage = hourly
             auth.recordAuthSuccess()
             // The daily bars prefer the real day-over-day growth of the reported
-            // pool %, falling back to a list-price estimate for days this build
-            // never observed (see `buildDailyBudgetDays`).
+            // pool %, falling back to a list-price estimate for unobserved
+            // days (see `buildDailyBudgetDays`).
             if let cycleEnd = snap.billingCycleEnd {
                 billingCycleEnd = cycleEnd
             }
@@ -175,9 +174,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         } catch is CancellationError {
             return .skipped
         } catch let cursorError as ProviderError {
-            // A request that began under a previous credential state must not
-            // tear down the current session (sign-out → sign in as another
-            // account while this fetch was in flight).
+            // Only a request made under the current credential state tears down
+            // the session; a stale one (sign-out → sign in as another account
+            // while this fetch was in flight) is skipped.
             guard auth.isCurrent(generation) else { return .skipped }
             let usageError = cursorError.usageError
             switch usageError {
@@ -223,14 +222,13 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// reported pool % (`observedByDay`). Days it did not observe are back-filled
     /// from a per-day pool-estimate weight (`estimatedWeightByDay`), scaled so the
     /// whole cycle still sums to `usedPercent`. If tracked deltas exceed the live
-    /// pool %, they are rescaled down to match instead of overshooting. Returns
-    /// nil when the subscription month cannot be resolved (a calendar month is
-    /// never substituted).
+    /// pool %, they are rescaled down to match. Returns nil when the subscription
+    /// month cannot be resolved.
     ///
     /// After an early provider reset, `interruptedWindowStart` marks the cycle
     /// that was cut short: its observed days that fall before the new cycle start
-    /// are shown (dimmed) as history in the displayed Monday–Sunday week, but
-    /// never count toward the new cycle's pool math.
+    /// are shown (dimmed) as history in the displayed Monday–Sunday week and
+    /// stay outside the new cycle's pool math.
     static func buildDailyBudgetDays(
         observedByDay: [Date: Double],
         interruptedWindowStart: Date? = nil,
@@ -253,8 +251,8 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         let estimated = estimatedWeightByDay.filter { $0.key >= cycleStartDay && $0.key < bounds.end }
 
         // The first day the app tracked is only partially observed (tracking began
-        // mid-day), so estimate it rather than paint a misleading sliver. Later
-        // days are covered fully and use their measured delta.
+        // mid-day), so it uses the estimate. Later days are covered fully and
+        // use their measured delta.
         var effectiveObserved = observed
         if let firstTrackedDay = observed.keys.min() {
             effectiveObserved.removeValue(forKey: firstTrackedDay)
@@ -267,7 +265,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         if tracked > usedPercent + 0.001, tracked > 0 {
             // Pool % fell below the sum of tracked daily deltas (downward tick,
             // API rebase, or drift past the reset floor). Rescale so bars still
-            // sum to the live headline usedPercent instead of overshooting it.
+            // sum to the live headline usedPercent.
             let scale = usedPercent / tracked
             for (day, value) in effectiveObserved {
                 blended[day] = value * scale

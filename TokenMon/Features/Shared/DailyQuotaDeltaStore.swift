@@ -3,7 +3,7 @@ import Foundation
 
 /// Provider-reported bounds of a quota window. Both ends are optional because
 /// providers differ: Grokbot and Cursor send a start *and* a reset instant,
-/// Claude sends only `resets_at`. A bound is never invented from the calendar.
+/// Claude sends only `resets_at`. Each bound comes from the provider's payload.
 struct QuotaWindow: Hashable, Sendable {
     var start: Date?
     var resetsAt: Date?
@@ -22,12 +22,12 @@ enum QuotaWindowTransition: Hashable, Sendable {
     /// Clock skew tolerated when deciding the old reset instant is still ahead.
     private static let skew: TimeInterval = 5 * 60
     /// Smallest move of the period start / reset instant that counts as a moved
-    /// window rather than payload jitter.
+    /// window; smaller moves are payload jitter.
     private static let movedThreshold: TimeInterval = 3600
 
-    /// True when `nextResetsAt` is a genuinely new period rather than the same
-    /// period's reset instant creeping forward: a rollover advances the instant
-    /// by at least half the period.
+    /// True when `nextResetsAt` starts a new period: a rollover advances the
+    /// instant by at least half the period, while the same period's reset
+    /// instant only creeps forward.
     static func isRollover(previousResetsAt: Date?, nextResetsAt: Date?, periodDays: Int) -> Bool {
         guard let previous = previousResetsAt, let next = nextResetsAt, next > previous else { return false }
         return next.timeIntervalSince(previous) >= TimeInterval(max(1, periodDays)) * 86_400 * 0.5
@@ -41,7 +41,7 @@ enum QuotaWindowTransition: Hashable, Sendable {
     ///   `Percent.resetDropFloor` **together with** a moved period start or reset
     ///   instant is an ``earlyReset``. A drop alone (same window metadata) is a
     ///   rebase and is left to the store's drop-as-reset credit; moved metadata
-    ///   alone (no drop) is not a reset of the pool, so nothing is rewound.
+    ///   alone (no drop) is ``none``.
     static func classify(
         from previous: QuotaWindow,
         previousUsedPercent: Double?,
@@ -73,7 +73,7 @@ enum QuotaWindowTransition: Hashable, Sendable {
 /// growth, in percentage points of that window.
 ///
 /// A drop in the window's utilization means a new window started; the post-reset
-/// value is credited to the sampled day rather than discarded.
+/// value is credited to the sampled day.
 ///
 /// Day totals survive window changes: a new window only discards the entries on
 /// or after its own start day (usage that belongs to the old window but shares a
@@ -103,7 +103,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
     /// Last provider-reported period start and reset instant seen. They are the
     /// "previous window" the next sample is compared against, and persisting them
     /// lets a relaunch still recognize a reset that happened while the app was
-    /// closed. Unlike `windowStart` they are never used to anchor charts.
+    /// closed. They serve that comparison only; charts anchor to `windowStart`.
     private(set) var observedStart: Date?
     private(set) var windowResetsAt: Date?
     /// Last recorded utilization of the tracked window.
@@ -125,10 +125,10 @@ final class DailyQuotaDeltaStore: ObservableObject {
     private var timeZoneObserver: NSObjectProtocol?
 
     /// `dayTotals` holds the days by `DayKey`. `days` holds the same totals
-    /// keyed by start-of-day instants, the format earlier builds read, so
-    /// running one of them does not discard the history; on load it is used
-    /// only when `dayTotals` is missing. Window fields decode as nil from
-    /// payloads that predate them.
+    /// keyed by start-of-day instants, the format of payloads without
+    /// `dayTotals`; writing both keeps the history readable in either format.
+    /// On load `days` is read only when `dayTotals` is missing. Window fields
+    /// decode as nil when absent from the payload.
     private struct Payload: Codable, Equatable {
         var dayTotals: [String: Double]?
         var days: [Date: Double]?
@@ -220,13 +220,12 @@ final class DailyQuotaDeltaStore: ObservableObject {
         } else if previous - windowUsedPercent >= Percent.resetDropFloor {
             delta = windowUsedPercent
         } else {
-            // A small downward tick is noise, not a reset. Crediting it as one
-            // would add the whole pool percent to the day.
+            // A small downward tick is noise and credits nothing; crediting it as
+            // a reset would add the whole pool percent to the day.
             delta = 0
         }
         lastUsedPercent = windowUsedPercent
 
-        // Ignore tiny noise.
         guard delta >= Percent.noiseFloor else { return transition }
 
         var next = dayTotals
@@ -272,7 +271,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
     /// Resolves where the new window began and applies it. Preference order:
     /// the payload's own start; for a rollover the old reset instant (the moment
     /// the old window ended); otherwise the new reset instant minus one period,
-    /// the same anchor the weekly bars already use. Never later than `date`.
+    /// the same anchor the weekly bars use. Clamped to at most `date`.
     private func applyTransition(
         _ transition: QuotaWindowTransition,
         to window: QuotaWindow,
@@ -332,7 +331,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
         observedStart = payload.observedStart
         windowResetsAt = payload.windowResetsAt
         dayTotals = days
-        // An older-format payload is rewritten once in the `dayTotals` format.
+        // A payload without `dayTotals` is rewritten once in that format.
         persist()
     }
 

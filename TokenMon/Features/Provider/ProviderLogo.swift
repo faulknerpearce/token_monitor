@@ -115,8 +115,7 @@ struct ProviderHeaderLabel: View {
 }
 
 /// Opens the app's Settings window. Injected once at the panel root so any
-/// provider header can show a Settings cog without threading the closure through
-/// every panel.
+/// provider header can show a Settings cog.
 private struct OpenPreferencesActionKey: EnvironmentKey {
     static let defaultValue: () -> Void = {}
 }

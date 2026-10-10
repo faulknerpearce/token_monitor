@@ -42,8 +42,8 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(snap.membershipType, "ultra")
         XCTAssertEqual(snap.displayPlanName, "Cursor Ultra")
 
-        // Daily Budget and event clipping key off these parsed dates, so assert
-        // them rather than only the percents.
+        // Daily Budget and event clipping key off these parsed dates, so the test
+        // asserts them alongside the percents.
         XCTAssertNotNil(snap.billingCycleStart)
         XCTAssertEqual(
             snap.billingCycleStart,
@@ -56,8 +56,7 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(snap.resetsAt, snap.billingCycleEnd)
     }
 
-    /// A summary without billing-cycle fields must leave the dates nil rather than
-    /// substituting a calendar month.
+    /// A summary without billing-cycle fields leaves the dates nil.
     func testParseSummaryLeavesCycleDatesNilWhenOmitted() throws {
         let json = Data(
             #"{"individualUsage":{"plan":{"enabled":true,"used":0,"limit":0,"totalPercentUsed":12}}}"#.utf8
@@ -250,8 +249,8 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(events.count, 2)
     }
 
-    /// A renamed/omitted total must read as unknown (0), not silently stop after
-    /// one page, and a numeric string must still parse.
+    /// A renamed/omitted total reads as unknown (0), so paging continues past the
+    /// first page; a numeric string total parses.
     func testParseUsageEventsPageCoercesTotal() throws {
         let stringTotal = Data(#"{"totalUsageEventsCount":"1234","usageEventsDisplay":[]}"#.utf8)
         XCTAssertEqual(try CursorUsageClient.parseUsageEventsPage(data: stringTotal).total, 1234)
@@ -260,7 +259,7 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(try CursorUsageClient.parseUsageEventsPage(data: missing).total, 0)
     }
 
-    /// Out-of-range/NaN token counts must clamp instead of trapping in `Int64`.
+    /// Out-of-range/NaN token counts clamp to the `Int64` range.
     func testSafeIntegerConversionDoesNotTrap() {
         XCTAssertEqual(CursorUsageClient.safeInt64(1e30), Int64.max)
         XCTAssertEqual(CursorUsageClient.safeInt64(-1e30), Int64.min)
@@ -274,8 +273,8 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(CursorUsageClient.tokenCount(event), Int64.max)
     }
 
-    /// The String timestamp branch must honour the same seconds/ms heuristic as
-    /// the numeric branches, and reject implausible values.
+    /// The String timestamp branch honours the same seconds/ms heuristic as
+    /// the numeric branches, and rejects implausible values.
     func testEventTimestampStringUnits() {
         let ms = CursorUsageClient.eventTimestamp(["timestamp": "1775418973898"])
         XCTAssertEqual(ms?.timeIntervalSince1970 ?? 0, 1_775_418_973.898, accuracy: 0.01)
@@ -352,8 +351,8 @@ final class CursorUsageClientTests: XCTestCase {
         }
     }
 
-    /// A truncated body must stay transient so the poller keeps the last-good
-    /// snapshot instead of signing the user out.
+    /// A truncated body is transient, so the poller keeps the last-good snapshot
+    /// and the user stays signed in.
     func testRejectUnauthorizedBodyTreatsMalformedAsBadResponse() {
         let truncated = Data(#"{"individualUsage":"#.utf8)
         XCTAssertThrowsError(try CursorUsageClient.rejectUnauthorizedBody(truncated)) { error in
@@ -363,14 +362,14 @@ final class CursorUsageClientTests: XCTestCase {
         }
     }
 
-    /// A normal summary body must pass through untouched.
+    /// A normal summary body passes through untouched.
     func testRejectUnauthorizedBodyPassesNormalSummary() throws {
         let data = Data(#"{"individualUsage":{"plan":{"enabled":true,"used":0,"limit":0}}}"#.utf8)
         XCTAssertNoThrow(try CursorUsageClient.rejectUnauthorizedBody(data))
     }
 
     /// Cursor Bot (`grok-bot-*`) usage belongs to the Grokbot allowance, not the
-    /// Cursor plan pool, so it must be excluded from every Cursor aggregation.
+    /// Cursor plan pool, so it is excluded from every Cursor aggregation.
     func testGrokBotEventsAreExcludedFromAggregations() {
         let calendar = Calendar(identifier: .gregorian)
         let dayStart = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_754_236_800))

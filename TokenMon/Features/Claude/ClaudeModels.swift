@@ -5,8 +5,8 @@ struct ClaudeUsageWindow: Hashable, Sendable {
     /// 0…100 utilization of the window.
     var usedPercent: Double
     var resetsAt: Date?
-    /// Model the limit applies to (`"Fable"`) when it is model-scoped rather
-    /// than account-wide; `nil` for an account-wide limit.
+    /// Model the limit applies to (`"Fable"`) when it is model-scoped;
+    /// `nil` for an account-wide limit.
     var scopeName: String?
 
     var remainingPercent: Double {

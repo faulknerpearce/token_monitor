@@ -3,8 +3,8 @@ import Foundation
 /// A calendar day as a `yyyy-MM-dd` string, independent of time zone.
 ///
 /// Stores persist days in this form so a recorded day keeps meaning the same
-/// calendar date after the system time zone changes, which an absolute
-/// `startOfDay` instant does not. Keys sort chronologically as strings.
+/// calendar date after the system time zone changes; an absolute `startOfDay`
+/// instant shifts with the zone. Keys sort chronologically as strings.
 enum DayKey {
     /// The key for the calendar day containing `date` in `calendar`.
     static func key(for date: Date, calendar: Calendar) -> String {
@@ -29,13 +29,13 @@ enum DayKey {
 
     /// The day a stored `startOfDay` instant was recorded for.
     ///
-    /// Payloads in the older store format key days by the absolute
+    /// Payloads in the `startOfDay` store format key days by the absolute
     /// local-midnight instant, without the zone it was taken in. A local
-    /// midnight in a zone at UTC offset `o` falls at `-o` past UTC midnight, so the instant's UTC time of day pins
-    /// the offset to one of two values a day apart; the one inside the real
-    /// range of offsets (−12 h … +14 h) is used, and `preferredOffset` (the
-    /// current zone's) breaks the tie for ±12 h. The date at that offset is the
-    /// recorded day, whatever zone the Mac is in now.
+    /// midnight in a zone at UTC offset `o` falls at `-o` past UTC midnight, so
+    /// the instant's UTC time of day pins the offset to one of two values a day
+    /// apart; the one inside the real range of offsets (−12 h … +14 h) is used,
+    /// and `preferredOffset` (the current zone's) breaks the tie for ±12 h. The
+    /// date at that offset is the recorded day, whatever zone the Mac is in.
     static func key(forStoredStartOfDay instant: Date, preferredOffset: Int) -> String {
         let seconds = Int(instant.timeIntervalSince1970.rounded())
         let secondOfDay = ((seconds % 86_400) + 86_400) % 86_400

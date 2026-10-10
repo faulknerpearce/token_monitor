@@ -98,7 +98,7 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
     func testBeginNewWindowClearsDaysAndNextSampleIsCreditedAsReset() {
         // A quota-window rollover drops finished-period day totals while the
         // baseline survives, so the first sample of the fresh window is
-        // credited whole via the drop-as-reset path instead of being lost.
+        // credited whole via the drop-as-reset path.
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -201,7 +201,7 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
     }
 
     /// Usage already recorded today belongs to the old window; it shares a calendar
-    /// day with the new one, so it is dropped rather than inflating the new bar.
+    /// day with the new one, so it is dropped from the new bar.
     func testEarlyResetDropsOnlyTheBoundaryDay() {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -307,9 +307,9 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(again.spentByDay[day(-1)] ?? 0, 20, accuracy: 0.001)
     }
 
-    /// Payloads written before window metadata existed must still load, with the
-    /// days and baseline intact and no window boundary.
-    func testLegacyPayloadWithoutWindowMetadataStillDecodes() throws {
+    /// Payloads without window metadata load with the days and baseline intact
+    /// and no window boundary.
+    func testPayloadWithoutWindowMetadataDecodes() throws {
         struct LegacyPayload: Codable {
             var days: [Date: Double]
             var lastUsedPercent: Double?
@@ -436,7 +436,7 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
     }
 
-    // MARK: - Day keys, retention, and older payloads
+    // MARK: - Day keys, retention, and instant-keyed payloads
 
     private func denver() throws -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -454,9 +454,9 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         Date(timeIntervalSinceReferenceDate: seconds)
     }
 
-    /// The older payload shape (days as a flat `[instant, value, …]` array) loads
+    /// The instant-keyed payload shape (days as a flat `[instant, value, …]` array) loads
     /// with every day on its own calendar date and is rewritten with day keys.
-    func testOlderPayloadWithDayInstantsLoadsAndIsRewritten() throws {
+    func testInstantKeyedPayloadLoadsAndIsRewritten() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
         backing.set(
@@ -474,15 +474,15 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[referenceDate(811_231_200)] ?? 0, 24, accuracy: 0.001)
         let rewritten = try XCTUnwrap(backing.value(forKey: "claude_daily_usage"))
         XCTAssertTrue(rewritten.contains("\"2026-09-14\":7"), rewritten)
-        // The instant-keyed `days` is written too, for builds that read only it.
+        // The instant-keyed `days` is written too, for readers of that form.
         XCTAssertTrue(rewritten.contains("\"days\":["), rewritten)
 
         let reloaded = DailyQuotaDeltaStore(store: backing, storageKey: "claude_daily_usage", calendar: calendar, now: { now })
         XCTAssertEqual(reloaded.spentByDay, store.spentByDay)
     }
 
-    /// The older payload with window metadata keeps every window field.
-    func testOlderPayloadWithWindowMetadataLoads() throws {
+    /// The instant-keyed payload with window metadata keeps every window field.
+    func testInstantKeyedPayloadWithWindowMetadataLoads() throws {
         let (backing, dir) = try makeBacking()
         defer { try? FileManager.default.removeItem(at: dir) }
         backing.set(
