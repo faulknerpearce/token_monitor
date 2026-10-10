@@ -23,8 +23,6 @@ struct ProviderHourUsage: Identifiable, Hashable, Sendable {
     var grokbotSharePercent: Double
     /// Percentage points of provider quota consumed during this hour.
     var activity: Double
-    /// Dollar-ish amount for peak labels (OpenCode / harness $ for this hour).
-    var costUSD: Double
     /// Token totals when the provider exposes them; Grok/Claude report quota only.
     var grokTokens: Int64?
     var openCodeGoTokens: Int64
@@ -65,7 +63,6 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
     ///
     /// All hourly inputs are percentage-point deltas against the provider's own quota,
     /// which makes the combined height comparable without daily re-normalization.
-    /// `hourCostUSD` is used only for peak `$` labels.
     static func build(
         dayStart: Date,
         grokHourWeights: [Double],
@@ -74,7 +71,6 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         cursorHourWeights: [Double] = Array(repeating: 0, count: 24),
         claudeHourWeights: [Double] = Array(repeating: 0, count: 24),
         grokbotHourWeights: [Double] = Array(repeating: 0, count: 24),
-        hourCostUSD: [Double]? = nil,
         grokHourTokens: [Int64]? = nil,
         openCodeGoHourTokens: [Int64] = Array(repeating: 0, count: 24),
         openCodeZenHourTokens: [Int64] = Array(repeating: 0, count: 24),
@@ -89,7 +85,6 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         let cursorHourWeights = Self.normalized(cursorHourWeights)
         let claudeHourWeights = Self.normalized(claudeHourWeights)
         let grokbotHourWeights = Self.normalized(grokbotHourWeights)
-        let costs = Self.normalized(hourCostUSD ?? [])
         let grokHourTokens = Self.normalized(grokHourTokens)
         let claudeHourTokens = Self.normalized(claudeHourTokens)
         let openCodeGoHourTokens = Self.normalized(openCodeGoHourTokens)
@@ -119,7 +114,6 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
                 claudeSharePercent: claudeShare,
                 grokbotSharePercent: grokbotShare,
                 activity: activity,
-                costUSD: max(0, costs[hour]),
                 grokTokens: grokHourTokens?[hour],
                 openCodeGoTokens: max(0, openCodeGoHourTokens[hour]),
                 openCodeZenTokens: max(0, openCodeZenHourTokens[hour]),
@@ -141,10 +135,6 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         if values.count == 24 { return values }
         if values.count > 24 { return Array(values.prefix(24)) }
         return values + Array(repeating: 0, count: 24 - values.count)
-    }
-
-    private static func normalized(_ values: [Double]?) -> [Double]? {
-        values.map { normalized($0) }
     }
 
     private static func normalized(_ values: [Int64]?) -> [Int64]? {

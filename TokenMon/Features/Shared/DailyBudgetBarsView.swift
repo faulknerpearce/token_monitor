@@ -100,15 +100,27 @@ struct DailyBudgetBarsView: View {
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
 
-    /// Render a day reliably (weekday + day-of-month), cached per calendar.
+    /// Weekday label formatters, cached per calendar so a render allocates none.
     private static let formatterCacheLock = NSLock()
-    private static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
+    private static var weekdayFormatterCache: [String: DateFormatter] = [:]
+
+    private static let rangeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMMM d"
+        return formatter
+    }()
+
+    private static let helpFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter
+    }()
 
     private var rangeLabel: String {
         guard let first = days.first?.date, let last = days.last?.date else { return "" }
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = "MMMM d"
+        let fmt = Self.rangeFormatter
         let cal = Calendar.current
         let sameMonth = cal.component(.month, from: first) == cal.component(.month, from: last)
             && cal.component(.year, from: first) == cal.component(.year, from: last)
@@ -206,7 +218,7 @@ struct DailyBudgetBarsView: View {
         let fraction = day.percentOfBudget / 100
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
         let isFuture = day.date > Calendar.current.startOfDay(for: Date())
-        let (weekday, _) = Self.formatters(for: day.date)
+        let weekday = Self.weekdayFormatter()
 
         return VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
@@ -243,32 +255,24 @@ struct DailyBudgetBarsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private static func formatters(for date: Date) -> (weekday: DateFormatter, dayOfMonth: DateFormatter) {
+    private static func weekdayFormatter() -> DateFormatter {
         let calendar = Calendar.current
         let key = "\(calendar.identifier)|\(calendar.timeZone.identifier)|\(calendar.locale?.identifier ?? "")"
         formatterCacheLock.lock()
         defer { formatterCacheLock.unlock() }
-        if let cached = formatterCache[key] {
+        if let cached = weekdayFormatterCache[key] {
             return cached
         }
         let weekday = DateFormatter()
         weekday.locale = .current
         weekday.calendar = calendar
         weekday.dateFormat = "EEE"
-        let dayOfMonth = DateFormatter()
-        dayOfMonth.locale = .current
-        dayOfMonth.calendar = calendar
-        dayOfMonth.dateFormat = "d"
-        let pair = (weekday, dayOfMonth)
-        formatterCache[key] = pair
-        return pair
+        weekdayFormatterCache[key] = weekday
+        return weekday
     }
 
     private func dayHelp(_ day: DailyBudgetDay) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEE, MMM d"
-        let dateStr = formatter.string(from: day.date)
+        let dateStr = Self.helpFormatter.string(from: day.date)
         if day.isPriorWindow {
             return String(format: "%@: %.1f%% of the %@ pool before the provider reset it early", dateStr, day.spentUSD, allowanceNoun)
         }
