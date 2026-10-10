@@ -4,30 +4,17 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Settings window: providers, menu bar, accounts, refresh, alerts, and data.
+///
+/// Observes only the objects its own rows read (`settings`, `history`,
+/// `updateChecker`); account and refresh rows are subviews that observe their
+/// provider's session or poller.
 struct PreferencesView: View {
-    @ObservedObject var auth: AuthSessionService
-    @ObservedObject var openCodeAuth: OpenCodeAuthSession
-    @ObservedObject var cursorAuth: CursorAuthSession
-    @ObservedObject var claudeAuth: ClaudeAuthSession
-    @ObservedObject var chatGPTAuth: ChatGPTAuthSession
-    @ObservedObject var openRouterAuth: OpenRouterAuthSession
+    let model: AppModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
-    @ObservedObject var poller: UsagePoller
-    @ObservedObject var openCodePoller: OpenCodeUsagePoller
-    @ObservedObject var cursorPoller: CursorUsagePoller
-    @ObservedObject var claudePoller: ClaudeUsagePoller
-    @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
-    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
-    @ObservedObject var grokbotPoller: GrokbotUsagePoller
     @ObservedObject var updateChecker: UpdateChecker
-    let openSignIn: () -> Void
-    let openOpenCodeSignIn: () -> Void
-    let openCursorSignIn: () -> Void
-    let openClaudeSignIn: () -> Void
-    let openChatGPTSignIn: () -> Void
+    let openWindow: (AppWindowID) -> Void
     @State private var exportError: String?
-    @State private var openRouterKeyDraft = ""
     @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
@@ -101,127 +88,47 @@ struct PreferencesView: View {
                 Text("Show selected provider replaces the pinned graphs with just the active provider's icon, percentage, and usage bar.")
             }
 
-            Section("Grok Account") {
-                if auth.isSignedIn {
-                    LabeledContent("Signed in as") {
-                        Text(auth.accountEmail ?? "Grok account")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        auth.signOut()
-                        poller.clearSnapshot()
-                    }
-                    Button("Re-authenticate…") { openSignIn() }
-                } else {
-                    Text("Not signed in")
-                        .foregroundStyle(.secondary)
-                    Button("Sign In to grok.com…") { openSignIn() }
-                }
-                if let err = auth.lastAuthError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-            }
-
-            Section("OpenCode Account") {
-                if openCodeAuth.isSignedIn {
-                    LabeledContent("Signed in as") {
-                        Text(openCodeAuth.accountEmail ?? "OpenCode account")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        openCodeAuth.signOut()
-                        openCodePoller.clearSnapshot()
-                    }
-                    Button("Re-authenticate…") { openOpenCodeSignIn() }
-                } else {
-                    Text("Not signed in")
-                        .foregroundStyle(.secondary)
-                    Button("Sign In to OpenCode…") { openOpenCodeSignIn() }
-                }
-                if let err = openCodeAuth.lastAuthError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-            }
-
-            Section("Cursor Account") {
-                if cursorAuth.isSignedIn {
-                    LabeledContent("Signed in as") {
-                        Text(cursorAuth.accountEmail ?? "Cursor account")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        cursorAuth.signOut()
-                        cursorPoller.clearSnapshot()
-                    }
-                    Button("Re-authenticate…") { openCursorSignIn() }
-                } else {
-                    Text("Not signed in")
-                        .foregroundStyle(.secondary)
-                    Button("Sign In to Cursor…") { openCursorSignIn() }
-                }
-                if let err = cursorAuth.lastAuthError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-            }
-
-            Section("Claude Account") {
-                if claudeAuth.isSignedIn {
-                    LabeledContent("Signed in as") {
-                        Text(claudeAuth.accountEmail ?? "Claude account")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        claudeAuth.signOut()
-                        claudePoller.clearSnapshot()
-                    }
-                    Button("Re-authenticate…") { openClaudeSignIn() }
-                } else {
-                    Text("Not signed in")
-                        .foregroundStyle(.secondary)
-                    Button("Sign In to Claude…") { openClaudeSignIn() }
-                }
-                if let err = claudeAuth.lastAuthError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-            }
-
-            Section("ChatGPT Account") {
-                if chatGPTAuth.isSignedIn {
-                    LabeledContent("Signed in as") {
-                        Text(chatGPTAuth.accountEmail ?? "ChatGPT account")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        chatGPTAuth.signOut()
-                        chatGPTPoller.clearSnapshot()
-                    }
-                    Button("Re-authenticate…") { openChatGPTSignIn() }
-                } else {
-                    Text("Not signed in")
-                        .foregroundStyle(.secondary)
-                    Button("Sign In to ChatGPT…") { openChatGPTSignIn() }
-                }
-                if let err = chatGPTAuth.lastAuthError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-            }
-
-            Section("OpenRouter Account") {
-                if openRouterAuth.isSignedIn {
-                    LabeledContent("Connected with") {
-                        Text("OpenRouter API key")
-                    }
-                    Button("Sign Out", role: .destructive) {
-                        openRouterAuth.signOut()
-                        openRouterPoller.clearSnapshot()
-                        openRouterKeyDraft = ""
-                    }
-                } else {
-                    Text("Not connected")
-                        .foregroundStyle(.secondary)
-                    SecureField("sk-or-v1-…", text: $openRouterKeyDraft)
-                    Button("Save API Key") { saveOpenRouterKey() }
-                        .disabled(openRouterKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    if let err = openRouterAuth.lastAuthError {
-                        Text(err).foregroundStyle(.red).font(.caption)
-                    }
-                }
-            }
+            ProviderAccountSection(
+                title: "Grok Account",
+                auth: model.auth,
+                accountFallback: "Grok account",
+                signInTitle: "Sign In to grok.com…",
+                clearSnapshot: model.poller.clearSnapshot,
+                openSignIn: { openWindow(.grokSignIn) }
+            )
+            ProviderAccountSection(
+                title: "OpenCode Account",
+                auth: model.openCodeAuth,
+                accountFallback: "OpenCode account",
+                signInTitle: "Sign In to OpenCode…",
+                clearSnapshot: model.openCodePoller.clearSnapshot,
+                openSignIn: { openWindow(.openCodeSignIn) }
+            )
+            ProviderAccountSection(
+                title: "Cursor Account",
+                auth: model.cursorAuth,
+                accountFallback: "Cursor account",
+                signInTitle: "Sign In to Cursor…",
+                clearSnapshot: model.cursorPoller.clearSnapshot,
+                openSignIn: { openWindow(.cursorSignIn) }
+            )
+            ProviderAccountSection(
+                title: "Claude Account",
+                auth: model.claudeAuth,
+                accountFallback: "Claude account",
+                signInTitle: "Sign In to Claude…",
+                clearSnapshot: model.claudePoller.clearSnapshot,
+                openSignIn: { openWindow(.claudeSignIn) }
+            )
+            ProviderAccountSection(
+                title: "ChatGPT Account",
+                auth: model.chatGPTAuth,
+                accountFallback: "ChatGPT account",
+                signInTitle: "Sign In to ChatGPT…",
+                clearSnapshot: model.chatGPTPoller.clearSnapshot,
+                openSignIn: { openWindow(.chatGPTSignIn) }
+            )
+            OpenRouterAccountSection(auth: model.openRouterAuth, poller: model.openRouterPoller)
 
             Section("Refresh") {
                 Stepper(value: $settings.activePollSeconds, in: AppSettings.activePollRange, step: 15) {
@@ -328,116 +235,21 @@ struct PreferencesView: View {
         }
     }
 
+    /// Last refresh (and error) of the selected provider, or every provider's
+    /// last refresh on Overview.
     @ViewBuilder
     private var refreshStatus: some View {
-        switch settings.selectedProvider {
-        case .opencode:
-            if let last = openCodePoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
+        if settings.selectedProvider == .overview {
+            ForEach(model.providers.all, id: \.provider) { entry in
+                pollerStatus(entry.poller, label: entry.provider.displayName)
             }
-            if let error = openCodePoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .cursor:
-            if let last = cursorPoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = cursorPoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .claude:
-            if let last = claudePoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = claudePoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .chatgpt:
-            if let last = chatGPTPoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = chatGPTPoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .openrouter:
-            if let last = openRouterPoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = openRouterPoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .grokbot:
-            if let last = grokbotPoller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = grokbotPoller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-        case .overview:
-            if let last = openCodePoller.lastRefreshedAt {
-                Text("OpenCode: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = cursorPoller.lastRefreshedAt {
-                Text("Cursor: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = claudePoller.lastRefreshedAt {
-                Text("Claude: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = chatGPTPoller.lastRefreshedAt {
-                Text("ChatGPT: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = openRouterPoller.lastRefreshedAt {
-                Text("OpenRouter: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = grokbotPoller.lastRefreshedAt {
-                Text("Grokbot: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let last = poller.lastRefreshedAt {
-                Text("Grok: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-        case .grok:
-            if let last = poller.lastRefreshedAt {
-                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            }
-            if let error = poller.lastError {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
+        } else if let entry = model.providers.all.first(where: { $0.provider == settings.selectedProvider }) {
+            pollerStatus(entry.poller, label: nil)
         }
     }
 
-    private func saveOpenRouterKey() {
-        if openRouterAuth.saveAPIKey(openRouterKeyDraft) {
-            openRouterKeyDraft = ""
-            Task { await openRouterPoller.refreshNow() }
-        }
+    private func pollerStatus(_ poller: some ProviderUsagePoller, label: String?) -> AnyView {
+        AnyView(PollerRefreshStatus(poller: poller, label: label))
     }
 
     private func export(_ format: ExportService.Format) {
@@ -481,5 +293,96 @@ private struct ProviderReorderDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         dragging = nil
         return true
+    }
+}
+
+/// One cookie-session provider's account rows: who is signed in, sign out,
+/// and (re-)authenticate.
+private struct ProviderAccountSection: View {
+    let title: String
+    @ObservedObject var auth: ProviderAuthSession
+    let accountFallback: String
+    let signInTitle: String
+    let clearSnapshot: () -> Void
+    let openSignIn: () -> Void
+
+    var body: some View {
+        Section(title) {
+            if auth.isSignedIn {
+                LabeledContent("Signed in as") {
+                    Text(auth.accountEmail ?? accountFallback)
+                }
+                Button("Sign Out", role: .destructive) {
+                    auth.signOut()
+                    clearSnapshot()
+                }
+                Button("Re-authenticate…") { openSignIn() }
+            } else {
+                Text("Not signed in")
+                    .foregroundStyle(.secondary)
+                Button(signInTitle) { openSignIn() }
+            }
+            if let err = auth.lastAuthError {
+                Text(err).foregroundStyle(.red).font(.caption)
+            }
+        }
+    }
+}
+
+/// OpenRouter connects with an API key rather than a browser session.
+private struct OpenRouterAccountSection: View {
+    @ObservedObject var auth: OpenRouterAuthSession
+    let poller: OpenRouterUsagePoller
+    @State private var keyDraft = ""
+
+    var body: some View {
+        Section("OpenRouter Account") {
+            if auth.isSignedIn {
+                LabeledContent("Connected with") {
+                    Text("OpenRouter API key")
+                }
+                Button("Sign Out", role: .destructive) {
+                    auth.signOut()
+                    poller.clearSnapshot()
+                    keyDraft = ""
+                }
+            } else {
+                Text("Not connected")
+                    .foregroundStyle(.secondary)
+                SecureField("sk-or-v1-…", text: $keyDraft)
+                Button("Save API Key") { saveKey() }
+                    .disabled(keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if let err = auth.lastAuthError {
+                    Text(err).foregroundStyle(.red).font(.caption)
+                }
+            }
+        }
+    }
+
+    private func saveKey() {
+        if auth.saveAPIKey(keyDraft) {
+            keyDraft = ""
+            Task { await poller.refreshNow() }
+        }
+    }
+}
+
+/// A poller's last refresh time and, without a `label`, its last error.
+private struct PollerRefreshStatus<Poller: ProviderUsagePoller>: View {
+    @ObservedObject var poller: Poller
+    /// Prefixes the time with the provider name (Overview lists every provider).
+    let label: String?
+
+    var body: some View {
+        if let last = poller.lastRefreshedAt {
+            let time = last.formatted(date: .abbreviated, time: .shortened)
+            Text(label.map { "\($0): \(time)" } ?? "Last refresh: \(time)")
+                .foregroundStyle(.secondary)
+        }
+        if label == nil, let error = poller.lastError {
+            Text(error)
+                .foregroundStyle(.red)
+                .font(.caption)
+        }
     }
 }

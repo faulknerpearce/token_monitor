@@ -9,6 +9,8 @@ import Foundation
 @MainActor
 protocol ProviderUsagePoller: ObservableObject {
     var menuIsOpen: Bool { get set }
+    var lastRefreshedAt: Date? { get }
+    var lastError: String? { get }
     /// The poller's timer; `wake()` it after an input to its interval changes.
     var pollingLoop: PollingLoop { get }
     func start()

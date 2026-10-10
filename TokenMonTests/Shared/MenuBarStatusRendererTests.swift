@@ -6,6 +6,48 @@ import XCTest
 /// shifts on the x axis.
 @MainActor
 final class MenuBarStatusRendererTests: XCTestCase {
+    override func setUp() async throws {
+        MenuBarStatusRenderer.resetCache()
+    }
+
+    override func tearDown() async throws {
+        MenuBarStatusRenderer.resetCache()
+    }
+
+    private func renderStatus(appearance: NSAppearance.Name) throws -> MenuBarStatusRenderer.RenderedStatus {
+        MenuBarStatusRenderer.render(
+            selectedProvider: .grok,
+            showSelectedProvider: false,
+            snapshot: WeeklyUsageSnapshot(usedPercent: 40),
+            openCodeSnapshot: nil,
+            cursorSnapshot: nil,
+            claudeSnapshot: nil,
+            chatGPTSnapshot: nil,
+            openRouterSnapshot: nil,
+            grokbotSnapshot: nil,
+            isGrokSignedIn: true,
+            showGrokBar: true,
+            showGrokCategories: false,
+            showOpenCodeBar: false,
+            showCursorBar: false,
+            showClaudeBar: false,
+            showGrokbotBar: false,
+            providerOrder: MonitorProvider.usageProviders,
+            visibleProductIDs: [],
+            appearance: try XCTUnwrap(NSAppearance(named: appearance))
+        )
+    }
+
+    /// The label colour is baked into the bitmap, so light and dark menu bars
+    /// must render (and cache) separately; the same appearance reuses the key.
+    func testAppearanceIsPartOfTheRenderedKey() throws {
+        let light = try renderStatus(appearance: .aqua)
+        let dark = try renderStatus(appearance: .darkAqua)
+        XCTAssertNotEqual(light.key, dark.key)
+        XCTAssertNotEqual(light.image.tiffRepresentation, dark.image.tiffRepresentation)
+        XCTAssertEqual(try renderStatus(appearance: .aqua).key, light.key)
+    }
+
     private func render(
         provider: MonitorProvider,
         showSelectedProvider: Bool,

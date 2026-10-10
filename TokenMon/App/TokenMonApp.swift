@@ -6,14 +6,16 @@ import SwiftUI
 @main
 struct TokenMonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var model: AppModel
-    /// Owns the `NSStatusItem` + dropdown that replace `MenuBarExtra`. Self-registers
-    /// in `init`, so it is retained for the app's lifetime and never read directly.
+    /// Process-lifetime services. Held as a plain reference: scenes observe the
+    /// individual objects they render, not the whole model.
+    private let model: AppModel
+    /// Owns the `NSStatusItem` and its dropdown panel. Self-registers in `init`,
+    /// so it is retained for the app's lifetime and never read directly.
     private let menuBar: MenuBarController
 
     init() {
         let model = AppModel()
-        _model = StateObject(wrappedValue: model)
+        self.model = model
         // A click on a provider's menu bar graph opens that provider's dropdown.
         menuBar = MenuBarController(model: model)
     }
@@ -29,55 +31,39 @@ struct TokenMonApp: App {
         }
         .defaultSize(width: 480, height: 640)
 
-        Window("Sign in to Grok", id: AppWindowID.grokSignIn.rawValue) {
-            SignInView(auth: model.auth) {
-                Task { await model.poller.refreshNow() }
-                AppDelegate.hideDockIfNoWindows()
-            }
-            .signInWindowChrome()
+        ProviderSignInWindow(title: "Sign in to Grok", id: .grokSignIn) {
+            SignInView(auth: model.auth) { model.signInCompleted(.grok) }
         }
-        .defaultSize(width: 920, height: 700)
-        .windowResizability(.contentMinSize)
-
-        Window("Sign in to OpenCode", id: AppWindowID.openCodeSignIn.rawValue) {
-            OpenCodeSignInView(auth: model.openCodeAuth) {
-                Task { await model.openCodePoller.refreshNow() }
-                AppDelegate.hideDockIfNoWindows()
-            }
-            .signInWindowChrome()
+        ProviderSignInWindow(title: "Sign in to OpenCode", id: .openCodeSignIn) {
+            OpenCodeSignInView(auth: model.openCodeAuth) { model.signInCompleted(.opencode) }
         }
-        .defaultSize(width: 920, height: 700)
-        .windowResizability(.contentMinSize)
-
-        Window("Sign in to Cursor", id: AppWindowID.cursorSignIn.rawValue) {
-            CursorSignInView(auth: model.cursorAuth) {
-                Task {
-                    await model.cursorPoller.refreshNow()
-                    await model.grokbotPoller.refreshNow()
-                }
-                AppDelegate.hideDockIfNoWindows()
-            }
-            .signInWindowChrome()
+        ProviderSignInWindow(title: "Sign in to Cursor", id: .cursorSignIn) {
+            CursorSignInView(auth: model.cursorAuth) { model.signInCompleted(.cursor) }
         }
-        .defaultSize(width: 920, height: 700)
-        .windowResizability(.contentMinSize)
-
-        Window("Sign in to Claude", id: AppWindowID.claudeSignIn.rawValue) {
-            ClaudeSignInView(auth: model.claudeAuth) {
-                Task { await model.claudePoller.refreshNow() }
-                AppDelegate.hideDockIfNoWindows()
-            }
-            .signInWindowChrome()
+        ProviderSignInWindow(title: "Sign in to Claude", id: .claudeSignIn) {
+            ClaudeSignInView(auth: model.claudeAuth) { model.signInCompleted(.claude) }
         }
-        .defaultSize(width: 920, height: 700)
-        .windowResizability(.contentMinSize)
+        ProviderSignInWindow(title: "Sign in to ChatGPT", id: .chatGPTSignIn) {
+            ChatGPTSignInView(auth: model.chatGPTAuth) { model.signInCompleted(.chatgpt) }
+        }
+    }
+}
 
-        Window("Sign in to ChatGPT", id: AppWindowID.chatGPTSignIn.rawValue) {
-            ChatGPTSignInView(auth: model.chatGPTAuth) {
-                Task { await model.chatGPTPoller.refreshNow() }
-                AppDelegate.hideDockIfNoWindows()
-            }
-            .signInWindowChrome()
+/// One provider's sign-in browser window. The dock icon hides again when the
+/// window closes.
+private struct ProviderSignInWindow<Content: View>: Scene {
+    let title: String
+    let id: AppWindowID
+    @ViewBuilder let content: () -> Content
+
+    var body: some Scene {
+        Window(title, id: id.rawValue) {
+            content()
+                .background(
+                    Color.clear
+                        .frame(width: 0, height: 0)
+                        .onDisappear { AppDelegate.hideDockIfNoWindows() }
+                )
         }
         .defaultSize(width: 920, height: 700)
         .windowResizability(.contentMinSize)
@@ -92,18 +78,6 @@ enum AppWindowID: String {
     case cursorSignIn = "cursor-signin"
     case claudeSignIn = "claude-signin"
     case chatGPTSignIn = "chatgpt-signin"
-}
-
-private extension View {
-    func signInWindowChrome() -> some View {
-        background(
-            Color.clear
-                .frame(width: 0, height: 0)
-                .onDisappear {
-                    AppDelegate.hideDockIfNoWindows()
-                }
-        )
-    }
 }
 
 /// Shared app services owned for the process lifetime.
@@ -137,6 +111,11 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var terminateObserver: NSObjectProtocol?
     private var wakeGate: SystemWakeGate?
+    private let childChanges = PassthroughSubject<Void, Never>()
+
+    /// Window over which bursts of child changes (one poll emits several)
+    /// collapse into a single `objectWillChange`.
+    static let changeCoalescing: RunLoop.SchedulerTimeType.Stride = .milliseconds(100)
 
     /// A menu open refreshes a provider only when its data is older than this,
     /// so quickly reopening the menu does not refetch.
@@ -209,6 +188,11 @@ final class AppModel: ObservableObject {
             openRouter: openRouterPoller,
             grokbot: grokbotPoller
         )
+        // One coalesced change per burst, delivered after the values are set.
+        childChanges
+            .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         forwardChanges(from: settings)
         forwardChanges(from: history)
         forwardChanges(from: grokHourly)
@@ -258,6 +242,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Loads a provider's data right after its sign-in window succeeds, even
+    /// when its tab is not selected. Grokbot shares the Cursor session.
+    func signInCompleted(_ provider: MonitorProvider) {
+        let pollers: [any ProviderUsagePoller] = switch provider {
+        case .cursor: [cursorPoller, grokbotPoller]
+        default: providers.all.filter { $0.provider == provider }.map(\.poller)
+        }
+        for providerPoller in pollers {
+            Task { await providerPoller.refreshNow() }
+        }
+        AppDelegate.hideDockIfNoWindows()
+    }
+
     private func forEachPollingLoop(_ body: (PollingLoop) -> Void) {
         for (_, providerPoller) in providers.all {
             body(providerPoller.pollingLoop)
@@ -300,10 +297,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// MenuBarExtra label only observes `AppModel`; forward child updates.
+    /// Funnels a child's changes into `childChanges`, which `AppModel` re-emits
+    /// at most once per `changeCoalescing` (see `init`).
     private func forwardChanges(from object: some ObservableObject) {
         object.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] _ in self?.childChanges.send() }
             .store(in: &cancellables)
     }
 
@@ -314,71 +312,32 @@ final class AppModel: ObservableObject {
     }
 }
 
-/// Bridges `AppModel` into the menu-bar dropdown content.
+/// Bridges `AppModel` into the menu-bar dropdown content. Holds the model as
+/// a plain reference so only the visible tab's objects drive re-renders.
 struct MenuBarRoot: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         MenuBarPanelView(
-            auth: model.auth,
-            poller: model.poller,
-            openCodeAuth: model.openCodeAuth,
-            openCodePoller: model.openCodePoller,
-            cursorAuth: model.cursorAuth,
-            cursorPoller: model.cursorPoller,
-            claudeAuth: model.claudeAuth,
-            claudePoller: model.claudePoller,
-            chatGPTAuth: model.chatGPTAuth,
-            chatGPTPoller: model.chatGPTPoller,
-            openRouterAuth: model.openRouterAuth,
-            openRouterPoller: model.openRouterPoller,
-            grokbotPoller: model.grokbotPoller,
+            model: model,
             settings: model.settings,
-            history: model.history,
-            grokHourly: model.grokHourly,
-            claudeHourly: model.claudeHourly,
-            grokbotHourly: model.grokbotHourly,
-            openPreferences: { model.openWindow(.preferences, openWindow: openWindow) },
-            openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
-            openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
-            openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },
-            openClaudeSignIn: { model.openWindow(.claudeSignIn, openWindow: openWindow) },
-            openChatGPTSignIn: { model.openWindow(.chatGPTSignIn, openWindow: openWindow) },
-            selectOpenRouter: { model.settings.selectedProvider = .openrouter }
+            openWindow: { model.openWindow($0, openWindow: openWindow) }
         )
     }
 }
 
 private struct PreferencesRoot: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         PreferencesView(
-            auth: model.auth,
-            openCodeAuth: model.openCodeAuth,
-            cursorAuth: model.cursorAuth,
-            claudeAuth: model.claudeAuth,
-            chatGPTAuth: model.chatGPTAuth,
-            openRouterAuth: model.openRouterAuth,
+            model: model,
             settings: model.settings,
             history: model.history,
-            poller: model.poller,
-            openCodePoller: model.openCodePoller,
-            cursorPoller: model.cursorPoller,
-            claudePoller: model.claudePoller,
-            chatGPTPoller: model.chatGPTPoller,
-            openRouterPoller: model.openRouterPoller,
-            grokbotPoller: model.grokbotPoller,
             updateChecker: model.updateChecker,
-            openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
-            openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
-            openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },
-            openClaudeSignIn: { model.openWindow(.claudeSignIn, openWindow: openWindow) },
-            openChatGPTSignIn: { model.openWindow(.chatGPTSignIn, openWindow: openWindow) }
+            openWindow: { model.openWindow($0, openWindow: openWindow) }
         )
     }
 }
-
-/// Observes nested services so the menu bar label refreshes on poll/settings updates.
