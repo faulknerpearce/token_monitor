@@ -278,12 +278,7 @@ struct OpenCodeModelWeekRow: View {
     }
 
     private var displayModelName: String {
-        // Use catalog display but prefer short "Kimi K2.6" style; fall back to raw id.
-        let lower = model.modelID.lowercased()
-        if lower.contains("muse-spark") { return "Muse Spark" }
-        // Turn "kimi-k2.6" → "Kimi K2.6", "qwen3.6-plus" → "Qwen3.6 Plus"
-        let base = model.modelID.replacingOccurrences(of: "-", with: " ").capitalized
-        return base
+        OpenCodeModelName.display(model.modelID)
     }
 
     var body: some View {
