@@ -67,7 +67,7 @@ The checks run on a staged copy (`.TokenMon-update-<uuid>.app`) placed next to t
 - The installed copy cannot replace itself (its folder is not writable, or macOS is running it from App Translocation): a translocated copy is asked to move into Applications; otherwise the release's `.pkg` is downloaded for the user to open, or the release page opens when there is none.
 - The zip is missing, has no digest, or fails any check: the release page opens with the reason.
 
-**Keychain prompt after an update.** Ad-hoc signed builds have no stable signing identity, so macOS treats each update as a new app and asks once whether it may read the TokenMon Keychain items. Choose **Always Allow**. Developer ID builds keep access across updates.
+**Keychain prompt after an update.** Ad-hoc signed builds have no stable signing identity, so macOS treats each update as a new app and asks once whether it may read the TokenMon Keychain item. Choose **Always Allow**. Developer ID builds keep access across updates.
 
 ## Entitlements
 

@@ -86,7 +86,8 @@ enum AppInstaller {
     /// `destination` with the app inside.
     ///
     /// - Returns: The installed app, at `destination`.
-    /// - Throws: `Failure`. `destination` is unchanged when this throws.
+    /// - Throws: `Failure`, or a file-system error from preparing the download.
+    ///   `destination` is unchanged when this throws.
     static func installUpdate(
         from archiveURL: URL,
         expecting expectation: Expectation,
@@ -257,12 +258,12 @@ enum AppInstaller {
     static func stageAndSwap(_ app: URL, into destination: URL, expecting expectation: Expectation) throws -> URL {
         let staged = destination.deletingLastPathComponent()
             .appendingPathComponent(".TokenMon-update-\(UUID().uuidString).app", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: staged) }
         do {
             try FileManager.default.copyItem(at: app, to: staged)
         } catch {
             throw Failure.install(error.localizedDescription)
         }
-        defer { try? FileManager.default.removeItem(at: staged) }
 
         try verify(staged, against: expectation)
         do {

@@ -201,9 +201,10 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Whether Grok should be polled (panel tab or menu-bar graph).
+    /// Whether Grok should be polled (panel tab, menu-bar graph, or the usage
+    /// threshold alert, which is evaluated on each Grok poll).
     var needsGrokPolling: Bool {
-        isProviderEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar)
+        isProviderEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar || thresholdEnabled)
     }
 
     /// Whether OpenCode should be polled (panel tab or menu-bar graph).

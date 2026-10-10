@@ -131,11 +131,17 @@ struct SecItemKeychainBackend: KeychainBackend {
 /// The item is loaded on first use and cached. When the read fails for any
 /// reason other than "not found" (for example the user denied access), the
 /// vault reports every account as missing and refuses writes for the rest of
-/// the process, so it never overwrites secrets it could not read.
+/// the process, so it never overwrites secrets it could not read. A removal
+/// made meanwhile (sign-out, session invalidation) is recorded in
+/// `pendingRemovals` and applied the next time the item loads, so the removed
+/// secret does not come back.
 final class KeychainVault {
-    static let shared = KeychainVault()
+    static let shared = KeychainVault(pendingRemovals: .standard)
 
-    /// Keychain service of the vault item and of the separate items it replaces.
+    /// Defaults key listing accounts removed while the vault was unavailable.
+    static let pendingRemovalsKey = "keychainVaultPendingRemovals"
+
+    /// Keychain service of the vault item and of any separate per-account items it adopts.
     static let service = "com.modelmonitor.app.credentials"
     /// Account of the vault item.
     static let vaultAccount = "vault"
@@ -153,13 +159,22 @@ final class KeychainVault {
 
     private let backend: any KeychainBackend
     private let service: String
+    private let pendingRemovals: UserDefaults?
     private let lock = NSLock()
     private var state = State.unloaded
+    private var memoryPendingRemovals: [String] = []
     private let logger = Logger(category: "Keychain")
 
-    init(service: String = KeychainVault.service, backend: any KeychainBackend = SecItemKeychainBackend()) {
+    /// - Parameter pendingRemovals: Where removals made while the vault is
+    ///   unavailable are kept until it loads; nil keeps them in memory only.
+    init(
+        service: String = KeychainVault.service,
+        backend: any KeychainBackend = SecItemKeychainBackend(),
+        pendingRemovals: UserDefaults? = nil
+    ) {
         self.service = service
         self.backend = backend
+        self.pendingRemovals = pendingRemovals
     }
 
     func value(forAccount account: String) -> String? {
@@ -185,7 +200,10 @@ final class KeychainVault {
     func remove(forAccount account: String) {
         lock.lock()
         defer { lock.unlock() }
-        guard case var .loaded(payload) = loadedState() else { return }
+        guard case var .loaded(payload) = loadedState() else {
+            recordPendingRemoval(account)
+            return
+        }
         let hadEntry = payload.entries.removeValue(forKey: account) != nil
         let newlyChecked = payload.checkedSeparateItems.insert(account).inserted
         deleteSeparateItem(account: account)
@@ -198,8 +216,49 @@ final class KeychainVault {
     private func loadedState() -> State {
         if case .unloaded = state {
             state = readVault()
+            applyPendingRemovals()
         }
         return state
+    }
+
+    private func storedPendingRemovals() -> [String] {
+        guard let pendingRemovals else { return memoryPendingRemovals }
+        return pendingRemovals.stringArray(forKey: Self.pendingRemovalsKey) ?? []
+    }
+
+    private func storePendingRemovals(_ accounts: [String]) {
+        guard let pendingRemovals else {
+            memoryPendingRemovals = accounts
+            return
+        }
+        if accounts.isEmpty {
+            pendingRemovals.removeObject(forKey: Self.pendingRemovalsKey)
+        } else {
+            pendingRemovals.set(accounts, forKey: Self.pendingRemovalsKey)
+        }
+    }
+
+    private func recordPendingRemoval(_ account: String) {
+        var accounts = storedPendingRemovals()
+        guard !accounts.contains(account) else { return }
+        accounts.append(account)
+        storePendingRemovals(accounts)
+    }
+
+    /// Removes accounts recorded while the vault was unavailable; the record is
+    /// cleared once the vault no longer holds them.
+    private func applyPendingRemovals() {
+        let accounts = storedPendingRemovals()
+        guard !accounts.isEmpty, case var .loaded(payload) = state else { return }
+        var changed = false
+        for account in accounts {
+            changed = payload.entries.removeValue(forKey: account) != nil || changed
+            changed = payload.checkedSeparateItems.insert(account).inserted || changed
+            deleteSeparateItem(account: account)
+        }
+        if !changed || write(payload) {
+            storePendingRemovals([])
+        }
     }
 
     private func readVault() -> State {

@@ -69,6 +69,7 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         settings.selectedProvider = .cursor
         settings.showGrokBarInMenuBar = false
+        settings.thresholdEnabled = false
         XCTAssertFalse(settings.needsGrokPolling)
 
         settings.showGrokBarInMenuBar = true
@@ -76,6 +77,15 @@ final class AppSettingsTests: XCTestCase {
 
         settings.showGrokBarInMenuBar = false
         settings.selectedProvider = .grok
+        XCTAssertTrue(settings.needsGrokPolling)
+    }
+
+    /// The usage threshold alert is evaluated on Grok polls, so it keeps Grok polling.
+    func testThresholdAlertKeepsGrokPolling() {
+        let settings = makeSettings()
+        settings.selectedProvider = .cursor
+        settings.showGrokBarInMenuBar = false
+        settings.thresholdEnabled = true
         XCTAssertTrue(settings.needsGrokPolling)
     }
 

@@ -474,7 +474,8 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[referenceDate(811_231_200)] ?? 0, 24, accuracy: 0.001)
         let rewritten = try XCTUnwrap(backing.value(forKey: "claude_daily_usage"))
         XCTAssertTrue(rewritten.contains("\"2026-09-14\":7"), rewritten)
-        XCTAssertFalse(rewritten.contains("\"days\""), rewritten)
+        // The instant-keyed `days` is written too, for builds that read only it.
+        XCTAssertTrue(rewritten.contains("\"days\":["), rewritten)
 
         let reloaded = DailyQuotaDeltaStore(store: backing, storageKey: "claude_daily_usage", calendar: calendar, now: { now })
         XCTAssertEqual(reloaded.spentByDay, store.spentByDay)

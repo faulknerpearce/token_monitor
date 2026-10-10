@@ -76,7 +76,7 @@ final class PollingLoop {
         backoff: BackoffTimer = BackoffTimer(initial: 30, maximum: 600),
         now: @escaping @MainActor () -> Date = { Date() },
         sleep: @escaping Sleeper = { seconds in
-            try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+            try await Task.sleep(nanoseconds: UInt64(min(max(0, seconds), 86_400) * 1_000_000_000))
         },
         jitter: @escaping @MainActor () -> Double = { Double.random(in: -0.1...0.1) },
         refresh: @escaping @MainActor () async -> PollOutcome

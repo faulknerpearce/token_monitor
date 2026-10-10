@@ -110,30 +110,15 @@ struct DailyBudgetBarsView: View {
     private static let formatterCacheLock = NSLock()
     private static var weekdayFormatterCache: [String: DateFormatter] = [:]
 
-    private static let rangeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMMM d"
-        return formatter
-    }()
-
-    private static let helpFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEE, MMM d"
-        return formatter
-    }()
-
     private var rangeLabel: String {
         guard let first = days.first?.date, let last = days.last?.date else { return "" }
-        let fmt = Self.rangeFormatter
         let cal = Calendar.current
         let sameMonth = cal.component(.month, from: first) == cal.component(.month, from: last)
             && cal.component(.year, from: first) == cal.component(.year, from: last)
         if sameMonth {
-            return "\(fmt.string(from: first)) – \(cal.component(.day, from: last))"
+            return "\(Format.date(first, dateFormat: "MMMM d")) – \(cal.component(.day, from: last))"
         }
-        return "\(fmt.string(from: first)) – \(last.formatted(Date.FormatStyle().month(.abbreviated).day()))"
+        return "\(Format.date(first, dateFormat: "MMMM d")) – \(last.formatted(Date.FormatStyle().month(.abbreviated).day()))"
     }
 
     private var dailyBudget: Double { days.first?.budgetUSD ?? 0 }
@@ -278,7 +263,7 @@ struct DailyBudgetBarsView: View {
     }
 
     private func dayHelp(_ day: DailyBudgetDay) -> String {
-        let dateStr = Self.helpFormatter.string(from: day.date)
+        let dateStr = Format.date(day.date, dateFormat: "EEE, MMM d")
         if day.isPriorWindow {
             return String(format: "%@: %.1f%% of the %@ pool before the provider reset it early", dateStr, day.spentUSD, allowanceNoun)
         }

@@ -170,8 +170,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// later payload omits the reset time.
     ///
     /// Does not wipe accumulated day deltas when `resets_at` moves forward: the
-    /// weekly pool is a rolling window whose reset time advances with usage, so a
-    /// forward move is not necessarily a fresh period. Old-period days fall outside
+    /// reported reset time can move without the used % dropping, so a forward
+    /// move alone is not a fresh period. Old-period days fall outside
     /// the anchored window and are hidden. A true reset is recognized by
     /// `DailyQuotaDeltaStore` only when the used % also drops (rollover, or an
     /// early provider reset); it then keeps earlier days as prior-window history.
@@ -231,9 +231,9 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     ///
     /// Uses the latest payload's `resets_at`, else the last one seen this run,
     /// else the one the daily store persisted on an earlier run. A remembered
-    /// instant that has already passed is carried forward by whole weeks (the
-    /// pool resets on a fixed weekly cadence), so a payload that omits
-    /// `resets_at` still yields the current window.
+    /// instant that has already passed is carried forward by whole weeks, so a
+    /// payload that omits `resets_at` still yields an estimate of the current
+    /// window.
     func weeklyResetsAt(now: Date = Date()) -> Date? {
         if let live = snapshot?.sevenDay?.resetsAt {
             return live

@@ -28,12 +28,21 @@ struct ChatGPTUsageClient: Sendable {
     private let cookieHeader: String
     private let transport: Transport
     private let tokenCache: ChatGPTAccessTokenCache?
+    private let tokenCacheKey: String
 
     /// `tokenCache` keeps the exchanged access token between calls (nil
-    /// exchanges the cookie on every call).
-    init(cookieHeader: String, tokenCache: ChatGPTAccessTokenCache? = nil, transport: Transport = .live) {
+    /// exchanges the cookie on every call). `tokenCacheKey` identifies the
+    /// signed-in session; it stays the same while the session cookie is
+    /// renewed, so a renewed cookie still reuses the cached token.
+    init(
+        cookieHeader: String,
+        tokenCache: ChatGPTAccessTokenCache? = nil,
+        tokenCacheKey: String = "",
+        transport: Transport = .live
+    ) {
         self.cookieHeader = cookieHeader
         self.tokenCache = tokenCache
+        self.tokenCacheKey = tokenCacheKey
         self.transport = transport
     }
 
@@ -43,7 +52,7 @@ struct ChatGPTUsageClient: Sendable {
     /// A cached token rejected with 401/403 is dropped and the call retried once
     /// with a freshly exchanged token.
     func fetchUsage(now: Date = Date()) async throws -> Fetch {
-        if let cached = tokenCache?.token(forKey: cookieHeader, now: now) {
+        if let cached = tokenCache?.token(forKey: tokenCacheKey, now: now) {
             do {
                 return try await usage(accessToken: cached, sessionCookies: [], now: now)
             } catch let error as ProviderError where error.usageError == .unauthorized {
@@ -53,7 +62,7 @@ struct ChatGPTUsageClient: Sendable {
         let session = try await fetchSession()
         tokenCache?.store(
             session.accessToken,
-            forKey: cookieHeader,
+            forKey: tokenCacheKey,
             validUntil: ChatGPTAccessTokenCache.validUntil(accessToken: session.accessToken, now: now)
         )
         return try await usage(accessToken: session.accessToken, sessionCookies: session.setCookieHeaders, now: now)

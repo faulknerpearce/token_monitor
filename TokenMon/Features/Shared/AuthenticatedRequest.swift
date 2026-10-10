@@ -74,21 +74,26 @@ enum AuthenticatedRequest {
         return mapError(for: response, data: data)
     }
 
-    /// `Retry-After` as seconds from now: either delta-seconds or an HTTP date.
-    /// Nil when the header is missing or unparseable.
+    /// Longest `Retry-After` honoured; a longer request waits this long.
+    static let maxRetryAfter: TimeInterval = 60 * 60
+
+    /// `Retry-After` as seconds from now, clamped to `0...maxRetryAfter`:
+    /// either delta-seconds or an HTTP date. Nil when the header is missing or
+    /// unparseable.
     static func retryAfter(from response: HTTPURLResponse, now: Date = Date()) -> TimeInterval? {
         guard let raw = response.value(forHTTPHeaderField: "Retry-After")?
             .trimmingCharacters(in: .whitespaces), !raw.isEmpty
         else { return nil }
         if let seconds = TimeInterval(raw) {
-            return max(0, seconds)
+            guard !seconds.isNaN else { return nil }
+            return min(max(0, seconds), maxRetryAfter)
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
         guard let date = formatter.date(from: raw) else { return nil }
-        return max(0, date.timeIntervalSince(now))
+        return min(max(0, date.timeIntervalSince(now)), maxRetryAfter)
     }
 
     /// Executes a request on `session`, mapping errors onto the provider's
@@ -118,6 +123,10 @@ enum AuthenticatedRequest {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            // A cancelled poll (system sleep, loop restart) is not a network failure.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
             throw map(.network(error.localizedDescription))
         }
         guard let http = response as? HTTPURLResponse else {

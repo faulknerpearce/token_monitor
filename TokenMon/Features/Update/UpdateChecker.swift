@@ -116,8 +116,12 @@ final class UpdateChecker: ObservableObject {
             offerManualInstall(release)
             return
         }
-        guard let sha256 = archive.sha256, let currentVersion, let bundleIdentifier else {
+        guard let sha256 = archive.sha256 else {
             openReleasePage(release, message: "The release has no checksum to verify — opening the release page.")
+            return
+        }
+        guard let currentVersion, let bundleIdentifier else {
+            openReleasePage(release, message: "This build has no version or bundle identifier to check against — opening the release page.")
             return
         }
         isInstalling = true

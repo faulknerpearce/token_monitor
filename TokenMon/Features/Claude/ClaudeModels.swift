@@ -21,7 +21,7 @@ struct ClaudeUsageResponse: Hashable, Sendable {
 
     /// Parses the raw usage JSON.
     ///
-    /// The legacy `five_hour` / `seven_day` objects win when present. Accounts
+    /// The top-level `five_hour` / `seven_day` objects win when present. Accounts
     /// whose `seven_day` is `null` report their weekly pool only in the `limits`
     /// array (`group: "weekly"`), and that entry is used instead.
     static func parse(_ data: Data) throws -> ClaudeUsageResponse {

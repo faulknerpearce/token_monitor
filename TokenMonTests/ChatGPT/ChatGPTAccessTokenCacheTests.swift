@@ -67,12 +67,29 @@ final class ChatGPTAccessTokenCacheTests: XCTestCase {
         )
     }
 
-    func testCacheIsScopedToCookie() {
+    func testCacheIsScopedToKey() {
         let cache = ChatGPTAccessTokenCache()
-        cache.store("tok", forKey: "cookie-a", validUntil: now.addingTimeInterval(60))
-        XCTAssertEqual(cache.token(forKey: "cookie-a", now: now), "tok")
-        XCTAssertNil(cache.token(forKey: "cookie-b", now: now))
-        XCTAssertNil(cache.token(forKey: "cookie-a", now: now.addingTimeInterval(61)))
+        cache.store("tok", forKey: "1", validUntil: now.addingTimeInterval(60))
+        XCTAssertEqual(cache.token(forKey: "1", now: now), "tok")
+        XCTAssertNil(cache.token(forKey: "2", now: now))
+        XCTAssertNil(cache.token(forKey: "1", now: now.addingTimeInterval(61)))
+    }
+
+    /// The poller builds a client per poll from the stored header, which holds
+    /// the cookie renewed by the previous exchange; the token is still reused.
+    func testTokenIsReusedAfterCookieRenewal() async throws {
+        let calls = ExchangeCounter()
+        let cache = ChatGPTAccessTokenCache()
+        let token = Self.jwt(expiresAt: now.addingTimeInterval(3600))
+        let first = makeClient(cache: cache, calls: calls, token: token, cookieHeader: "session=old") { _ in self.usageBody }
+        let fetch = try await first.fetchUsage(now: now)
+        XCTAssertEqual(fetch.setCookieHeaders, ["session=renewed"])
+
+        let second = makeClient(cache: cache, calls: calls, token: token, cookieHeader: "session=renewed") { _ in self.usageBody }
+        _ = try await second.fetchUsage(now: now.addingTimeInterval(60))
+
+        let sessions = await calls.sessions
+        XCTAssertEqual(sessions, 1)
     }
 
     func testWindowLabelsDeriveFromWindowSeconds() {
@@ -94,6 +111,7 @@ final class ChatGPTAccessTokenCacheTests: XCTestCase {
         cache: ChatGPTAccessTokenCache,
         calls: ExchangeCounter,
         token: String,
+        cookieHeader: String = "session=old",
         usage: @escaping @Sendable (Int) async throws -> Data
     ) -> ChatGPTUsageClient {
         let transport = ChatGPTUsageClient.Transport(
@@ -106,7 +124,7 @@ final class ChatGPTAccessTokenCacheTests: XCTestCase {
                 return try await (usage(index), [])
             }
         )
-        return ChatGPTUsageClient(cookieHeader: "session=old", tokenCache: cache, transport: transport)
+        return ChatGPTUsageClient(cookieHeader: cookieHeader, tokenCache: cache, tokenCacheKey: "1", transport: transport)
     }
 
     private static func jwt(expiresAt: Date) -> String {

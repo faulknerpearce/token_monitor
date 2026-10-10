@@ -16,7 +16,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     private let settings: AppSettings
     private let auth: ChatGPTAuthSession
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
-    private let fetchUsage: (String) async throws -> ChatGPTUsageClient.Fetch
+    /// Takes the cookie header and the session generation.
+    private let fetchUsage: (String, Int) async throws -> ChatGPTUsageClient.Fetch
     /// Access token reused across polls by the live client.
     private let tokenCache: ChatGPTAccessTokenCache
     private let logger = Logger(category: "ChatGPT")
@@ -30,14 +31,18 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     init(
         settings: AppSettings,
         auth: ChatGPTAuthSession,
-        fetchUsage: ((String) async throws -> ChatGPTUsageClient.Fetch)? = nil
+        fetchUsage: ((String, Int) async throws -> ChatGPTUsageClient.Fetch)? = nil
     ) {
         self.settings = settings
         self.auth = auth
         let tokenCache = ChatGPTAccessTokenCache()
         self.tokenCache = tokenCache
-        self.fetchUsage = fetchUsage ?? { cookieHeader in
-            try await ChatGPTUsageClient(cookieHeader: cookieHeader, tokenCache: tokenCache).fetchUsage()
+        self.fetchUsage = fetchUsage ?? { cookieHeader, generation in
+            try await ChatGPTUsageClient(
+                cookieHeader: cookieHeader,
+                tokenCache: tokenCache,
+                tokenCacheKey: String(generation)
+            ).fetchUsage()
         }
         auth.accountReset
             .sink { [weak self] in self?.clearSnapshot() }
@@ -80,7 +85,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
 
         let generation = auth.sessionGeneration
         do {
-            let fetch = try await fetchUsage(cookieHeader)
+            let fetch = try await fetchUsage(cookieHeader, generation)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             publish(fetch)
             return .success

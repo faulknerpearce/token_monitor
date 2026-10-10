@@ -60,9 +60,9 @@ Credentials are stored through `SecretRoutingCredentialStore`:
 
 - Secrets (each provider's `session` cookie header, OpenRouter's `key`) share one generic-password item in the login Keychain (`KeychainVault`: service `com.modelmonitor.app.credentials`, account `vault`, a JSON object keyed by `<prefix><key>`), this device only. Secrets held as separate per-account items under the same service are copied into the vault on first read.
 - Account email, account identity, and OpenCode's workspace id are mode `0600` files in `~/Library/Application Support/TokenMon/` (`<prefix><key>.dat`).
-- A secret still in a legacy `.dat` file is moved into the Keychain once it has been written and read back; if the Keychain write fails the file is kept and used.
+- A secret still in a `.dat` file is moved into the Keychain once it has been written and read back; if the Keychain write fails the file is kept and used.
 
-A first launch after the rename moves `Application Support/ModelMonitor/` onto `TokenMon/` when the new folder does not already exist. At launch `LegacyCacheCleanup` removes, once, the `URLCache` files in `~/Library/Caches/com.modelmonitor.app/` and the shared cookie jar `com.modelmonitor.app.binarycookies`, which `URLSession.shared` kept for provider requests in older builds.
+At launch, `Application Support/ModelMonitor/` is moved to `TokenMon/` when `TokenMon/` does not exist. At launch `LegacyCacheCleanup` removes, once, the `URLCache` files in `~/Library/Caches/com.modelmonitor.app/` and the shared cookie jar `com.modelmonitor.app.binarycookies` that `URLSession.shared` can hold for provider requests.
 
 Provider requests use `ProviderURLSession.shared`, an ephemeral session with no cookie jar and no URL cache; credentials travel only in explicit `Cookie` / `Authorization` headers. Details: `AUTH_AND_ENDPOINTS.md`.
 

@@ -75,6 +75,45 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertEqual(delay, 60, accuracy: 0.001)
     }
 
+    /// Huge, infinite and far-future values are clamped so the poll wait stays finite.
+    func testRetryAfterIsClamped() {
+        func delay(_ header: String) -> TimeInterval? {
+            let response = HTTPURLResponse(
+                url: URL(string: "https://example.com")!,
+                statusCode: 429,
+                httpVersion: nil,
+                headerFields: ["Retry-After": header]
+            )!
+            return AuthenticatedRequest.retryAfter(from: response, now: Date(timeIntervalSince1970: 1_445_412_420))
+        }
+        XCTAssertEqual(delay("99999999999"), AuthenticatedRequest.maxRetryAfter)
+        XCTAssertEqual(delay("inf"), AuthenticatedRequest.maxRetryAfter)
+        XCTAssertEqual(delay("Fri, 31 Dec 9999 23:59:59 GMT"), AuthenticatedRequest.maxRetryAfter)
+        XCTAssertEqual(delay("-5"), 0)
+        XCTAssertNil(delay("nan"))
+    }
+
+    /// A request cancelled mid-flight surfaces as `CancellationError`, which pollers skip.
+    func testCancelledRequestThrowsCancellationError() async {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [NeverRespondingURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let task = Task {
+            try await AuthenticatedRequest.perform(
+                URLRequest(url: URL(string: "https://example.com/usage")!),
+                session: session,
+                map: { ProviderError($0, context: .cursor) }
+            )
+        }
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "got \(error)")
+        }
+    }
+
     func testRateLimitedProviderErrorKeepsRetryAfter() {
         let error = ProviderError(.rateLimited(retryAfter: 30), context: .cursor)
         XCTAssertEqual(error.usageError, .rateLimited(retryAfter: 30))
@@ -171,4 +210,12 @@ final class AuthenticatedRequestTests: XCTestCase {
     func testStaticURLParsesLiteral() {
         XCTAssertEqual(URL(staticString: "https://grok.com/rest/usage").host, "grok.com")
     }
+}
+
+/// Accepts every request and never answers, so only cancellation ends it.
+private final class NeverRespondingURLProtocol: URLProtocol {
+    override static func canInit(with request: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {}
+    override func stopLoading() {}
 }

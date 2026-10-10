@@ -170,6 +170,22 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights.reduce(0, +), 7, accuracy: 0.001)
     }
 
+    /// After a gap of more than a day, the first sample sets a new baseline
+    /// instead of crediting days of growth to one hour.
+    func testGapOfSeveralDaysStartsWithoutBaseline() throws {
+        let (backing, dir) = try makeBacking()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let calendar = try denver()
+        let monday = Date(timeIntervalSinceReferenceDate: 811_144_800 - 6 * 3600)
+        let activity = HourlyDeltaActivityStore(store: backing, storageKey: "gap", calendar: calendar, now: monday)
+        activity.record(usedPercent: 20, at: monday)
+        let wednesday = monday.addingTimeInterval(2 * 86400 + 15 * 3600)
+        activity.record(usedPercent: 60, at: wednesday)
+        activity.record(usedPercent: 63, at: wednesday.addingTimeInterval(600))
+
+        XCTAssertEqual(activity.hourWeights.reduce(0, +), 3, accuracy: 0.001)
+    }
+
     /// The older payload shape (day named by its start instant only) restores
     /// today's hours and is rewritten with a day key.
     func testOlderPayloadRestoresTodayAndIsRewritten() throws {

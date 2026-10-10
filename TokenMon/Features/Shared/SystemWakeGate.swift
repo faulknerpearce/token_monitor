@@ -35,7 +35,7 @@ final class SystemWakeGate {
         observeSystem: Bool = true,
         fallbackDelay: TimeInterval = 30,
         sleep: @escaping Sleeper = { seconds in
-            try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+            try await Task.sleep(nanoseconds: UInt64(min(max(0, seconds), 86_400) * 1_000_000_000))
         },
         onSleep: @escaping @MainActor () -> Void,
         onReady: @escaping @MainActor () -> Void

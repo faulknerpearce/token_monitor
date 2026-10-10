@@ -59,6 +59,7 @@ final class GrokPollerGatingTests: XCTestCase {
         let settings = AppSettings(defaults: defaults)
         settings.selectedProvider = .cursor
         settings.showGrokBarInMenuBar = false
+        settings.thresholdEnabled = false
         let (poller, _) = makePoller(settings: settings) { _, _ in
             WeeklyUsageSnapshot(usedPercent: 10, remainingPercent: 90)
         }

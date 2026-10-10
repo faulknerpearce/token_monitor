@@ -274,20 +274,19 @@ final class MenuBarController: NSObject {
 /// alignment SwiftUI centers the content in the taller window, which visibly
 /// moves the provider tabs. Anchoring to the top keeps them fixed.
 ///
-/// The panel's height is clamped to the screen. Measured unconstrained (the
-/// hosting view's `fittingSize`) the content always fits and reports its full
-/// height; once the panel is shorter than that, the content scrolls instead of
-/// being clipped.
+/// The panel's height is clamped to the screen. The content sits in one
+/// scroll view: measured unconstrained (the hosting view's `fittingSize`) it
+/// reports the content's full height, it bounces only when the content is
+/// taller than the panel, and once the panel is shorter the content scrolls
+/// instead of being clipped.
 private struct MenuBarPanelContent: View {
     let model: AppModel
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
+        ScrollView(.vertical) {
             MenuBarRoot(model: model)
-            ScrollView(.vertical) {
-                MenuBarRoot(model: model)
-            }
         }
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

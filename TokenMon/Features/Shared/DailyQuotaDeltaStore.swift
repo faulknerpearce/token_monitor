@@ -124,9 +124,11 @@ final class DailyQuotaDeltaStore: ObservableObject {
     private var persisted: Payload?
     private var timeZoneObserver: NSObjectProtocol?
 
-    /// `dayTotals` holds the days by `DayKey`. `days` is the older format,
-    /// keyed by absolute start-of-day instants; it is only read, and converted
-    /// on load. Window fields decode as nil from payloads that predate them.
+    /// `dayTotals` holds the days by `DayKey`. `days` holds the same totals
+    /// keyed by start-of-day instants, the format earlier builds read, so
+    /// running one of them does not discard the history; on load it is used
+    /// only when `dayTotals` is missing. Window fields decode as nil from
+    /// payloads that predate them.
     private struct Payload: Codable, Equatable {
         var dayTotals: [String: Double]?
         var days: [Date: Double]?
@@ -345,10 +347,21 @@ final class DailyQuotaDeltaStore: ObservableObject {
         return converted
     }
 
+    /// `dayTotals` keyed by each day's start in `calendar`.
+    private static func startOfDayInstants(_ totals: [String: Double], calendar: Calendar) -> [Date: Double] {
+        var instants: [Date: Double] = [:]
+        for (key, value) in totals {
+            if let start = DayKey.startOfDay(for: key, calendar: calendar) {
+                instants[start, default: 0] += value
+            }
+        }
+        return instants
+    }
+
     private func persist() {
         let payload = Payload(
             dayTotals: dayTotals,
-            days: nil,
+            days: Self.startOfDayInstants(dayTotals, calendar: calendar),
             lastUsedPercent: lastUsedPercent,
             windowStart: windowStart,
             interruptedWindowStart: interruptedWindowStart,

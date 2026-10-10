@@ -86,9 +86,18 @@ final class HourlyDeltaActivityStore: ObservableObject {
     /// attributed to the current hour; a drop large enough to be a quota-window
     /// reset credits the new value to this hour, while a small downward tick is
     /// treated as rounding noise and ignored.
+    ///
+    /// On a new day the previous sample stays the baseline only when it was
+    /// taken the day before; after a longer gap there is no baseline, so growth
+    /// over several days is not credited to a single hour.
     func record(usedPercent: Double, at date: Date = Date()) {
         let key = DayKey.key(for: date, calendar: calendar)
         if key != dayKey {
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: date)
+                .map { DayKey.key(for: $0, calendar: calendar) }
+            if yesterday != dayKey {
+                lastUsedPercent = nil
+            }
             dayKey = key
             dayStart = calendar.startOfDay(for: date)
             hourWeights = Array(repeating: 0, count: 24)

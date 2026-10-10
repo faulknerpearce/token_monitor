@@ -116,9 +116,16 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         do {
             var (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
+            // A different account fires `accountReset`, which clears the previous
+            // account's figures before this poll publishes.
+            if let email = snap.accountEmail, email != auth.accountEmail {
+                auth.saveAccountEmail(email)
+            }
             // No event aggregates this poll (events fetch failed): keep the
-            // previous event-derived figures rather than publishing zeros.
-            if snap.costStats == nil, let previous = snapshot {
+            // previous event-derived figures for the same billing cycle rather
+            // than publishing zeros.
+            if snap.costStats == nil, let previous = snapshot,
+               previous.billingCycleStart == snap.billingCycleStart {
                 snap.costStats = previous.costStats
                 hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
                 estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
@@ -126,9 +133,6 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             snapshot = snap
             dayHourlyUsage = hourly
             auth.recordAuthSuccess()
-            if let email = snap.accountEmail, email != auth.accountEmail {
-                auth.saveAccountEmail(email)
-            }
             // The daily bars prefer the real day-over-day growth of the reported
             // pool %, falling back to a list-price estimate for days this build
             // never observed (see `buildDailyBudgetDays`).

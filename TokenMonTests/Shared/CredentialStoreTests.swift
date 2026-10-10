@@ -271,6 +271,29 @@ final class CredentialStoreTests: XCTestCase {
         XCTAssertEqual(keychain.items[vaultKey], stored)
     }
 
+    /// A sign-out made while the vault could not be read is applied once it loads.
+    func testRemovalWhileVaultUnavailableIsAppliedOnNextLoad() throws {
+        let suite = "CredentialStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let keychain = FakeKeychain()
+        XCTAssertTrue(makeStore("auth_", keychain).set("sso=old", forKey: "session"))
+        keychain.refusedAccounts = ["vault"]
+        let refused = KeychainCredentialStore(
+            accountPrefix: "auth_",
+            vault: KeychainVault(backend: keychain, pendingRemovals: defaults)
+        )
+
+        refused.remove(forKey: "session")
+        XCTAssertEqual(defaults.stringArray(forKey: KeychainVault.pendingRemovalsKey), ["auth_session"])
+
+        keychain.refusedAccounts = []
+        let next = KeychainVault(backend: keychain, pendingRemovals: defaults)
+        XCTAssertNil(next.value(forAccount: "auth_session"))
+        XCTAssertNil(KeychainVault(backend: keychain).value(forAccount: "auth_session"))
+        XCTAssertNil(defaults.stringArray(forKey: KeychainVault.pendingRemovalsKey))
+    }
+
     func testKeychainStoreReportsFailedWrite() {
         let keychain = FakeKeychain()
         keychain.addStatus = errSecInteractionNotAllowed

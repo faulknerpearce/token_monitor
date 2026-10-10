@@ -100,6 +100,12 @@ enum Format {
         formatterCacheLock.unlock()
     }
 
+    /// `date` in `dateFormat` (POSIX locale) with a formatter cached per
+    /// format and time zone; the cache is cleared when the system zone changes.
+    static func date(_ date: Date, dateFormat: String, timeZone: TimeZone? = nil) -> String {
+        cachedFormatter(dateFormat: dateFormat, timeZone: timeZone).string(from: date)
+    }
+
     /// Formats a reset date in a fixed locale, with lowercase meridian (am/pm).
     static func resetDate(_ date: Date, dateFormat: String, timeZone: TimeZone? = nil) -> String {
         cachedFormatter(dateFormat: dateFormat, timeZone: timeZone)

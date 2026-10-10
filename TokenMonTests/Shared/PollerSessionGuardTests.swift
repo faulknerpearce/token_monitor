@@ -288,7 +288,7 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            fetchUsage: { _ in
+            fetchUsage: { _, _ in
                 auth.signOut()
                 auth.save(cookieHeader: "__Secure-next-auth.session-token=new")
                 throw ProviderError.unauthorized(.chatGPT)
@@ -305,7 +305,7 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            fetchUsage: { _ in throw ProviderError.unauthorized(.chatGPT) }
+            fetchUsage: { _, _ in throw ProviderError.unauthorized(.chatGPT) }
         )
         await pollUntilInvalidated(poller, auth: auth)
         XCTAssertTrue(auth.needsSignIn)
@@ -321,7 +321,7 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            fetchUsage: { _ in
+            fetchUsage: { _, _ in
                 if attempts.next() == 1 { throw ProviderError.unauthorized(.chatGPT) }
                 return self.chatGPTFetch()
             }
@@ -343,7 +343,7 @@ final class PollerSessionGuardTests: XCTestCase {
         let poller = ChatGPTUsagePoller(
             settings: settings(.chatgpt),
             auth: auth,
-            fetchUsage: { _ in
+            fetchUsage: { _, _ in
                 ChatGPTUsageClient.Fetch(
                     response: self.chatGPTResponse(),
                     fetchedAt: Date(),

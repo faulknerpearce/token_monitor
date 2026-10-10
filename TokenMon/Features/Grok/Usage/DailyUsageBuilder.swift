@@ -384,7 +384,8 @@ enum DailyUsageBuilder {
 
     // MARK: - Billing period week
 
-    /// **7** calendar days for the active SuperGrok billing period: before
+    /// Calendar days for the active SuperGrok billing period (7, or 8 on the
+    /// reset day as described below): before
     /// `resetsAt`, the previous reset day through the day before reset; once it fires,
     /// the window rolls to the new period starting that day. On the reset day itself,
     /// before the reset instant, the running period still owns today, so the current
