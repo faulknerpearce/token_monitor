@@ -75,7 +75,10 @@ final class UsageClientTests: XCTestCase {
     func testBillingUnauthorizedRejectsWithoutProbing() async {
         GrokStubProtocol.reset([billingPath: (401, [:], Data())])
 
-        await XCTAssertThrowsErrorAsync(try await client().fetchUsage()) { error in
+        do {
+            _ = try await client().fetchUsage()
+            XCTFail("expected an error")
+        } catch {
             XCTAssertEqual((error as? ProviderError)?.usageError, .unauthorized)
         }
         XCTAssertEqual(GrokStubProtocol.requestedPaths, [billingPath])
@@ -86,7 +89,10 @@ final class UsageClientTests: XCTestCase {
     func testTrailersOnlyUnauthenticatedIsUnauthorized() async {
         GrokStubProtocol.reset([billingPath: (200, ["grpc-status": "16", "grpc-message": "unauthenticated"], Data())])
 
-        await XCTAssertThrowsErrorAsync(try await client().fetchUsage()) { error in
+        do {
+            _ = try await client().fetchUsage()
+            XCTFail("expected an error")
+        } catch {
             XCTAssertEqual((error as? ProviderError)?.usageError, .unauthorized)
         }
     }
@@ -96,7 +102,10 @@ final class UsageClientTests: XCTestCase {
         let html = Data("<html><title>Just a moment...</title></html>".utf8)
         GrokStubProtocol.reset([billingPath: (403, ["Content-Type": "text/html"], html)])
 
-        await XCTAssertThrowsErrorAsync(try await client().fetchUsage()) { error in
+        do {
+            _ = try await client().fetchUsage()
+            XCTFail("expected an error")
+        } catch {
             XCTAssertNotEqual((error as? ProviderError)?.usageError, .unauthorized)
         }
     }
@@ -109,7 +118,10 @@ final class UsageClientTests: XCTestCase {
         }
         GrokStubProtocol.reset(replies)
 
-        await XCTAssertThrowsErrorAsync(try await client().fetchUsage()) { error in
+        do {
+            _ = try await client().fetchUsage()
+            XCTFail("expected an error")
+        } catch {
             XCTAssertNotEqual((error as? ProviderError)?.usageError, .unauthorized)
         }
         XCTAssertEqual(GrokStubProtocol.requestedPaths, [billingPath] + restPaths)
@@ -143,20 +155,5 @@ final class UsageClientTests: XCTestCase {
     func testProductsWithoutUsageKeysAreIgnored() {
         let json = Data(#"{"products":[{"id":"chat","value":30},{"id":"build","percent":20}]}"#.utf8)
         XCTAssertNil(UsageResponseParser.parseJSON(json, accountEmail: nil))
-    }
-}
-
-/// `XCTAssertThrowsError` for an async expression.
-private func XCTAssertThrowsErrorAsync(
-    _ expression: @autoclosure () async throws -> some Any,
-    file: StaticString = #filePath,
-    line: UInt = #line,
-    _ handler: (Error) -> Void = { _ in }
-) async {
-    do {
-        _ = try await expression()
-        XCTFail("Expected an error", file: file, line: line)
-    } catch {
-        handler(error)
     }
 }
