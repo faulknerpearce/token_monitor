@@ -77,8 +77,8 @@ struct ProviderDayHourlyUsage: Hashable, Sendable {
         cursorHourTokens: [Int64] = Array(repeating: 0, count: 24),
         claudeHourTokens: [Int64]? = nil
     ) -> ProviderDayHourlyUsage {
-        // Pad/truncate to 24 instead of trapping: a malformed caller should
-        // degrade to a zeroed hour, never crash the menu bar.
+        // Pads or truncates to 24 instead of trapping, so a malformed input
+        // degrades to zeroed hours rather than crashing the menu bar.
         let grokHourWeights = Self.normalized(grokHourWeights)
         let openCodeGoHourWeights = Self.normalized(openCodeGoHourWeights)
         let openCodeZenHourWeights = Self.normalized(openCodeZenHourWeights)

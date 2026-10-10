@@ -30,9 +30,9 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
     }
 
     func testWindowResetAttributesPostResetValueToTheSampledDay() {
-        // A window reset (used-percent drops) must not silently discard the usage
-        // that already accrued in the new window before the next poll — it should
-        // be credited to the day it was observed in.
+        // A window reset (used-percent drops) credits the usage that already
+        // accrued in the new window before the next poll to the day it was
+        // observed in.
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -68,8 +68,8 @@ final class DailyQuotaDeltaStoreTests: XCTestCase {
         XCTAssertEqual(store.spentByDay[today] ?? 0, 0, accuracy: 0.001)
     }
 
-    /// A small downward tick (rounding/rebase noise) must not be credited as a
-    /// full window reset; `50.0 -> 49.9` used to add 49.9 to the day.
+    /// A small downward tick (rounding/rebase noise) is not credited as a full
+    /// window reset: `50.0 -> 49.9` adds nothing to the day.
     func testSmallDownwardNoiseIsNotCreditedAsReset() {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

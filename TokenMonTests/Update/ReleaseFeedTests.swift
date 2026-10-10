@@ -31,7 +31,7 @@ final class ReleaseFeedTests: XCTestCase {
         XCTAssertNil(try parse(#"{"tag_name":"1.4.1"}"#))
     }
 
-    /// A menu-bar app should not nudge people onto an unfinished build.
+    /// Drafts and prereleases are never offered as updates.
     func testDraftsAndPrereleasesAreIgnored() throws {
         XCTAssertNil(try parse(#"{"tag_name":"9.9.9","draft":true}"#))
         XCTAssertNil(try parse(#"{"tag_name":"9.9.9","prerelease":true}"#))
@@ -139,8 +139,8 @@ final class ReleaseFeedTests: XCTestCase {
         XCTAssertFalse(ReleaseFeed.isRepositoryReleaseDownload(URL(string: trusted[2])!))
     }
 
-    /// An unusable tag is an error, not a silent "no update" — the check should
-    /// surface that something changed upstream.
+    /// An unusable tag is an error, not a silent "no update", so the check
+    /// surfaces that something changed upstream.
     func testUnparseableTagThrows() {
         XCTAssertThrowsError(try parse(#"{"tag_name":"nightly"}"#))
         XCTAssertThrowsError(try parse("not json at all"))

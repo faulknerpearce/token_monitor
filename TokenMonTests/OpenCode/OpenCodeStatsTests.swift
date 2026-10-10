@@ -230,7 +230,7 @@ final class OpenCodeStatsTests: XCTestCase {
 
         insert(timeCreated: now.addingTimeInterval(-4 * 3600), cost: 1, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
         insert(timeCreated: last, cost: 1, input: 1, model: modelJSON(provider: "opencode-go", id: "m"))
-        // Zen activity should not drive the Go rolling reset clock
+        // Zen activity does not drive the Go rolling reset clock
         insert(timeCreated: now.addingTimeInterval(-600), cost: 5, input: 1, model: modelJSON(provider: "opencode", id: "free"))
 
         let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
@@ -299,7 +299,7 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(week.start.timeIntervalSince1970, 1_783_900_800, accuracy: 1) // 2026-07-13 00:00 UTC
         XCTAssertEqual(week.end.timeIntervalSince(week.start), 7 * 24 * 3600, accuracy: 1)
 
-        // Sunday should still roll back to prior Monday
+        // Sunday rolls back to the prior Monday
         let sunday = Date(timeIntervalSince1970: 1_784_462_400) // 2026-07-19 12:00 UTC (Sunday)
         let weekSun = OpenCodeLocalStats.weeklyBounds(now: sunday)
         XCTAssertEqual(weekSun.start.timeIntervalSince1970, 1_783_900_800, accuracy: 1)
@@ -311,7 +311,7 @@ final class OpenCodeStatsTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_785_596_400)
         let month = OpenCodeLocalStats.monthlyBounds(now: now, subscribedAt: subscribed)
 
-        // Period should be 2026-07-18 14:24:41 … 2026-08-18 14:24:41 (not calendar Aug 1)
+        // Period is 2026-07-18 14:24:41 … 2026-08-18 14:24:41 (not calendar Aug 1)
         XCTAssertEqual(month.start.timeIntervalSince1970, 1_784_384_681, accuracy: 2)
         XCTAssertEqual(month.end.timeIntervalSince1970, 1_787_063_081, accuracy: 2)
         XCTAssertLessThan(month.start, now)

@@ -1,9 +1,6 @@
 import SwiftUI
 
 /// Shared provider accent colors, used by panels, the menu bar, and the overview.
-///
-/// This was formerly `ConcentricUsageRingView`, whose ring `body` and stat rows
-/// were never instantiated; only these color statics were referenced.
 enum ProviderColors {
     static let grokColor = ProviderAccent.grok.color.opacity(0.85)
     /// Canonical Cursor sRGB, shared with other renderers (e.g. the menu bar icon).
