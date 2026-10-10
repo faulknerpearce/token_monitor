@@ -104,10 +104,12 @@ final class DailyQuotaDeltaStore: ObservableObject {
     private let storageKey: String
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    /// Last payload read from or written to disk; `persist()` skips identical writes.
+    private var persisted: Payload?
 
     /// Optional fields decode as nil from payloads written before window
     /// metadata existed, so old stores keep loading unchanged.
-    private struct Payload: Codable {
+    private struct Payload: Codable, Equatable {
         var days: [Date: Double]
         var lastUsedPercent: Double?
         var windowStart: Date?
@@ -260,6 +262,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
             persist()
             return
         }
+        persisted = payload
         var days = payload.days
         Self.prune(&days)
         lastUsedPercent = payload.lastUsedPercent
@@ -279,9 +282,11 @@ final class DailyQuotaDeltaStore: ObservableObject {
             observedStart: observedStart,
             windowResetsAt: windowResetsAt
         )
-        guard let data = try? encoder.encode(payload),
+        guard payload != persisted,
+              let data = try? encoder.encode(payload),
               let raw = String(data: data, encoding: .utf8)
         else { return }
         store.set(raw, forKey: storageKey)
+        persisted = payload
     }
 }

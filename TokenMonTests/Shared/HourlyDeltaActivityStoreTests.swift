@@ -123,4 +123,20 @@ final class HourlyDeltaActivityStoreTests: XCTestCase {
         XCTAssertEqual(activity.hourWeights[9], 15, accuracy: 0.001)
         XCTAssertEqual(activity.hourWeights[11], 4, accuracy: 0.001)
     }
+
+    func testUnchangedSampleDoesNotRewriteTheFile() throws {
+        let (activity, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("activity_test_hourly.dat")
+
+        activity.record(usedPercent: 10, at: date(hour: 9))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        try FileManager.default.removeItem(at: file)
+
+        activity.record(usedPercent: 10, at: date(hour: 9, minute: 5))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path), "same state, no write")
+
+        activity.record(usedPercent: 12, at: date(hour: 9, minute: 10))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "a change is written")
+    }
 }

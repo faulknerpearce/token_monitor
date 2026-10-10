@@ -144,6 +144,13 @@ final class HistoryStore: ObservableObject {
            abs(last.fetchedAt.timeIntervalSince(snapshot.fetchedAt)) < 60 {
             return
         }
+        // An idle poll that reports the same usage as today's row leaves the
+        // row (and the disk) untouched.
+        if let last = recent.first,
+           cal.isDate(last.fetchedAt, inSameDayAs: snapshot.fetchedAt),
+           Self.hasSameUsage(last, snapshot) {
+            return
+        }
 
         let sameDay = findRecords(on: dayStart, calendar: cal)
         if let existing = sameDay.first {
@@ -161,6 +168,17 @@ final class HistoryStore: ObservableObject {
             upsertRecent(snapshot)
         }
         scheduleFlush()
+    }
+
+    /// True when `next` records nothing new over `current`: same usage (within
+    /// rounding), reset instant, product split, credits and account.
+    private static func hasSameUsage(_ current: WeeklyUsageSnapshot, _ next: WeeklyUsageSnapshot) -> Bool {
+        abs(current.usedPercent - next.usedPercent) < 0.05
+            && abs(current.remainingPercent - next.remainingPercent) < 0.05
+            && current.resetsAt == next.resetsAt
+            && current.products == next.products
+            && current.extraCreditsBalance == next.extraCreditsBalance
+            && current.accountEmail == next.accountEmail
     }
 
     /// Synchronous save — call on terminate so the coalesced write cannot be lost.

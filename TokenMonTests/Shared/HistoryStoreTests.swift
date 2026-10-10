@@ -115,4 +115,16 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertTrue(store.recent.isEmpty)
         XCTAssertTrue(store.allSnapshots().isEmpty)
     }
+
+    func testUnchangedUsageLaterTheSameDayLeavesTheRowAlone() {
+        let first = snapshot(usedPercent: 30, minutesAgo: 120)
+        store.append(first)
+        store.append(snapshot(usedPercent: 30, minutesAgo: 0))
+        XCTAssertEqual(store.recent.first?.fetchedAt, first.fetchedAt, "an identical idle poll is not re-saved")
+        XCTAssertEqual(store.allSnapshots().first?.fetchedAt, first.fetchedAt)
+
+        let changed = snapshot(usedPercent: 31, minutesAgo: 0)
+        store.append(changed)
+        XCTAssertEqual(store.recent.first?.usedPercent ?? -1, 31, accuracy: 0.001)
+    }
 }

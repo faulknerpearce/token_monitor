@@ -18,11 +18,14 @@ final class HourlyDeltaActivityStore: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    private struct Payload: Codable {
+    private struct Payload: Codable, Equatable {
         var dayStart: Date
         var hourWeights: [Double]
         var lastUsedPercent: Double?
     }
+
+    /// Last payload read from or written to disk; `persist()` skips identical writes.
+    private var persisted: Payload?
 
     convenience init(storageKey: String) {
         self.init(store: FileBackedStringStore(filenamePrefix: "activity_"), storageKey: storageKey)
@@ -113,6 +116,7 @@ final class HourlyDeltaActivityStore: ObservableObject {
             persist()
             return
         }
+        persisted = payload
 
         if Calendar.current.isDate(payload.dayStart, inSameDayAs: today),
            payload.hourWeights.count == 24 {
@@ -133,9 +137,11 @@ final class HourlyDeltaActivityStore: ObservableObject {
             hourWeights: hourWeights,
             lastUsedPercent: lastUsedPercent
         )
-        guard let data = try? encoder.encode(payload),
+        guard payload != persisted,
+              let data = try? encoder.encode(payload),
               let raw = String(data: data, encoding: .utf8)
         else { return }
         store.set(raw, forKey: storageKey)
+        persisted = payload
     }
 }
