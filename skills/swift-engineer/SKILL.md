@@ -553,7 +553,7 @@ Push back on "optimize everything" — prioritize the critical 3%.
   - `SystemWakeGate` calls `pause()` on sleep and `resume()` once the network is back.
   - `AppModel` forwards child `objectWillChange` through one throttled publisher, so a poll that sets many fields triggers one re-render.
 - Auth: `ProviderAuthSession` subclasses with per-provider `WebKitCookieCapture` policies (isolated non-persistent WebKit store, essential-cookie allowlist, three-strike invalidation). Secrets (session cookie headers, the OpenRouter key) live in the login Keychain via `SecretRoutingCredentialStore` / `KeychainCredentialStore`; email, account identity, and workspace id are mode-`0600` files under Application Support. Tests use `InMemoryCredentialStore` or a fake `KeychainBackend`. See `Docs/AUTH_AND_ENDPOINTS.md`.
-- Percent semantics: menu bar shows used %; dropdown shows used + remaining; the Grok daily chart shows the 7 days of the active billing period (plus the reset day before its reset instant), deriving day-over-day deltas from local history (server `dailySeries` only when local samples cannot paint bars).
+- Percent semantics: menu bar shows used %; dropdown shows used + remaining; the Grok daily chart shows the 7 days of the active billing period (plus the reset day before its reset instant), deriving day-over-day deltas from local history.
 
 ## Workflow
 
