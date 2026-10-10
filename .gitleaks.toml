@@ -28,3 +28,12 @@ id = "provider-session-cookie-value"
 description = "Raw provider session cookie assignment"
 regex = '''(?i)\b(__Host-console_session|__Secure-next-auth\.session-token|WorkosCursorSessionToken|sessionKey)=[A-Za-z0-9._%+/-]{20,}'''
 tags = ["cookie", "session"]
+
+# OpenRouter API keys can spend account credit. Real keys are `sk-or-v1-`
+# followed by 64 hex characters; short test fixtures do not match.
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key"
+regex = '''\bsk-or-v1-[0-9a-f]{64}\b'''
+keywords = ["sk-or-v1-"]
+tags = ["key", "openrouter"]
