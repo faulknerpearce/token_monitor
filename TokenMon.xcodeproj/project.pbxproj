@@ -27,6 +27,7 @@
 		1C8C2B06991E9E56434FCC73 /* UsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F1D02F3A15A666EC3FD672 /* UsagePoller.swift */; };
 		2247415495F4C60331207D12 /* ColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BA87CC7E75A176DAC734DB /* ColorPalette.swift */; };
 		230F134178B6141A959B2B8C /* OpenRouterModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DD4BD107A72D61C50B064B /* OpenRouterModelsTests.swift */; };
+		26A2E88DBD3B3D7C2FE232C8 /* CursorEventCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34F6A0AFA6F7ACA1AA0F19E /* CursorEventCacheTests.swift */; };
 		26D7E8FC5A81B94D8DA6386F /* CategoryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC222617652A6DEB37620B31 /* CategoryRow.swift */; };
 		299B5762DBAA0D2EED375F6D /* HourlyDeltaActivityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16C9B6ED2EA4419F6622D08 /* HourlyDeltaActivityStore.swift */; };
 		2F6B2B0C96F59867B928808B /* BillingPeriodWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3A7943BED7C1C7868926A /* BillingPeriodWindowTests.swift */; };
@@ -279,6 +280,7 @@
 		B161EEE25050CED17FBFC98B /* ProviderHourlyUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHourlyUsage.swift; sourceTree = "<group>"; };
 		B295E6C1B0146F0086543DCB /* SlimUsageTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlimUsageTrack.swift; sourceTree = "<group>"; };
 		B2BA87CC7E75A176DAC734DB /* ColorPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPalette.swift; sourceTree = "<group>"; };
+		B34F6A0AFA6F7ACA1AA0F19E /* CursorEventCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorEventCacheTests.swift; sourceTree = "<group>"; };
 		B68FE75A96E4091616408783 /* WebKitCookieCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitCookieCapture.swift; sourceTree = "<group>"; };
 		B69E3BE6CB2BB7A9F0EAC5E4 /* FileBackedStringStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBackedStringStore.swift; sourceTree = "<group>"; };
 		BDF40560D85850DB0EC7F326 /* HourlyDeltaActivityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlyDeltaActivityStoreTests.swift; sourceTree = "<group>"; };
@@ -583,6 +585,7 @@
 		A3527F2E0E092F9483313FCD /* Cursor */ = {
 			isa = PBXGroup;
 			children = (
+				B34F6A0AFA6F7ACA1AA0F19E /* CursorEventCacheTests.swift */,
 				51E17B841EF448C0AF47E291 /* CursorUsageClientTests.swift */,
 				44005D10711D80DFD2267A59 /* CursorUsagePollerTests.swift */,
 			);
@@ -852,6 +855,7 @@
 				36D3EEAB4EBE83485D790F09 /* ClaudeUsagePollerTests.swift in Sources */,
 				433B2FEACC4CCD5241D0DAA6 /* ColorPaletteTests.swift in Sources */,
 				02472E508149CA71C7076143 /* CredentialStoreTests.swift in Sources */,
+				26A2E88DBD3B3D7C2FE232C8 /* CursorEventCacheTests.swift in Sources */,
 				E141DD24CE9930A269665594 /* CursorUsageClientTests.swift in Sources */,
 				3486AED10838CF0CCEE45B1B /* CursorUsagePollerTests.swift in Sources */,
 				F343F1F69EF51F172B713978 /* DailyBudgetTests.swift in Sources */,

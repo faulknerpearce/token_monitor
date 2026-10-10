@@ -40,9 +40,9 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         var referenceNow: Date
     }
 
-    /// Reuse the last refreshed result when a rapid consecutive poll lands within
-    /// this window, avoiding redundant full-cycle event paging on every poll step.
-    private let eventCacheTTL: TimeInterval = 4
+    /// Event aggregates kept between polls by the live client, so usage events
+    /// are paged at most every `CursorUsageClient.eventsRefreshInterval`.
+    private let eventCache: CursorEventCache
 
     private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
@@ -58,8 +58,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         self.settings = settings
         self.auth = auth
         self.daily = daily
+        let eventCache = CursorEventCache()
+        self.eventCache = eventCache
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader in
-            try await CursorUsageClient(cookieHeader: cookieHeader).fetchSnapshot()
+            try await CursorUsageClient(cookieHeader: cookieHeader, eventCache: eventCache).fetchSnapshot()
         }
         // Drop the Cursor snapshot as soon as this shared session signs out.
         auth.$isSignedIn
@@ -88,6 +90,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         lastError = nil
         dataSourceLabel = nil
         lastRefreshedAt = nil
+        eventCache.clear()
         daily.clear()
     }
 
@@ -105,19 +108,17 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             return
         }
 
-        // Rapid consecutive polls (e.g. while the menu is open) can reuse the
-        // last result instead of re-paginating the full event history.
-        if let lastRefreshedAt,
-           snapshot != nil,
-           Date().timeIntervalSince(lastRefreshedAt) < eventCacheTTL {
-            auth.needsSignIn = false
-            return
-        }
-
         let generation = auth.sessionGeneration
         do {
-            let (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
+            var (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            // No event aggregates this poll (events fetch failed): keep the
+            // previous event-derived figures rather than publishing zeros.
+            if snap.costStats == nil, let previous = snapshot {
+                snap.costStats = previous.costStats
+                hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
+                estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
+            }
             snapshot = snap
             dayHourlyUsage = hourly
             if let email = snap.accountEmail {
@@ -188,6 +189,16 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private func currentInterval() -> TimeInterval {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    }
+
+    /// `previous` when it covers the same calendar day as `fallback`, else `fallback`.
+    static func carriedHourly(
+        _ previous: CursorDayHourlyUsage?,
+        fallback: CursorDayHourlyUsage,
+        calendar: Calendar = .current
+    ) -> CursorDayHourlyUsage {
+        guard let previous, calendar.isDate(previous.dayStart, inSameDayAs: fallback.dayStart) else { return fallback }
+        return previous
     }
 
     /// Billing-cycle length in days for rollover detection; 30 when either end is unknown.

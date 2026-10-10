@@ -134,18 +134,13 @@ final class CursorUsageClientTests: XCTestCase {
             ]
         ]
 
-        let stats = CursorUsageClient.aggregateCostStats(
-            events: events,
-            cycleStart: cycleStart,
-            now: now,
-            calendar: calendar
-        )
-        XCTAssertEqual(stats.todayUSD, 12.02, accuracy: 0.01)
+        let stats = CursorUsageClient.aggregateCostStats(events: events, cycleStart: cycleStart)
         XCTAssertEqual(stats.meteredCycleUSD, 62.02, accuracy: 0.01)
         XCTAssertEqual(stats.cycleTokens, 3_500_000)
-        XCTAssertEqual(stats.last20dUSD, 62.02, accuracy: 0.01)
-        XCTAssertEqual(stats.todayTokens, 1_500_000)
-        XCTAssertEqual(stats.last20dTokens, 3_500_000)
+        XCTAssertEqual(stats.cycleInputTokens, 3_000_000)
+        XCTAssertEqual(stats.cycleOutputTokens, 500_000)
+        let lateStart = dayStart.addingTimeInterval(-86400)
+        XCTAssertEqual(CursorUsageClient.aggregateCostStats(events: events, cycleStart: lateStart).meteredCycleUSD, 12.02, accuracy: 0.01)
     }
 
     func testHourWeightsBucketByRequestsCosts() {
@@ -396,17 +391,13 @@ final class CursorUsageClientTests: XCTestCase {
             event("grok-bot-default", cents: 900, tokens: 9000)
         ]
 
-        let stats = CursorUsageClient.aggregateCostStats(
-            events: events,
-            cycleStart: cycleStart,
-            now: now,
-            calendar: calendar
-        )
+        let stats = CursorUsageClient.aggregateCostStats(events: events, cycleStart: cycleStart)
         XCTAssertEqual(stats.meteredCycleUSD, 1.0, accuracy: 0.001)
         XCTAssertEqual(stats.cycleTokens, 1000)
-        XCTAssertEqual(stats.todayTokens, 1000)
 
         let hour = calendar.component(.hour, from: now)
+        let activity = CursorUsageClient.hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
+        XCTAssertEqual(activity[hour], 1000, accuracy: 0.001)
         let tokens = CursorUsageClient.tokenHourWeights(
             fromEvents: events,
             dayStart: dayStart,

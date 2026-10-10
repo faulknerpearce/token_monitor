@@ -2,17 +2,46 @@ import Foundation
 import os
 
 /// Fetches Cursor dashboard usage via cookie-authenticated unofficial endpoints.
+///
+/// The usage summary is fetched on every call. Usage events (paged, up to a
+/// whole billing cycle) only feed the cost stats, the hourly chart and the
+/// daily back-fill, so their aggregates are cached in ``CursorEventCache`` and
+/// re-fetched at most every ``eventsRefreshInterval``, or sooner when the day
+/// or billing cycle changes. A failed events fetch reuses the cached aggregates.
 struct CursorUsageClient: Sendable {
     static let baseURL = URL(string: "https://cursor.com")!
     private static let log = Logger(category: "Cursor")
 
-    private let cookieHeader: String
+    /// Minimum age of cached event aggregates before events are paged again.
+    static let eventsRefreshInterval: TimeInterval = 5 * 60
 
-    init(cookieHeader: String) {
-        self.cookieHeader = cookieHeader
+    /// Network seam: a GET of a dashboard path and one page of usage events.
+    struct Transport: Sendable {
+        var get: @Sendable (_ path: String) async throws -> Data
+        var eventsPage: @Sendable (_ startMs: Int64, _ endMs: Int64, _ page: Int, _ pageSize: Int) async throws -> Data
     }
 
-    /// Fetches the summary, account email, and event aggregates for `now`.
+    private let transport: Transport
+    private let cacheKey: String
+    private let eventCache: CursorEventCache?
+
+    /// Live client for `cookieHeader`; `eventCache` keeps event aggregates
+    /// between calls (nil fetches events on every call).
+    init(cookieHeader: String, eventCache: CursorEventCache? = nil) {
+        self.init(transport: .live(cookieHeader: cookieHeader), cacheKey: cookieHeader, eventCache: eventCache)
+    }
+
+    init(transport: Transport, cacheKey: String, eventCache: CursorEventCache?) {
+        self.transport = transport
+        self.cacheKey = cacheKey
+        self.eventCache = eventCache
+    }
+
+    /// Fetches the summary and account email, plus event aggregates for `now`
+    /// (cached, see the type documentation).
+    ///
+    /// `costStats` is nil when no event aggregates are available for this
+    /// billing cycle; the hourly usage and back-fill weights are then empty.
     func fetchSnapshot(now: Date = Date()) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double]) {
         async let summaryData = get(path: "/api/usage-summary")
         async let meData = try? get(path: "/api/auth/me")
@@ -25,75 +54,81 @@ struct CursorUsageClient: Sendable {
 
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: now)
-        let windowStart = Self.eventsWindowStart(
-            cycleStart: snap.billingCycleStart,
+        let windowStart = Self.eventsWindowStart(cycleStart: snap.billingCycleStart, now: now, calendar: calendar)
+        guard let aggregates = await eventAggregates(for: snap, windowStart: windowStart, now: now, calendar: calendar),
+              aggregates.windowStart == windowStart
+        else {
+            return (snap, .empty(dayStart: dayStart), [:])
+        }
+        snap.costStats = aggregates.costStats
+        let hourly = calendar.isDate(aggregates.hourly.dayStart, inSameDayAs: dayStart)
+            ? aggregates.hourly
+            : .empty(dayStart: dayStart)
+        return (snap, hourly, aggregates.estimatedWeightByDay)
+    }
+
+    /// Cached aggregates when fresh, else freshly paged events; on a paging
+    /// failure the cached aggregates (possibly stale) or nil.
+    private func eventAggregates(
+        for snap: CursorSnapshot,
+        windowStart: Date,
+        now: Date,
+        calendar: Calendar
+    ) async -> CursorEventAggregates? {
+        let cached = eventCache?.value(forKey: cacheKey)
+        if let cached, cached.isFresh(windowStart: windowStart, now: now, calendar: calendar) {
+            return cached
+        }
+        do {
+            let events = try await fetchAllEvents(from: windowStart, to: now)
+            let aggregates = Self.aggregate(events: events, snap: snap, windowStart: windowStart, now: now, calendar: calendar)
+            eventCache?.store(aggregates, forKey: cacheKey)
+            return aggregates
+        } catch {
+            Self.log.error("Cursor events fetch failed: \(error.localizedDescription, privacy: .public)")
+            return cached
+        }
+    }
+
+    /// Builds every event-derived figure for one poll.
+    static func aggregate(
+        events: [[String: Any]],
+        snap: CursorSnapshot,
+        windowStart: Date,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> CursorEventAggregates {
+        let dayStart = calendar.startOfDay(for: now)
+        let hourly = CursorDayHourlyUsage(
+            dayStart: dayStart,
+            hourWeights: hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar),
+            quotaHourWeights: quotaHourWeights(
+                fromEvents: events,
+                dayStart: dayStart,
+                planLimitUSD: snap.planLimitUSD,
+                calendar: calendar
+            ),
+            hourTokenWeights: tokenHourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
+        )
+        // Per-day pool-estimate weights, used only to back-fill days the app
+        // did not observe directly (see `CursorUsagePoller.buildDailyBudgetDays`).
+        let bounds = DailyBudget.subscriptionMonth(
+            knownStart: snap.billingCycleStart,
+            resetsAt: snap.billingCycleEnd,
             now: now,
             calendar: calendar
         )
-        var hourly = CursorDayHourlyUsage(
-            dayStart: dayStart,
-            hourWeights: Array(repeating: 0, count: 24),
-            quotaHourWeights: Array(repeating: 0, count: 24)
-        )
-        var estimatedWeightByDay: [Date: Double] = [:]
-        if let events = try? await fetchAllEvents(from: windowStart, to: now) {
-            snap.costStats = Self.aggregateCostStats(
-                events: events,
-                cycleStart: snap.billingCycleStart ?? windowStart,
-                now: now,
-                calendar: calendar
-            )
-            hourly = CursorDayHourlyUsage(
-                dayStart: dayStart,
-                hourWeights: Self.hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar),
-                quotaHourWeights: Self.quotaHourWeights(
-                    fromEvents: events,
-                    dayStart: dayStart,
-                    planLimitUSD: snap.planLimitUSD,
-                    calendar: calendar
-                ),
-                hourTokenWeights: Self.tokenHourWeights(
-                    fromEvents: events,
-                    dayStart: dayStart,
-                    calendar: calendar
-                )
-            )
-            // Per-day pool-estimate weights, used only to back-fill days the app
-            // did not observe directly (see `CursorUsagePoller.buildDailyBudgetDays`).
-            let bounds = DailyBudget.subscriptionMonth(
-                knownStart: snap.billingCycleStart,
-                resetsAt: snap.billingCycleEnd,
-                now: now,
-                calendar: calendar
-            )
-            estimatedWeightByDay = Self.dailyEstimateWeightByDay(
+        return CursorEventAggregates(
+            fetchedAt: now,
+            windowStart: windowStart,
+            costStats: aggregateCostStats(events: events, cycleStart: snap.billingCycleStart ?? windowStart),
+            hourly: hourly,
+            estimatedWeightByDay: dailyEstimateWeightByDay(
                 events: events,
                 cycleStart: bounds?.start ?? snap.billingCycleStart,
                 cycleEnd: bounds?.end ?? snap.billingCycleEnd,
                 calendar: calendar
             )
-        }
-        return (snap, hourly, estimatedWeightByDay)
-    }
-
-    /// Fetches today's event weights; quota weights stay zero without a plan limit.
-    func fetchDayHourlyUsage(now: Date = Date()) async throws -> CursorDayHourlyUsage {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: now)
-        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
-            return CursorDayHourlyUsage(
-                dayStart: dayStart,
-                hourWeights: Array(repeating: 0, count: 24),
-                quotaHourWeights: Array(repeating: 0, count: 24)
-            )
-        }
-        let events = try await fetchAllEvents(from: dayStart, to: dayEnd.addingTimeInterval(-0.001))
-        let weights = Self.hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
-        return CursorDayHourlyUsage(
-            dayStart: dayStart,
-            hourWeights: weights,
-            quotaHourWeights: Array(repeating: 0, count: 24),
-            hourTokenWeights: Self.tokenHourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
         )
     }
 
@@ -258,62 +293,32 @@ struct CursorUsageClient: Sendable {
         ((event["model"] as? String) ?? "").hasPrefix("grok-bot")
     }
 
-    /// Sums cycle/today/20-day cost and tokens, excluding `grok-bot-*` events.
-    static func aggregateCostStats(
-        events: [[String: Any]],
-        cycleStart: Date,
-        now: Date,
-        calendar: Calendar = .current
-    ) -> CursorCostStats {
-        let dayStart = calendar.startOfDay(for: now)
-        let twentyDaysAgo = calendar.date(byAdding: .day, value: -20, to: dayStart) ?? dayStart.addingTimeInterval(-20 * 86400)
-
+    /// Sums billing-cycle cost and tokens, excluding `grok-bot-*` events.
+    static func aggregateCostStats(events: [[String: Any]], cycleStart: Date) -> CursorCostStats {
         var meteredCycleCents = 0.0
         var cycleTokens: Int64 = 0
         var cycleInput: Int64 = 0
         var cycleOutput: Int64 = 0
-        var todayCents = 0.0
-        var last20dCents = 0.0
-        var todayTokens: Int64 = 0
-        var last20dTokens: Int64 = 0
 
         for event in events {
             guard !isGrokBotEvent(event) else { continue }
-            guard let date = eventTimestamp(event) else { continue }
-            let cents = chargedCents(event)
-            let tokens = tokenCount(event)
-            let input = inputTokenCount(event)
-            let output = outputTokenCount(event)
-
-            if date >= cycleStart {
-                meteredCycleCents += cents
-                cycleTokens += tokens
-                cycleInput += input
-                cycleOutput += output
-            }
-            if date >= dayStart {
-                todayCents += cents
-                todayTokens += tokens
-            }
-            if date >= twentyDaysAgo {
-                last20dCents += cents
-                last20dTokens += tokens
-            }
+            guard let date = eventTimestamp(event), date >= cycleStart else { continue }
+            meteredCycleCents += chargedCents(event)
+            cycleTokens += tokenCount(event)
+            cycleInput += inputTokenCount(event)
+            cycleOutput += outputTokenCount(event)
         }
 
         return CursorCostStats(
             meteredCycleUSD: meteredCycleCents / 100,
             cycleTokens: cycleTokens,
             cycleInputTokens: cycleInput,
-            cycleOutputTokens: cycleOutput,
-            todayUSD: todayCents / 100,
-            last20dUSD: last20dCents / 100,
-            todayTokens: todayTokens,
-            last20dTokens: last20dTokens
+            cycleOutputTokens: cycleOutput
         )
     }
 
-    /// Bucket event activity into 24 hourly weights using requestsCosts, else token totals.
+    /// Bucket event activity into 24 hourly weights using requestsCosts, else
+    /// token totals, excluding `grok-bot-*` events.
     static func hourWeights(
         fromEvents events: [[String: Any]],
         dayStart: Date,
@@ -321,6 +326,7 @@ struct CursorUsageClient: Sendable {
     ) -> [Double] {
         var weights = Array(repeating: 0.0, count: 24)
         for event in events {
+            guard !isGrokBotEvent(event) else { continue }
             guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
@@ -456,13 +462,7 @@ struct CursorUsageClient: Sendable {
         let pageSize = 500
         let pageCap = 40
         while page <= pageCap {
-            let body: [String: Any] = [
-                "startDate": String(startMs),
-                "endDate": String(endMs),
-                "page": page,
-                "pageSize": pageSize
-            ]
-            let data = try await post(path: "/api/dashboard/get-filtered-usage-events", json: body)
+            let data = try await Self.rejectUnauthorizedBody(transport.eventsPage(startMs, endMs, page, pageSize))
             let (events, total) = try Self.parseUsageEventsPage(data: data)
             allEvents.append(contentsOf: events)
             if events.count < pageSize { break }
@@ -479,27 +479,7 @@ struct CursorUsageClient: Sendable {
     }
 
     private func get(path: String) async throws -> Data {
-        let data = try await ProviderHTTP.get(
-            path,
-            baseURL: Self.baseURL,
-            context: .cursor,
-            cookieHeader: cookieHeader,
-            referer: "https://cursor.com"
-        )
-        return try Self.rejectUnauthorizedBody(data)
-    }
-
-    private func post(path: String, json: [String: Any]) async throws -> Data {
-        let data = try await ProviderHTTP.post(
-            path,
-            baseURL: Self.baseURL,
-            context: .cursor,
-            json: json,
-            cookieHeader: cookieHeader,
-            referer: "https://cursor.com",
-            origin: "https://cursor.com"
-        )
-        return try Self.rejectUnauthorizedBody(data)
+        try await Self.rejectUnauthorizedBody(transport.get(path))
     }
 
     /// A 200 response can still signal an expired session: either a
@@ -515,14 +495,14 @@ struct CursorUsageClient: Sendable {
 
     // MARK: - Helpers
 
-    /// Earliest event fetch date: cycle start capped to the last 30 days.
+    /// Earliest event fetch date: the billing-cycle start, never more than 31
+    /// days back (the longest calendar-month cycle); 31 days back without a
+    /// known cycle start.
     static func eventsWindowStart(cycleStart: Date?, now: Date, calendar: Calendar = .current) -> Date {
         let dayStart = calendar.startOfDay(for: now)
-        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: dayStart) ?? now.addingTimeInterval(-30 * 86400)
-        if let cycleStart {
-            return min(cycleStart, thirtyDaysAgo)
-        }
-        return thirtyDaysAgo
+        let cap = calendar.date(byAdding: .day, value: -31, to: dayStart) ?? now.addingTimeInterval(-31 * 86400)
+        guard let cycleStart else { return cap }
+        return max(cycleStart, cap)
     }
 
     private static func parseISO8601(_ value: String?) -> Date? {
@@ -559,5 +539,38 @@ struct CursorUsageClient: Sendable {
             byDay[dayKey, default: 0] += tokens
         }
         return byDay
+    }
+}
+
+extension CursorUsageClient.Transport {
+    /// Cookie-authenticated requests against cursor.com.
+    static func live(cookieHeader: String) -> Self {
+        Self(
+            get: { path in
+                try await ProviderHTTP.get(
+                    path,
+                    baseURL: CursorUsageClient.baseURL,
+                    context: .cursor,
+                    cookieHeader: cookieHeader,
+                    referer: "https://cursor.com"
+                )
+            },
+            eventsPage: { startMs, endMs, page, pageSize in
+                try await ProviderHTTP.post(
+                    "/api/dashboard/get-filtered-usage-events",
+                    baseURL: CursorUsageClient.baseURL,
+                    context: .cursor,
+                    json: [
+                        "startDate": String(startMs),
+                        "endDate": String(endMs),
+                        "page": page,
+                        "pageSize": pageSize
+                    ],
+                    cookieHeader: cookieHeader,
+                    referer: "https://cursor.com",
+                    origin: "https://cursor.com"
+                )
+            }
+        )
     }
 }
