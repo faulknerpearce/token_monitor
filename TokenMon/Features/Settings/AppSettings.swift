@@ -55,7 +55,8 @@ final class AppSettings: ObservableObject {
     }
 
     /// When on, TokenMon checks GitHub for a newer release and shows a row in
-    /// the menu when one exists. Notify-only — nothing is downloaded.
+    /// the menu when one exists. Installing it is a separate, user-initiated
+    /// action (`UpdateChecker.installAvailableUpdate`).
     @Published var checksForUpdates: Bool {
         didSet {
             guard checksForUpdates != oldValue else { return }

@@ -61,6 +61,8 @@ struct MenuBarPanelView: View {
             case .grokbot:
                 grokbotContent
             }
+
+            UpdateAvailableIndicator()
         }
         .padding(12)
         .frame(width: Self.panelWidth)
