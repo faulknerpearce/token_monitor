@@ -43,43 +43,68 @@ enum OpenCodeConsoleError: Error {
 struct OpenCodeConsoleClient: Sendable {
     static let baseURL = URL(string: "https://opencode.ai")!
 
-    private let cookieHeader: String
-    private let logger = Logger(category: "OpenCodeConsole")
+    /// Network seam: GET a console path, optionally scoped to an org id.
+    typealias Get = @Sendable (_ path: String, _ orgID: String?) async throws -> Data
+
+    private let getData: Get
 
     init(cookieHeader: String) {
-        self.cookieHeader = cookieHeader
+        self.init { path, orgID in
+            try await Self.liveGet(path, orgID: orgID, cookieHeader: cookieHeader)
+        }
+    }
+
+    /// Injects the transport (tests supply canned console responses).
+    init(get: @escaping Get) {
+        getData = get
     }
 
     // MARK: - Public
 
     /// Returns the snapshot and the org id (`wrk_…`) that produced it, so the
     /// caller can persist the id.
+    ///
+    /// Tries `knownOrgID` first, then every other workspace on the account, and
+    /// returns the first one that holds a Go seat. A workspace that rejects the
+    /// request (403) or has no Go meters is skipped; only 401 or a login
+    /// redirect means the session itself is expired.
     func fetchGoUsageSnapshot(knownOrgID: String? = nil) async throws -> (OpenCodeSnapshot, String) {
-        let orgID = try await resolveOrgID(preferred: knownOrgID)
-        do {
-            let meters = try await fetchGoMeters(orgID: orgID)
-            return (Self.snapshot(from: meters, now: Date()), orgID)
-        } catch OpenCodeConsoleError.orgForbidden {
-            // The stored org id was rejected. Re-resolve from the account's own
-            // workspace list and retry once; only 401 / a login redirect (raised
-            // by the unscoped requests) means the session itself is expired.
-            let freshOrg = try await resolveOrgID(preferred: nil)
-            guard freshOrg != orgID else {
-                throw ProviderError.badResponse(
-                    .openCode,
-                    "The OpenCode console denied access to this workspace."
-                )
+        let preferred = knownOrgID.flatMap { $0.hasPrefix("wrk_") ? $0 : nil }
+        var tried = 0
+        var forbidden = 0
+        func attempt(_ org: String) async throws -> OpenCodeGoMeters? {
+            tried += 1
+            switch try await seatedMeters(orgID: org) {
+            case let .seated(meters): return meters
+            case .forbidden: forbidden += 1
+            case .noSeat: break
             }
-            let meters = try await fetchGoMeters(orgID: freshOrg)
-            return (Self.snapshot(from: meters, now: Date()), freshOrg)
+            return nil
         }
+        if let preferred, let meters = try await attempt(preferred) {
+            return (Self.snapshot(from: meters, now: Date()), preferred)
+        }
+        for org in try await listOrgs() where org != preferred {
+            if let meters = try await attempt(org) {
+                return (Self.snapshot(from: meters, now: Date()), org)
+            }
+        }
+        guard tried > 0 else {
+            throw ProviderError.badResponse(.openCode, "No OpenCode workspace on this account.")
+        }
+        throw ProviderError.badResponse(
+            .openCode,
+            forbidden == tried
+                ? "The OpenCode console denied access to this workspace."
+                : "No Go subscription on this account (or another member holds the Go seat)."
+        )
     }
 
-    /// The console org id. Prefers the stored id; otherwise lists `/console/api/orgs`.
+    /// The console org id. Prefers `preferred` (for example the id in the
+    /// sign-in redirect); otherwise the first workspace listed by `/console/api/orgs`.
     func resolveOrgID(preferred: String? = nil) async throws -> String {
         if let preferred, preferred.hasPrefix("wrk_") { return preferred }
-        let orgs = try await Self.parseOrgs(try get("/console/api/orgs"))
-        guard let first = orgs.first else {
+        guard let first = try await listOrgs().first else {
             throw ProviderError.badResponse(.openCode, "No OpenCode workspace on this account.")
         }
         return first
@@ -88,25 +113,36 @@ struct OpenCodeConsoleClient: Sendable {
     /// Account email from the console session. Best-effort — the console session
     /// may not be bound yet on the first capture.
     func fetchAccountEmail() async -> String? {
-        let data = try? await get("/console/auth/session")
+        let data = try? await getData("/console/auth/session", nil)
         return data.flatMap(Self.parseSessionEmail)
     }
 
     // MARK: - Requests
 
-    private func fetchGoMeters(orgID: String) async throws -> OpenCodeGoMeters {
-        let meters = try await Self.parseGoMeters(try get("/console/api/go/status", orgID: orgID))
-        guard meters.hasAny else {
-            throw ProviderError.badResponse(
-                .openCode,
-                "No Go subscription on this account (or another member holds the Go seat)."
-            )
-        }
-        return meters
+    /// Go status for one workspace.
+    private enum SeatResult {
+        case seated(OpenCodeGoMeters)
+        case noSeat
+        case forbidden
     }
 
-    private func get(_ path: String, orgID: String? = nil) async throws -> Data {
-        guard let url = URL(string: path, relativeTo: Self.baseURL)?.absoluteURL else {
+    private func seatedMeters(orgID: String) async throws -> SeatResult {
+        do {
+            let meters = try await Self.parseGoMeters(getData("/console/api/go/status", orgID))
+            return meters.hasAny ? .seated(meters) : .noSeat
+        } catch OpenCodeConsoleError.orgForbidden {
+            return .forbidden
+        }
+    }
+
+    private func listOrgs() async throws -> [String] {
+        try await Self.parseOrgs(getData("/console/api/orgs", nil))
+    }
+
+    private static let log = Logger(category: "OpenCodeConsole")
+
+    private static func liveGet(_ path: String, orgID: String?, cookieHeader: String) async throws -> Data {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
             throw ProviderError.network(.openCode, "malformed path: \(path)")
         }
         var request = URLRequest(url: url)
@@ -121,14 +157,21 @@ struct OpenCodeConsoleClient: Sendable {
         guard let http = response as? HTTPURLResponse else {
             throw ProviderError.network(.openCode, "invalid response")
         }
-        // An expired console session redirects to the login page (URLSession
-        // follows it) rather than returning 401.
-        if let final = http.url, Self.isLoginRedirect(final) {
+        try check(http, data: data, orgID: orgID)
+        return data
+    }
+
+    /// Maps a console response onto the client's errors.
+    ///
+    /// An expired console session redirects to the login page (URLSession
+    /// follows it) rather than returning 401. A 403 on an org-scoped request is
+    /// a rejected workspace, not an expired session, so the caller can try
+    /// another; a 403 without an org id is the session being refused outright.
+    /// Error bodies are logged privately and never shown to the user.
+    static func check(_ http: HTTPURLResponse, data: Data, orgID: String?) throws {
+        if let final = http.url, isLoginRedirect(final) {
             throw ProviderError.unauthorized(.openCode)
         }
-        // A 403 on an org-scoped request is a rejected workspace, not an expired
-        // session — let the caller re-resolve and retry. A 403 without an org id
-        // is the session being refused outright.
         if http.statusCode == 403, orgID != nil {
             throw OpenCodeConsoleError.orgForbidden
         }
@@ -137,9 +180,9 @@ struct OpenCodeConsoleClient: Sendable {
         }
         guard http.statusCode < 400 else {
             let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
-            throw ProviderError.badResponse(.openCode, "HTTP \(http.statusCode): \(body)")
+            log.error("OpenCode console HTTP \(http.statusCode, privacy: .public): \(body, privacy: .private)")
+            throw ProviderError.badResponse(.openCode, "HTTP \(http.statusCode)")
         }
-        return data
     }
 
     // MARK: - Session expiry
