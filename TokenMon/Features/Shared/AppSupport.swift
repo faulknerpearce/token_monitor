@@ -9,12 +9,27 @@ enum AppSupport {
     /// Legacy Model Monitor folder name, migrated into `directoryName`.
     static let legacyDirectoryName = "ModelMonitor"
 
+    /// True when the process is the XCTest host.
+    static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
+    /// Parent of the app's folder: the user's Application Support directory, or
+    /// a per-process temporary directory under XCTest so tests never read or
+    /// write the user's files.
+    static let baseDirectory: URL = {
+        let fm = FileManager.default
+        if isRunningTests {
+            return fm.temporaryDirectory
+                .appendingPathComponent("TokenMonTests-\(UUID().uuidString)", isDirectory: true)
+        }
+        return fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+    }()
+
     /// The app's Application Support directory (created on demand, `0700`).
-    /// Defaults to `~/Library/Application Support/TokenMon`.
+    /// Defaults to `~/Library/Application Support/TokenMon` (see `baseDirectory`).
     static func directory(subdirectory: String = directoryName) -> URL {
         let fm = FileManager.default
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fm.temporaryDirectory
+        let base = baseDirectory
         let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
         if subdirectory == directoryName {
             migrateLegacyDirectoryIfNeeded(

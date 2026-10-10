@@ -115,9 +115,9 @@ final class AppModel: ObservableObject {
     let claudeAuth: ClaudeAuthSession
     let chatGPTAuth: ChatGPTAuthSession
     let openRouterAuth: OpenRouterAuthSession
-    let settings = AppSettings()
+    let settings: AppSettings
     let history = HistoryStore(inMemory: AppModel.isRunningTests)
-    let notifier = ThresholdNotifier()
+    let notifier: ThresholdNotifier
     let grokHourly = HourlyDeltaActivityStore(storageKey: "grok_hourly_today")
     let claudeHourly = HourlyDeltaActivityStore(storageKey: "claude_hourly_today")
     let claudeDaily = DailyQuotaDeltaStore(storageKey: "claude_daily_usage")
@@ -139,11 +139,30 @@ final class AppModel: ObservableObject {
 
     /// True when the process is the XCTest host — tests must not start pollers,
     /// prompt for notifications, or touch live hosts / the real history store.
-    static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    /// Files land in a temporary directory (`AppSupport.baseDirectory`) and
+    /// preferences in a throwaway defaults suite.
+    nonisolated static var isRunningTests: Bool {
+        AppSupport.isRunningTests
+    }
+
+    /// Defaults suite the XCTest host uses in place of the installed app's domain.
+    nonisolated static let testDefaultsSuiteName = "com.modelmonitor.app.tests.appmodel"
+
+    /// The installed app's defaults, or a throwaway suite (emptied on every
+    /// launch) under XCTest.
+    nonisolated static func makeDefaults() -> UserDefaults {
+        guard isRunningTests else { return .standard }
+        guard let defaults = UserDefaults(suiteName: testDefaultsSuiteName) else {
+            preconditionFailure("could not open the test defaults suite")
+        }
+        defaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        return defaults
     }
 
     init() {
+        let defaults = Self.makeDefaults()
+        settings = AppSettings(defaults: defaults)
+        notifier = ThresholdNotifier(defaults: defaults)
         let auth = AuthSessionService()
         let openCodeAuth = OpenCodeAuthSession()
         let cursorAuth = CursorAuthSession()
