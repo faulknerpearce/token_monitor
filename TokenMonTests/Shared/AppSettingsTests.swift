@@ -1,3 +1,4 @@
+import ServiceManagement
 @testable import TokenMon
 import XCTest
 
@@ -36,7 +37,7 @@ final class AppSettingsTests: XCTestCase {
     func testIdlePollClamped() throws {
         let settings = makeSettings()
         settings.idlePollSeconds = 0
-        XCTAssertEqual(settings.idlePollSeconds, 15)
+        XCTAssertEqual(settings.idlePollSeconds, 60)
         settings.idlePollSeconds = 100_000
         XCTAssertEqual(settings.idlePollSeconds, 3600)
     }
@@ -227,10 +228,17 @@ final class AppSettingsTests: XCTestCase {
 
     func testThresholdPercentIsClampedOnLoad() {
         defaults.set(250.0, forKey: "thresholdPercent")
-        XCTAssertEqual(makeSettings().thresholdPercent, 100)
+        XCTAssertEqual(makeSettings().thresholdPercent, 99)
 
         defaults.set(-5.0, forKey: "thresholdPercent")
-        XCTAssertEqual(makeSettings().thresholdPercent, 0)
+        XCTAssertEqual(makeSettings().thresholdPercent, 50)
+    }
+
+    func testThresholdPercentIsClampedOnSet() {
+        let settings = makeSettings()
+        settings.thresholdPercent = 10
+        XCTAssertEqual(settings.thresholdPercent, AppSettings.thresholdRange.lowerBound)
+        XCTAssertEqual(defaults.double(forKey: "thresholdPercent"), 50)
     }
 
     func testRetiredVisibleProductsFallBackToAllKnown() {
@@ -265,6 +273,14 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(settings.selectedProvider, .cursor)
     }
 
+    func testProviderOrderPersistsTheNormalizedValue() {
+        let settings = makeSettings()
+        settings.providerOrder = [.claude, .claude, .overview]
+        let expected = MonitorProvider.normalizedOrder([.claude])
+        XCTAssertEqual(settings.providerOrder, expected)
+        XCTAssertEqual(defaults.stringArray(forKey: "providerOrder"), expected.map(\.rawValue))
+    }
+
     func testNeedsPollingMatchesTheProviderFlags() {
         let settings = makeSettings()
         settings.selectedProvider = .chatgpt
@@ -273,5 +289,55 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(settings.needsPolling(.chatgpt))
         XCTAssertFalse(settings.needsPolling(.openrouter))
         XCTAssertFalse(settings.needsPolling(.overview))
+    }
+
+    func testLaunchAtLoginShowsOnWhileAwaitingApproval() {
+        let loginItem = FakeLoginItem(status: .requiresApproval)
+        let settings = AppSettings(defaults: defaults, loginItem: loginItem)
+        XCTAssertTrue(settings.launchAtLogin)
+        XCTAssertTrue(settings.launchAtLoginNeedsApproval)
+
+        loginItem.status = .enabled
+        settings.refreshLaunchAtLoginStatus()
+        XCTAssertTrue(settings.launchAtLogin)
+        XCTAssertFalse(settings.launchAtLoginNeedsApproval)
+    }
+
+    func testLaunchAtLoginRegistersAndRevertsOnFailure() {
+        let loginItem = FakeLoginItem(status: .notRegistered)
+        let settings = AppSettings(defaults: defaults, loginItem: loginItem)
+        XCTAssertFalse(settings.launchAtLogin)
+
+        loginItem.registerResult = .requiresApproval
+        settings.launchAtLogin = true
+        XCTAssertEqual(loginItem.registerCalls, 1)
+        XCTAssertTrue(settings.launchAtLogin)
+        XCTAssertTrue(settings.launchAtLoginNeedsApproval)
+
+        loginItem.failUnregister = true
+        settings.launchAtLogin = false
+        XCTAssertTrue(settings.launchAtLogin, "a failed unregister reverts to the real status")
+    }
+}
+
+@MainActor
+private final class FakeLoginItem: LoginItemService {
+    var status: SMAppService.Status
+    var registerResult: SMAppService.Status = .enabled
+    var failUnregister = false
+    private(set) var registerCalls = 0
+
+    init(status: SMAppService.Status) {
+        self.status = status
+    }
+
+    func register() throws {
+        registerCalls += 1
+        status = registerResult
+    }
+
+    func unregister() throws {
+        if failUnregister { throw CocoaError(.featureUnsupported) }
+        status = .notRegistered
     }
 }

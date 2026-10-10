@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -223,10 +224,10 @@ struct PreferencesView: View {
             }
 
             Section("Refresh") {
-                Stepper(value: $settings.activePollSeconds, in: 15...300, step: 15) {
+                Stepper(value: $settings.activePollSeconds, in: AppSettings.activePollRange, step: 15) {
                     Text("While menu open: \(settings.activePollSeconds)s")
                 }
-                Stepper(value: $settings.idlePollSeconds, in: 60...3600, step: 60) {
+                Stepper(value: $settings.idlePollSeconds, in: AppSettings.idlePollRange, step: 60) {
                     Text("While idle: \(settings.idlePollSeconds)s")
                 }
                 refreshStatus
@@ -236,12 +237,12 @@ struct PreferencesView: View {
                 Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
                     .toggleStyle(.switch)
                 if settings.thresholdEnabled {
-                    Slider(value: $settings.thresholdPercent, in: 50...99, step: 1) {
+                    Slider(value: $settings.thresholdPercent, in: AppSettings.thresholdRange, step: 1) {
                         Text("Threshold")
                     } minimumValueLabel: {
-                        Text("50%")
+                        Text("\(Int(AppSettings.thresholdRange.lowerBound))%")
                     } maximumValueLabel: {
-                        Text("99%")
+                        Text("\(Int(AppSettings.thresholdRange.upperBound))%")
                     }
                     Text("Alert at \(Int(settings.thresholdPercent))% used")
                         .foregroundStyle(.secondary)
@@ -263,6 +264,12 @@ struct PreferencesView: View {
             Section("System") {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                     .toggleStyle(.switch)
+                if settings.launchAtLoginNeedsApproval {
+                    Text("Waiting for approval in System Settings › General › Login Items.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                }
                 Toggle("Check for Updates", isOn: $settings.checksForUpdates)
                     .toggleStyle(.switch)
                 Button(updateChecker.actionTitle) {
@@ -313,6 +320,9 @@ struct PreferencesView: View {
         .font(.system(size: 14))
         .padding()
         .frame(minWidth: 440, minHeight: 520)
+        .onAppear {
+            settings.refreshLaunchAtLoginStatus()
+        }
         .onDisappear {
             AppDelegate.hideDockIfNoWindows()
         }

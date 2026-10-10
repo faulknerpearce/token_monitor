@@ -2,10 +2,22 @@ import Foundation
 import ServiceManagement
 import SwiftUI
 
+/// The login-item registration `AppSettings` drives (`SMAppService.mainApp`
+/// in the app; tests inject a fake so they never touch the real login item).
+@MainActor
+protocol LoginItemService: AnyObject {
+    var status: SMAppService.Status { get }
+    func register() throws
+    func unregister() throws
+}
+
+extension SMAppService: LoginItemService {}
+
 /// Persisted user settings published to pollers and menu-bar surfaces.
 @MainActor
 final class AppSettings: ObservableObject {
     private let defaults: UserDefaults
+    private let loginItem: LoginItemService
 
     @Published var showCategoriesInMenuBar: Bool {
         didSet {
@@ -93,7 +105,11 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var thresholdPercent: Double {
-        didSet { defaults.set(thresholdPercent, forKey: Keys.thresholdPercent) }
+        didSet {
+            let clamped = Self.clampThreshold(thresholdPercent)
+            if thresholdPercent != clamped { thresholdPercent = clamped }
+            defaults.set(thresholdPercent, forKey: Keys.thresholdPercent)
+        }
     }
 
     @Published var visibleProductIDs: Set<String> {
@@ -117,12 +133,13 @@ final class AppSettings: ObservableObject {
     @Published var providerOrder: [MonitorProvider] {
         didSet {
             guard providerOrder != oldValue else { return }
+            // Assigning inside `didSet` does not re-run the observer, so the
+            // normalized order is persisted here directly.
             let normalized = MonitorProvider.normalizedOrder(providerOrder)
             if providerOrder != normalized {
                 providerOrder = normalized
-                return
             }
-            defaults.set(providerOrder.map(\.rawValue), forKey: Keys.providerOrder)
+            defaults.set(normalized.map(\.rawValue), forKey: Keys.providerOrder)
         }
     }
 
@@ -148,12 +165,18 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// On when the login item is registered, including while macOS still waits
+    /// for the user to approve it (see `launchAtLoginNeedsApproval`).
     @Published var launchAtLogin: Bool {
         didSet {
             guard !isRevertingLaunchAtLogin, launchAtLogin != oldValue else { return }
             updateLaunchAtLogin()
         }
     }
+
+    /// True while the login item is registered but awaiting approval in
+    /// System Settings › General › Login Items.
+    @Published private(set) var launchAtLoginNeedsApproval = false
 
     /// A provider only polls when the user has it enabled. The selection and
     /// menu-bar flags are visibility filters, not lifecycle switches; without
@@ -217,8 +240,9 @@ final class AppSettings: ObservableObject {
     /// Guards against recursive `didSet` when registration fails and the value is reverted.
     private var isRevertingLaunchAtLogin = false
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, loginItem: LoginItemService = SMAppService.mainApp) {
         self.defaults = defaults
+        self.loginItem = loginItem
         showCategoriesInMenuBar = defaults.object(forKey: Keys.showCategories) as? Bool ?? true
         showGrokBarInMenuBar = defaults.object(forKey: Keys.showGrokBar) as? Bool ?? true
         showOpenCodeBarInMenuBar = defaults.object(forKey: Keys.showOpenCodeBar) as? Bool ?? false
@@ -231,7 +255,7 @@ final class AppSettings: ObservableObject {
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? true
-        thresholdPercent = min(100, max(0, defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80))
+        thresholdPercent = Self.clampThreshold(defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80)
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
         let savedOrder = (defaults.stringArray(forKey: Keys.providerOrder) ?? [])
             .compactMap(MonitorProvider.init(rawValue:))
@@ -258,27 +282,54 @@ final class AppSettings: ObservableObject {
         } else {
             visibleProductIDs = Set(ProductCatalog.knownIDs)
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        launchAtLogin = Self.isRegistered(loginItem.status)
+        launchAtLoginNeedsApproval = loginItem.status == .requiresApproval
     }
 
-    private static func clampActivePoll(_ value: Int) -> Int { max(15, min(300, value)) }
-    private static func clampIdlePoll(_ value: Int) -> Int { max(15, min(3600, value)) }
+    private static func isRegistered(_ status: SMAppService.Status) -> Bool {
+        status == .enabled || status == .requiresApproval
+    }
+
+    /// Re-reads the login item, e.g. after the user approved it in System Settings.
+    func refreshLaunchAtLoginStatus() {
+        let status = loginItem.status
+        launchAtLoginNeedsApproval = status == .requiresApproval
+        let registered = Self.isRegistered(status)
+        guard launchAtLogin != registered else { return }
+        isRevertingLaunchAtLogin = true
+        launchAtLogin = registered
+        isRevertingLaunchAtLogin = false
+    }
+
+    /// Allowed values, shared by the model clamps and the Settings controls.
+    static let activePollRange = 15...300
+    static let idlePollRange = 60...3600
+    static let thresholdRange: ClosedRange<Double> = 50...99
+
+    private static func clampActivePoll(_ value: Int) -> Int {
+        min(activePollRange.upperBound, max(activePollRange.lowerBound, value))
+    }
+
+    private static func clampIdlePoll(_ value: Int) -> Int {
+        min(idlePollRange.upperBound, max(idlePollRange.lowerBound, value))
+    }
+
+    private static func clampThreshold(_ value: Double) -> Double {
+        min(thresholdRange.upperBound, max(thresholdRange.lowerBound, value))
+    }
 
     private func updateLaunchAtLogin() {
         do {
             if launchAtLogin {
-                try SMAppService.mainApp.register()
+                try loginItem.register()
             } else {
-                try SMAppService.mainApp.unregister()
+                try loginItem.unregister()
             }
         } catch {
-            // Revert UI if registration fails (e.g. unsigned debug builds).
-            let actual = SMAppService.mainApp.status == .enabled
-            guard launchAtLogin != actual else { return }
-            isRevertingLaunchAtLogin = true
-            launchAtLogin = actual
-            isRevertingLaunchAtLogin = false
+            // Registration can fail (e.g. unsigned debug builds); the status
+            // re-read below reverts the toggle to what macOS reports.
         }
+        refreshLaunchAtLoginStatus()
     }
 
     private enum Keys {
