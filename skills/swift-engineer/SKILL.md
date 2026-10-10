@@ -136,7 +136,7 @@ The engineer's in-the-moment awareness so code is born fast instead of fixed lat
 ### Project hot paths (token_monitor)
 
 - **Menu bar render** — `MenuBarStatusRenderer` (NSCache-bounded; keep the key complete, keep colors resolved against the live appearance).
-- **Polling** — `PollingLoop` (one loop per provider; the interval comes from the provider each tick; don't poll hot against a throttling server).
+- **Polling** — `PollingLoop`, one per provider: a full-interval sleep between refreshes (no ticking timer), parked with no timer while `interval()` returns nil, re-armed by `wake()`; failures back off 30 s → 10 min with ±10% jitter and honour `Retry-After`.
 - **OpenCode SQLite reads** — `OpenCodeLocalStats` (one read-only connection per scan, `json_extract` in SQL so rows arrive as plain columns, `busy_timeout`, re-read only when the database changes).
 - **Grok payload parsing** — `GRPCWebParser` (manual protobuf scan) and `UsageResponseParser` (multi-shape `JSONSerialization`); don't "upgrade" them to a framework.
 
@@ -490,10 +490,11 @@ Checklist:
 - [ ] **Fail fast on auth**: `401/403` → surface re-auth immediately, don't fall through 4 candidate endpoints (this repo does this for `.unauthorized` — keep it)
 - [ ] **Candidate probing**: Grok calls the gRPC-web billing endpoint first and probes its 4 REST candidates (sequential, 15 s timeouts) only when billing fails transiently — keep the probes off the common path, and bound their total time if they ever move onto it
 - [ ] **Don't pay N× external I/O over the whole queue when one poll advances one item**
-- [ ] **Never poll hot against a throttling server** — failed refreshes wait for a later tick; check `PollingLoop` and the poller's error path for the current retry policy before changing cadence
+- [ ] **Never poll hot against a throttling server** — a refresh returns `PollOutcome`; `.failure` grows the wait through `BackoffTimer` (30 s → 10 min) and a 429's `Retry-After` (`UsageError.rateLimited`) sets the earliest next refresh. Report `.failure` for real fetch errors and `.skipped` for cancellation or nothing-to-do, or the backoff never engages
+- [ ] **Don't wake parked loops for nothing** — a provider that is not needed returns a nil interval (`PollInterval.seconds(menuIsOpen:settings:needed:)`) and its loop holds no timer; `AppModel` calls `wake()` only when an input to `interval()` changes (menu opened, polling settings edited)
 - [ ] **Cache discovery results** — e.g. the OpenCode workspace id is stored after sign-in and tried first; don't re-resolve per poll what rarely changes
 - [ ] **Logging**: per-item `info!` × N polls is disk + I-cache tax; summary once, `debug` for detail (repo already mostly does this)
-- [ ] **Sleep/wake handling**: don't poll during sleep (the Grok poller observes `NSWorkspace` sleep/wake)
+- [ ] **Sleep/wake handling**: `SystemWakeGate` pauses every loop on system sleep and resumes them once `NWPathMonitor` reports a satisfied path (or after a fallback delay), so a wake does not fail every provider at once
 
 ### Review output format
 
@@ -546,7 +547,12 @@ Push back on "optimize everything" — prioritize the critical 3%.
 - **Menu bar content is drawn as an AppKit bitmap**, not SwiftUI (see `MenuBarStatusRenderer`): one `NSImage` composite of per-provider segments plus the hit regions for the same layout, so a status-item click maps back to its provider (`MenuBarController`).
 - Menu bar labels are bitmaps: text must use system label colors resolved from the menu bar's *live* `effectiveAppearance`, and the image cache must be keyed by appearance and invalidated on `AppleInterfaceThemeChangedNotification`.
 - App-wide services live on `AppModel` (`@MainActor` `ObservableObject`); child services forward `objectWillChange` into it so the status-item label refreshes (see `AppModel.forwardChanges`).
-- Polling uses `PollingLoop`, one loop per provider, with a shorter interval while the panel is open (`PollInterval`). Read `PollingLoop` and the provider's poller for the current wait, retry, and sleep/wake behaviour before changing them.
+- Polling uses `PollingLoop`, one loop per provider:
+  - It refreshes at start, then sleeps the full remaining interval (active interval while the panel is open, idle otherwise; `PollInterval`). There is no periodic tick.
+  - `interval()` returning nil parks the loop with no timer; `wake()` re-evaluates it and re-arms from the last refresh, refreshing at once when overdue. `refreshNow()` restarts the wait from the manual refresh.
+  - Each refresh returns a `PollOutcome`. Failures back off exponentially (`BackoffTimer`, 30 s → 10 min), a 429 `Retry-After` is honoured, and every wait carries ±10% jitter.
+  - `SystemWakeGate` calls `pause()` on sleep and `resume()` once the network is back.
+  - `AppModel` forwards child `objectWillChange` through one throttled publisher, so a poll that sets many fields triggers one re-render.
 - Auth: `ProviderAuthSession` subclasses with per-provider `WebKitCookieCapture` policies (isolated non-persistent WebKit store, essential-cookie allowlist, three-strike invalidation). Secrets (session cookie headers, the OpenRouter key) live in the login Keychain via `SecretRoutingCredentialStore` / `KeychainCredentialStore`; email, account identity, and workspace id are mode-`0600` files under Application Support. Tests use `InMemoryCredentialStore` or a fake `KeychainBackend`. See `Docs/AUTH_AND_ENDPOINTS.md`.
 - Percent semantics: menu bar shows used %; dropdown shows used + remaining; the Grok daily chart shows the 7 days of the active billing period (plus the reset day before its reset instant), deriving day-over-day deltas from local history (server `dailySeries` only when local samples cannot paint bars).
 
