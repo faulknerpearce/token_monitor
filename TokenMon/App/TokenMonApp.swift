@@ -272,6 +272,7 @@ struct MenuBarRoot: View {
             openChatGPTSignIn: { model.openWindow(.chatGPTSignIn, openWindow: openWindow) },
             selectOpenRouter: { model.settings.selectedProvider = .openrouter }
         )
+        .environment(\.updateChecker, model.updateChecker)
     }
 }
 

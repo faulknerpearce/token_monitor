@@ -1,12 +1,26 @@
 import Foundation
 
+/// A file attached to a GitHub release.
+struct ReleaseAsset: Equatable, Sendable {
+    var name: String
+    var url: URL
+    /// Lowercase hex SHA-256 from the asset's `digest` field (`sha256:<hex>`),
+    /// or `nil` when GitHub reported none.
+    var sha256: String?
+}
+
 /// A published release newer than the running build.
 struct AvailableRelease: Equatable, Sendable {
     var version: AppVersion
     var pageURL: URL
     /// Zip of `TokenMon.app` attached to the release, when one was published.
-    var archiveURL: URL?
+    var archive: ReleaseAsset?
+    /// Installer package attached to the release, offered when this copy of
+    /// the app cannot replace itself.
+    var installerPackage: ReleaseAsset?
     var publishedAt: Date?
+
+    var archiveURL: URL? { archive?.url }
 
     static func == (lhs: AvailableRelease, rhs: AvailableRelease) -> Bool {
         lhs.version.description == rhs.version.description && lhs.pageURL == rhs.pageURL
@@ -17,10 +31,17 @@ struct AvailableRelease: Equatable, Sendable {
 /// than the running app.
 ///
 /// Fetches public release metadata. A newer release's `TokenMon-*.zip` can be
-/// installed in place; without that asset the user is sent to the release page.
+/// installed in place once its SHA-256 matches the asset digest; without that
+/// asset the user is sent to the installer package or the release page.
 enum ReleaseFeed {
     static let owner = "faulknerpearce"
     static let repository = "token_monitor"
+
+    /// Hosts GitHub redirects release-asset downloads to.
+    static let assetCDNHosts: Set<String> = [
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com"
+    ]
 
     static var latestReleaseURL: URL {
         URL(string: "https://api.github.com/repos/\(owner)/\(repository)/releases/latest")!
@@ -51,39 +72,78 @@ enum ReleaseFeed {
             .flatMap(URL.init(string:))
             ?? URL(string: "https://github.com/\(owner)/\(repository)/releases/latest")!
 
+        let assets = releaseAssets(in: root)
         return AvailableRelease(
             version: version,
             pageURL: page,
-            archiveURL: archiveURL(in: root),
+            archive: preferredAsset(in: assets, withExtension: "zip"),
+            installerPackage: preferredAsset(in: assets, withExtension: "pkg"),
             publishedAt: JSON.firstString(root, keys: ["published_at"])
                 .flatMap(ISO8601DateFormatter.parseFlexible)
         )
     }
 
-    /// Zip asset to install. Prefers `TokenMon-*.zip`. Ignores other hosts so a
-    /// release payload cannot point the download at an unrelated site.
-    static func archiveURL(in root: [String: Any]) -> URL? {
-        guard let assets = root["assets"] as? [[String: Any]] else { return nil }
-        let zips: [(name: String, url: URL)] = assets.compactMap { asset in
-            guard let name = JSON.firstString(asset, keys: ["name"]),
-                  name.lowercased().hasSuffix(".zip"),
-                  let raw = JSON.firstString(asset, keys: ["browser_download_url"]),
-                  let url = URL(string: raw),
-                  isTrustedDownload(url)
-            else { return nil }
-            return (name, url)
+    /// Asset to install with the given extension. Prefers `TokenMon-*` names
+    /// and skips debug-symbol archives (`*-dSYM.zip`).
+    static func preferredAsset(in assets: [ReleaseAsset], withExtension pathExtension: String) -> ReleaseAsset? {
+        let matching = assets.filter {
+            let name = $0.name.lowercased()
+            return name.hasSuffix(".\(pathExtension)") && !name.contains("dsym")
         }
-        let preferred = zips.first { $0.name.lowercased().hasPrefix("tokenmon") }
-        return (preferred ?? zips.first)?.url
+        return matching.first { $0.name.lowercased().hasPrefix("tokenmon") } ?? matching.first
     }
 
-    /// True for `https` GitHub release hosts; rejects unrelated download URLs.
+    /// Assets whose download URL is one of this repository's release
+    /// downloads. Others are dropped so a release payload cannot point the
+    /// download at an unrelated site.
+    static func releaseAssets(in root: [String: Any]) -> [ReleaseAsset] {
+        guard let assets = root["assets"] as? [[String: Any]] else { return [] }
+        return assets.compactMap { asset in
+            guard let name = JSON.firstString(asset, keys: ["name"]),
+                  let raw = JSON.firstString(asset, keys: ["browser_download_url"]),
+                  let url = URL(string: raw),
+                  isRepositoryReleaseDownload(url)
+            else { return nil }
+            return ReleaseAsset(name: name, url: url, sha256: sha256(fromDigest: asset["digest"] as? String))
+        }
+    }
+
+    /// Hex SHA-256 from a GitHub asset digest (`sha256:<64 hex>`), lowercased.
+    static func sha256(fromDigest digest: String?) -> String? {
+        guard let digest else { return nil }
+        let parts = digest.split(separator: ":", maxSplits: 1)
+        guard parts.count == 2, parts[0].lowercased() == "sha256" else { return nil }
+        let hex = parts[1].lowercased()
+        guard hex.count == 64, hex.allSatisfy(\.isHexDigit) else { return nil }
+        return hex
+    }
+
+    /// True for `https://github.com/<owner>/<repository>/releases/download/<tag>/<file>`.
+    static func isRepositoryReleaseDownload(_ url: URL) -> Bool {
+        guard isPlainHTTPS(url), url.host?.lowercased() == "github.com" else { return false }
+        let components = url.pathComponents
+        guard components.count == 7,
+              !components.contains(".."), !components.contains(".")
+        else { return false }
+        return components[1].lowercased() == owner.lowercased()
+            && components[2].lowercased() == repository.lowercased()
+            && components[3] == "releases"
+            && components[4] == "download"
+    }
+
+    /// True for this repository's release downloads and the GitHub CDN hosts
+    /// those downloads redirect to.
     static func isTrustedDownload(_ url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
-        if host == "github.com" { return true }
-        return host == "objects.githubusercontent.com"
-            || host == "release-assets.githubusercontent.com"
-            || host.hasSuffix(".githubusercontent.com")
+        if isRepositoryReleaseDownload(url) { return true }
+        guard isPlainHTTPS(url), let host = url.host?.lowercased() else { return false }
+        return assetCDNHosts.contains(host)
+    }
+
+    /// `https` on the default port with no embedded credentials.
+    private static func isPlainHTTPS(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https"
+            && url.user == nil && url.password == nil
+            && (url.port == nil || url.port == 443)
     }
 }
 

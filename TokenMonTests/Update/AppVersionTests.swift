@@ -8,6 +8,21 @@ final class AppVersionTests: XCTestCase {
         XCTAssertEqual(AppVersion("V2.0")?.description, "2.0")
     }
 
+    /// Semver build metadata is dropped and does not affect ordering.
+    func testParsesBuildMetadata() {
+        XCTAssertEqual(AppVersion("1.8.0+5")?.description, "1.8.0")
+        XCTAssertEqual(AppVersion("v1.8.0-beta.1+exp.sha.5114f85")?.description, "1.8.0-beta.1")
+        XCTAssertEqual(AppVersion("1.8.0+5")!, AppVersion("1.8.0")!)
+    }
+
+    func testParsesReleaseNamePrefix() {
+        XCTAssertEqual(AppVersion("TokenMon-1.8.0")?.description, "1.8.0")
+        XCTAssertEqual(AppVersion("TokenMon v1.8.0")?.description, "1.8.0")
+        XCTAssertEqual(AppVersion("TokenMon-v1.8.0-beta.2")?.description, "1.8.0-beta.2")
+        XCTAssertNil(AppVersion("TokenMon-nightly"))
+        XCTAssertNil(AppVersion("TokenMon-"))
+    }
+
     func testRejectsUnparseableTags() {
         XCTAssertNil(AppVersion("nightly"))
         XCTAssertNil(AppVersion(""))

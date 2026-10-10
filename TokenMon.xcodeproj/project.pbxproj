@@ -51,6 +51,7 @@
 		45CF52CA0D48AE4EFD9674B2 /* DailyBudgetBarsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA55668290D2300298B0BC29 /* DailyBudgetBarsView.swift */; };
 		46F1C528574C5DA03FCCE64D /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D56ED51363320E599F80827 /* ProviderRegistry.swift */; };
 		48F5B17A873190A817646FEF /* Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4D47682593A1EE79DD6A0C /* Domain.swift */; };
+		4999E652E5C574D76438C78A /* AppInstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C70E92DD2655CFB67E6C1A3 /* AppInstallerTests.swift */; };
 		4A3663B9181037817F954687 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB64AEAC59754BB40949D23C /* UpdateCheckerTests.swift */; };
 		4CE28448F0C6FAA8AE2C4128 /* ChatGPTSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4A83133D58CA8EFB9E0C82 /* ChatGPTSignInView.swift */; };
 		504EBC85D44DF3DCB5105EE7 /* CursorUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3134A3D28E86BDE453FDADB0 /* CursorUsageClient.swift */; };
@@ -64,6 +65,7 @@
 		5F1B77DEC7B2FC1F9A70D292 /* OpenCodeAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08662DA61F7BDFBFB4B43515 /* OpenCodeAuthSession.swift */; };
 		6194CDF488B1A7A92DCD5DB0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DB82058780239EE6F551759 /* Assets.xcassets */; };
 		67CB3BAF2D6D0B348912F873 /* ThresholdNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57DE707648903EDB3AF63DD9 /* ThresholdNotifierTests.swift */; };
+		69C07DE7098DD911D9580431 /* UpdateAvailableIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391D34329286AAEF2C014198 /* UpdateAvailableIndicator.swift */; };
 		6C49B3BEC92293AB4BFC7CB4 /* OpenCodeSignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96616027EAA5189BC18E97E6 /* OpenCodeSignInSheet.swift */; };
 		6D3C3BF5E179DD1B60147EEB /* ProductCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5685652948176D011F6AD18 /* ProductCatalogTests.swift */; };
 		6DA992476A20077DDFBA00CE /* MenuBarStatusRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */; };
@@ -209,6 +211,7 @@
 		3236D1884085409D04BB2A13 /* AppSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSupportTests.swift; sourceTree = "<group>"; };
 		3690B6E973D0E03E2CB00E81 /* SegmentedUsageBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedUsageBarTests.swift; sourceTree = "<group>"; };
 		36C4B1FF750F8B1392D1AC6A /* ClaudePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudePanelView.swift; sourceTree = "<group>"; };
+		391D34329286AAEF2C014198 /* UpdateAvailableIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateAvailableIndicator.swift; sourceTree = "<group>"; };
 		39384E817EE6D493EC3E52DB /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
 		3A3130D7477D8F9FB9A6A108 /* GrokbotUsagePollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsagePollerTests.swift; sourceTree = "<group>"; };
 		3A6FD45894627C32B2A37E7F /* TokenMon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMon.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -244,6 +247,7 @@
 		75358DA29FB869146E6164A1 /* AuthSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionService.swift; sourceTree = "<group>"; };
 		7B84CFAAB0D7972BDC20C4DB /* ProviderSwitcherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSwitcherView.swift; sourceTree = "<group>"; };
 		7C452AEAE4FAB699B18DF456 /* AppVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionTests.swift; sourceTree = "<group>"; };
+		7C70E92DD2655CFB67E6C1A3 /* AppInstallerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstallerTests.swift; sourceTree = "<group>"; };
 		7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokPanelView.swift; sourceTree = "<group>"; };
 		7DB9D8707EA6CA028C761114 /* BackoffTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackoffTimer.swift; sourceTree = "<group>"; };
 		7E04123306AF45F2E0DD879C /* MenuBarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanel.swift; sourceTree = "<group>"; };
@@ -531,6 +535,7 @@
 				2831F536A3D09C69497FEF69 /* AppInstaller.swift */,
 				900E667C6972741C36D32F47 /* AppVersion.swift */,
 				9720EBF79E217B63CE39BE16 /* ReleaseFeed.swift */,
+				391D34329286AAEF2C014198 /* UpdateAvailableIndicator.swift */,
 				CEBEC9D064C56FD2ADDD4ED5 /* UpdateChecker.swift */,
 			);
 			path = Update;
@@ -662,6 +667,7 @@
 		D37ADC9DA74720F2BA93BF81 /* Update */ = {
 			isa = PBXGroup;
 			children = (
+				7C70E92DD2655CFB67E6C1A3 /* AppInstallerTests.swift */,
 				7C452AEAE4FAB699B18DF456 /* AppVersionTests.swift */,
 				DB794058AE925A033C64BDC4 /* ReleaseFeedTests.swift */,
 				FB64AEAC59754BB40949D23C /* UpdateCheckerTests.swift */,
@@ -791,7 +797,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					9180ECBDB83F7FBB6499CE82 = {
 						ProvisioningStyle = Automatic;
@@ -838,6 +844,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4999E652E5C574D76438C78A /* AppInstallerTests.swift in Sources */,
 				CD23EECB6013B960DC54F329 /* AppSettingsTests.swift in Sources */,
 				A3B6205627F823688673DEA1 /* AppSupportTests.swift in Sources */,
 				93B1433243C06146B7E93A6C /* AppVersionTests.swift in Sources */,
@@ -983,6 +990,7 @@
 				87F758D86BCA5AABC2B9959F /* SlimUsageTrack.swift in Sources */,
 				D37A350E070C4FD59B5025C9 /* ThresholdNotifier.swift in Sources */,
 				440F0FD6B4942548127BC790 /* TokenMonApp.swift in Sources */,
+				69C07DE7098DD911D9580431 /* UpdateAvailableIndicator.swift in Sources */,
 				98EC96921A3FCE5B747765A8 /* UpdateChecker.swift in Sources */,
 				2F72BB40935919BF6E176BA2 /* UsageClient.swift in Sources */,
 				C8D1DC73D55A2557D3CDB7D0 /* UsageError.swift in Sources */,
@@ -1142,7 +1150,6 @@
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.7.3;
-				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
 				PRODUCT_NAME = TokenMon;
@@ -1161,7 +1168,6 @@
 				INFOPLIST_FILE = TokenMon/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.7.3;
-				PRIVACY_MANIFEST_FILE = TokenMon/Resources/PrivacyInfo.xcprivacy;
 				PRODUCT_BUNDLE_IDENTIFIER = com.modelmonitor.app;
 				PRODUCT_MODULE_NAME = TokenMon;
 				PRODUCT_NAME = TokenMon;
