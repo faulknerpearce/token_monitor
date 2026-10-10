@@ -147,16 +147,12 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             default:
                 break
             }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            lastError = error.localizedDescription
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
             return PollOutcome(error: error)
         } catch {
             guard auth.isCurrent(generation) else { return .skipped }
-            if snapshot == nil {
-                lastError = error.localizedDescription
-            }
+            lastError = error.localizedDescription
             logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
             return PollOutcome(error: error)
         }

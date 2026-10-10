@@ -97,6 +97,20 @@ final class AuthInvalidationTests: XCTestCase {
         XCTAssertFalse(daily.spentByDay.isEmpty)
     }
 
+    /// A failed refresh after a successful one reports its error alongside the
+    /// kept snapshot, so the panel marks the data as stale.
+    func testClaudeFailureAfterDataReportsError() async {
+        let (poller, _, _, _) = makeClaude()
+        await poller.refreshNow()
+        await poller.refreshNow()
+        XCTAssertNil(poller.lastError)
+
+        await poller.refreshNow()
+
+        XCTAssertNotNil(poller.snapshot)
+        XCTAssertNotNil(poller.lastError)
+    }
+
     func testClaudeSignOutClearsHistory() async {
         let (poller, auth, daily, _) = makeClaude()
         await poller.refreshNow()

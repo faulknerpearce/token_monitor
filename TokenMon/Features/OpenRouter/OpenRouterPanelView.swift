@@ -67,9 +67,7 @@ struct OpenRouterPanelView: View {
                 }
 
                 if let err = poller.lastError {
-                    Text(err)
-                        .font(PanelTypography.caption)
-                        .foregroundStyle(.secondary)
+                    StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
                         .padding(.top, 8)
                 }
                 replaceKeyRow
