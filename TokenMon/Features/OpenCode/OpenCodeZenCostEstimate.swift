@@ -17,6 +17,10 @@ import Foundation
 /// free-model paid-equivalents that have no plan entry and for OpenRouter's own
 /// `$0` rows (`estimate(modelID:)`). Recorded cost always wins over any estimate.
 enum OpenCodeZenCostEstimate {
+    /// Date `goRates` and `zenRates` were checked against the published Go and
+    /// Zen price pages (base context tier, off-peak DeepSeek).
+    static let ratesVerifiedOn = "2026-10-10"
+
     /// Rates per 1M tokens (input, output, cacheRead, cacheWrite).
     struct Rates {
         var input: Double
@@ -58,7 +62,8 @@ enum OpenCodeZenCostEstimate {
         "grok-4.7": Rates(input: 2.00, output: 6.00, cacheRead: 0.50, cacheWrite: 0),
         "grok-4.6": Rates(input: 2.00, output: 6.00, cacheRead: 0.50, cacheWrite: 0),
         "gpt-6-luna": Rates(input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125),
-        "gpt-5.6-luna": Rates(input: 0.20, output: 1.20, cacheRead: 0.02, cacheWrite: 0.25)
+        "gpt-5.6-luna": Rates(input: 0.20, output: 1.20, cacheRead: 0.02, cacheWrite: 0.25),
+        "claude-haiku-5-5": Rates(input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125)
     ]
 
     /// Official OpenCode **Zen** pay-as-you-go rates per 1M tokens
@@ -95,7 +100,9 @@ enum OpenCodeZenCostEstimate {
         "claude-opus-4-7": Rates(input: 5.00, output: 25.00, cacheRead: 0.50, cacheWrite: 6.25),
         "claude-opus-4-6": Rates(input: 5.00, output: 25.00, cacheRead: 0.50, cacheWrite: 6.25),
         "claude-opus-4-5": Rates(input: 5.00, output: 25.00, cacheRead: 0.50, cacheWrite: 6.25),
+        "claude-sonnet-5-5": Rates(input: 2.00, output: 10.00, cacheRead: 0.20, cacheWrite: 2.50),
         "claude-sonnet-5": Rates(input: 2.00, output: 10.00, cacheRead: 0.20, cacheWrite: 2.50),
+        "claude-haiku-5-5": Rates(input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125),
         "claude-sonnet-4-6": Rates(input: 3.00, output: 15.00, cacheRead: 0.30, cacheWrite: 3.75),
         "claude-sonnet-4-5": Rates(input: 3.00, output: 15.00, cacheRead: 0.30, cacheWrite: 3.75),
         "claude-haiku-4-5": Rates(input: 1.00, output: 5.00, cacheRead: 0.10, cacheWrite: 1.25),
@@ -120,6 +127,7 @@ enum OpenCodeZenCostEstimate {
         "gpt-5.6-terra": Rates(input: 2.00, output: 12.00, cacheRead: 0.20, cacheWrite: 2.50),
         "gpt-5.6-luna": Rates(input: 0.20, output: 1.20, cacheRead: 0.02, cacheWrite: 0.25),
         "gpt-5.5": Rates(input: 5.00, output: 30.00, cacheRead: 0.50, cacheWrite: 0),
+        "gpt-5-codex": Rates(input: 1.07, output: 8.50, cacheRead: 0.107, cacheWrite: 0),
         "gpt-5.5-pro": Rates(input: 30.00, output: 180.00, cacheRead: 30.00, cacheWrite: 0),
         "gpt-5.4": Rates(input: 2.50, output: 15.00, cacheRead: 0.25, cacheWrite: 0),
         "gpt-5.4-pro": Rates(input: 30.00, output: 180.00, cacheRead: 30.00, cacheWrite: 0),
@@ -269,6 +277,8 @@ enum OpenCodeZenCostEstimate {
     }
 
     /// Prefer recorded cost; otherwise calculate value from the published rate.
+    /// `isUnpriced` marks a `$0` plan row with tokens whose model has no rate,
+    /// so its usage carries no value.
     static func billableCostUSD(
         providerID: String,
         modelID: String,
@@ -277,16 +287,19 @@ enum OpenCodeZenCostEstimate {
         outputTokens: Int64,
         cacheReadTokens: Int64,
         cacheWriteTokens: Int64
-    ) -> (cost: Double, isEstimated: Bool) {
+    ) -> (cost: Double, isEstimated: Bool, isUnpriced: Bool) {
         if recordedCostUSD > 0 {
-            return (recordedCostUSD, false)
+            return (recordedCostUSD, false, false)
         }
         guard isPlanProvider(providerID) else {
-            return (0, false)
+            return (0, false, false)
         }
         let tokens = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
         guard tokens > 0 else {
-            return (0, false)
+            return (0, false, false)
+        }
+        guard rates(providerID: providerID, modelID: modelID) != nil else {
+            return (0, false, true)
         }
         let value = estimate(
             providerID: providerID,
@@ -297,9 +310,8 @@ enum OpenCodeZenCostEstimate {
             cacheWriteTokens: cacheWriteTokens
         )
         // Any token-derived value is an estimate (recorded cost was zero), so it
-        // must carry the `~` prefix. A free model with no rate entry estimates to
-        // 0 and stays unmarked.
-        return (value, value > 0)
+        // carries the `~` prefix.
+        return (value, value > 0, false)
     }
 
     /// Token-based USD value for a `providerID`/`modelID` from per-1M rates; `0` when unknown.

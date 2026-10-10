@@ -141,7 +141,7 @@ enum OpenCodeLocalStats {
         var totalTokens: Int64 { inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens }
 
         /// Recorded cost, or a token-based estimate for a `$0` plan row.
-        var billable: (cost: Double, isEstimated: Bool) {
+        var billable: (cost: Double, isEstimated: Bool, isUnpriced: Bool) {
             OpenCodeZenCostEstimate.billableCostUSD(
                 providerID: providerID,
                 modelID: modelID,
@@ -432,6 +432,9 @@ enum OpenCodeLocalStats {
             usage.costUSD += billable.cost
             if billable.isEstimated {
                 usage.isCostEstimated = true
+            }
+            if billable.isUnpriced {
+                usage.isCostUnpriced = true
             }
             byKey[key] = usage
         }

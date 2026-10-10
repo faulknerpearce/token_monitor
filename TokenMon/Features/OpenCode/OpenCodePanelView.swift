@@ -268,8 +268,11 @@ struct OpenCodeModelWeekRow: View {
     }
 
     private var costLabel: String {
+        if model.isCostUnpriced, model.costUSD == 0 {
+            return "No price"
+        }
         let formatted = Format.usdCurrency.string(from: NSNumber(value: model.costUSD)) ?? "$0"
-        if model.isCostEstimated {
+        if model.isCostEstimated || model.isCostUnpriced {
             return "~\(formatted)"
         }
         return formatted

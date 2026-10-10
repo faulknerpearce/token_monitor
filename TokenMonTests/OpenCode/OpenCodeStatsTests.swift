@@ -784,8 +784,8 @@ final class OpenCodeStatsTests: XCTestCase {
         )
     }
 
-    /// An unknown model with no base rate still stays unmarked at $0.
-    func testUnknownFreeModelStaysZero() {
+    /// A plan model with no published rate is flagged as unpriced at $0.
+    func testUnknownModelIsFlaggedUnpriced() {
         let billable = OpenCodeZenCostEstimate.billableCostUSD(
             providerID: "opencode",
             modelID: "totally-new-model-free",
@@ -797,6 +797,7 @@ final class OpenCodeStatsTests: XCTestCase {
         )
         XCTAssertEqual(billable.cost, 0, accuracy: 1e-9)
         XCTAssertFalse(billable.isEstimated)
+        XCTAssertTrue(billable.isUnpriced)
     }
 
     func testMonthlyTokensAndEstimatedValue() throws {
