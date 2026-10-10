@@ -142,14 +142,15 @@ final class MenuBarController: NSObject, ObservableObject {
 
         panel.setFrame(panelFrame(for: panelContentSize()), display: true)
         panel.makeKeyAndOrderFront(nil)
+        model.setMenuOpen(true)
     }
 
     private func hidePanel() {
         guard panel.isVisible else { return }
         panel.orderOut(nil)
-        // Detaching fires the panel content's `onDisappear` (menuIsOpen resets).
         panel.contentViewController = nil
         hosting = nil
+        model.setMenuOpen(false)
     }
 
     /// Fits the panel to the SwiftUI content via `panelFrame(for:)`, which clamps

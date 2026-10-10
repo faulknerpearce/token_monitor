@@ -136,6 +136,11 @@ final class AppModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var terminateObserver: NSObjectProtocol?
+    private var wakeGate: SystemWakeGate?
+
+    /// A menu open refreshes a provider only when its data is older than this,
+    /// so quickly reopening the menu does not refetch.
+    static let menuOpenFreshness: TimeInterval = 15
 
     /// True when the process is the XCTest host — tests must not start pollers,
     /// prompt for notifications, or touch live hosts / the real history store.
@@ -226,11 +231,62 @@ final class AppModel: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.updateChecker.settingChanged() }
             .store(in: &cancellables)
+        observePollingInputs()
         guard !Self.isRunningTests else { return }
         notifier.requestAuthorizationIfNeeded()
         providers.startAll()
         updateChecker.start()
         observeTermination()
+        wakeGate = SystemWakeGate(
+            onSleep: { [weak self] in self?.forEachPollingLoop { $0.pause() } },
+            onReady: { [weak self] in self?.forEachPollingLoop { $0.resume() } }
+        )
+    }
+
+    /// Marks every poller's menu-open state (switching it to the active
+    /// interval) and, on open, refreshes the providers the menu shows when
+    /// their data is older than `menuOpenFreshness`.
+    func setMenuOpen(_ isOpen: Bool) {
+        for (_, providerPoller) in providers.all {
+            providerPoller.menuIsOpen = isOpen
+        }
+        // The test host never fetches (see `isRunningTests`).
+        guard isOpen, !Self.isRunningTests else { return }
+        for (provider, providerPoller) in providers.all where settings.needsPolling(provider) {
+            let loop = providerPoller.pollingLoop
+            Task { await loop.refreshNow(ifOlderThan: Self.menuOpenFreshness) }
+        }
+    }
+
+    private func forEachPollingLoop(_ body: (PollingLoop) -> Void) {
+        for (_, providerPoller) in providers.all {
+            body(providerPoller.pollingLoop)
+        }
+    }
+
+    /// Re-arms the polling loops when a setting that feeds their interval or
+    /// "needed" check changes, and refreshes a provider at once when its menu
+    /// bar graph is switched on.
+    private func observePollingInputs() {
+        settings.objectWillChange
+            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.forEachPollingLoop { $0.wake() } }
+            .store(in: &cancellables)
+        let graphToggles: [(Published<Bool>.Publisher, any ProviderUsagePoller)] = [
+            (settings.$showGrokBarInMenuBar, poller),
+            (settings.$showOpenCodeBarInMenuBar, openCodePoller),
+            (settings.$showCursorBarInMenuBar, cursorPoller),
+            (settings.$showClaudeBarInMenuBar, claudePoller),
+            (settings.$showGrokbotBarInMenuBar, grokbotPoller)
+        ]
+        for (toggle, providerPoller) in graphToggles {
+            toggle
+                .dropFirst()
+                .removeDuplicates()
+                .filter { $0 }
+                .sink { _ in Task { await providerPoller.refreshNow() } }
+                .store(in: &cancellables)
+        }
     }
 
     /// Flush coalesced history writes on quit so the last samples are not lost.

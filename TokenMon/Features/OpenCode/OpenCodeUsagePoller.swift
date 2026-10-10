@@ -16,7 +16,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
     @Published private(set) var dataSourceLabel: String?
-    @Published var menuIsOpen = false
+    @Published var menuIsOpen = false {
+        didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
+    }
 
     private let settings: AppSettings
     private let auth: OpenCodeAuthSession
@@ -26,9 +28,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let logger = Logger(category: "OpenCode")
     private var cancellables = Set<AnyCancellable>()
 
-    private lazy var loop = PollingLoop(
-        interval: { [weak self] in self?.currentInterval() },
-        refresh: { [weak self] in await self?.refreshNow() }
+    private(set) lazy var pollingLoop = PollingLoop(
+        interval: { [weak self] in self?.pollInterval() },
+        refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
 
     init(
@@ -63,11 +65,11 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func start() {
-        loop.start()
+        pollingLoop.start()
     }
 
     func stop() {
-        loop.stop()
+        pollingLoop.stop()
     }
 
     func clearSnapshot() {
@@ -81,15 +83,23 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
         lastRefreshedAt = nil
     }
 
+    /// Fetches now when the provider is enabled and restarts the poll wait from here.
     func refreshNow() async {
-        guard settings.needsOpenCodePolling else { return }
-        guard !isRefreshing else { return }
+        await pollingLoop.refreshNow()
+    }
+
+    private func performRefresh() async -> PollOutcome {
+        guard settings.isProviderEnabled(.opencode) else { return .skipped }
+        guard !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
         // Prefer official console Go usage (matches opencode.ai bars).
         let generation = auth.sessionGeneration
         let cookieHeader = auth.cookieHeader()
+        // A failed console fetch backs the loop off even when the local
+        // estimate below succeeds.
+        var consoleOutcome = PollOutcome.success
         if let cookieHeader, !cookieHeader.isEmpty {
             do {
                 let (consoleSnap, orgID) = try await fetchConsole(cookieHeader, auth.workspaceID)
@@ -98,7 +108,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 if let local = localBundle?.0 {
                     snap = Self.mergeLocalModels(into: snap, local: local)
                 }
-                guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+                guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
                 // Persist the workspace id only for the live session, and only
                 // when it changed, so a late success cannot rewrite the previous
                 // account's id after sign-out cleared it.
@@ -119,22 +129,26 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 logger.info(
                     "OpenCode console refresh: monthly \(pct, format: .fixed(precision: 1))%"
                 )
-                return
+                return .success
+            } catch is CancellationError {
+                return .skipped
             } catch let error as ProviderError {
                 // A request that began under a previous credential state must
                 // not tear down the current session.
-                guard auth.isCurrent(generation) else { return }
+                guard auth.isCurrent(generation) else { return .skipped }
                 switch error.usageError {
                 case .unauthorized, .notSignedIn:
                     auth.markSessionInvalid(reason: error.localizedDescription)
                 default:
                     break
                 }
+                consoleOutcome = PollOutcome(error: error)
                 logger.error("OpenCode console fetch failed: \(error.localizedDescription, privacy: .public)")
             } catch {
                 // Same generation rule as the unauthorized path: a failure from
                 // the previous account must not continue into the local publish.
-                guard auth.sessionGeneration == generation else { return }
+                guard auth.sessionGeneration == generation else { return .skipped }
+                consoleOutcome = PollOutcome(error: error)
                 logger.error("OpenCode console fetch failed: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -145,7 +159,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             // Do not republish after a sign-out / account switch cleared the
             // snapshot while this poll was in flight (generation moved). A poll
             // that *started* signed-out keeps working: its generation is stable.
-            guard !Task.isCancelled, auth.sessionGeneration == generation else { return }
+            guard !Task.isCancelled, auth.sessionGeneration == generation else { return .skipped }
             if let hourly { dayHourlyUsage = hourly }
             guard let snap else {
                 // The hourly read may still have succeeded; only the snapshot is
@@ -153,7 +167,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 if snapshot == nil {
                     lastError = "Could not read local OpenCode usage."
                 }
-                return
+                return consoleOutcome
             }
             snapshot = snap
             let budget = await Self.buildDailyBudgetDays(for: snap)
@@ -172,19 +186,21 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             logger.info(
                 "OpenCode local refresh: monthly \(snap.primaryUsedPercent, format: .fixed(precision: 1))%"
             )
+            return consoleOutcome
         } catch {
             // Compare the generation only. A poll that started signed out is
             // not `isCurrent`, and it still needs to surface a local-read error.
-            guard auth.sessionGeneration == generation else { return }
+            guard auth.sessionGeneration == generation else { return .skipped }
             if snapshot == nil {
                 lastError = error.localizedDescription
             }
             logger.error("OpenCode local refresh failed: \(error.localizedDescription, privacy: .public)")
+            return consoleOutcome
         }
     }
 
-    private func currentInterval() -> TimeInterval {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    private func pollInterval() -> TimeInterval? {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsOpenCodePolling)
     }
 
     /// Monday-week bars `weekOffset` steps before the week of the last refresh.

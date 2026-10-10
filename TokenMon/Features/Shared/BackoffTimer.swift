@@ -3,9 +3,9 @@ import Foundation
 /// Exponential backoff for poller retries.
 ///
 /// Starts at 0 (no backoff). Each `recordFailure()` doubles the delay from
-/// `initial` up to `maximum`; `reset()` clears it after a success.
-@MainActor
-struct BackoffTimer {
+/// `initial` up to `maximum`; `reset()` clears it after a success. Used by
+/// `PollingLoop` to stretch the wait after consecutive failed refreshes.
+struct BackoffTimer: Sendable {
     private let initial: TimeInterval
     private let maximum: TimeInterval
     private(set) var current: TimeInterval = 0

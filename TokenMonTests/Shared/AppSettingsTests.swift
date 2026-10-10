@@ -249,4 +249,29 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         XCTAssertEqual(settings.visibleProductIDs, ["chat"])
     }
+
+    func testDisablingTheSelectedProviderFallsBackToOverview() {
+        let settings = makeSettings()
+        settings.selectedProvider = .cursor
+        settings.enabledProviderIDs.remove(.cursor)
+        XCTAssertEqual(settings.selectedProvider, .overview)
+        XCTAssertEqual(makeSettings().selectedProvider, .overview, "the fallback is persisted")
+    }
+
+    func testDisablingAnotherProviderKeepsTheSelection() {
+        let settings = makeSettings()
+        settings.selectedProvider = .cursor
+        settings.enabledProviderIDs.remove(.claude)
+        XCTAssertEqual(settings.selectedProvider, .cursor)
+    }
+
+    func testNeedsPollingMatchesTheProviderFlags() {
+        let settings = makeSettings()
+        settings.selectedProvider = .chatgpt
+        XCTAssertEqual(settings.needsPolling(.grok), settings.needsGrokPolling)
+        XCTAssertEqual(settings.needsPolling(.cursor), settings.needsCursorPolling)
+        XCTAssertTrue(settings.needsPolling(.chatgpt))
+        XCTAssertFalse(settings.needsPolling(.openrouter))
+        XCTAssertFalse(settings.needsPolling(.overview))
+    }
 }
