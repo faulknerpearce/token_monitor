@@ -10,8 +10,7 @@ enum DailyUsageBuilder {
 
     /// Caches the week/day formatter pair per calendar to avoid per-call construction.
     private static let formatterCacheLock = NSLock()
-    // swiftlint:disable:next modifier_order
-    private nonisolated(unsafe) static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
+    nonisolated(unsafe) private static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
 
     private static func makeDateFormatters(
         calendar: Calendar
