@@ -28,9 +28,9 @@ enum OpenCodeConsoleError: Error {
 
 /// Fetches OpenCode Go usage from the console API.
 ///
-/// The console moved off the legacy `_server` (`lite.subscription`) server
-/// function, which now answers every call with a `302` to `/console/login`.
-/// Usage is served by the console's own session instead:
+/// The console's `_server` (`lite.subscription`) server function answers every
+/// call with a `302` to `/console/login`, so usage is read through the
+/// console's own session:
 ///
 /// ```
 /// GET https://opencode.ai/console/api/go/status

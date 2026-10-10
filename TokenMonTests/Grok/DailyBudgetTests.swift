@@ -701,7 +701,7 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertTrue(caption.hasPrefix("Usage 7.1% over today's allowance"), "got: \(caption)")
     }
 
-    /// Regression (Grokbot, first day of a fresh period): the allowance is one
+    /// Grokbot, first day of a fresh period: the allowance is one
     /// whole day's share, so 7% used on day 1 of a weekly pool leaves ~7.3% — not
     /// the fractional-time value, and never a false over-pace.
     func testFirstDayRemainingIsWholeDayShare() throws {

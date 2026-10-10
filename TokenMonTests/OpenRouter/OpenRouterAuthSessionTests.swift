@@ -66,7 +66,7 @@ final class OpenRouterAuthSessionTests: XCTestCase {
     }
 
     /// A rejected key must not be considered current, so the poller stops probing
-    /// until a new key is saved (audit: OpenRouter invalidation contract).
+    /// until a new key is saved.
     func testRejectedKeyIsNotCurrentUntilReplaced() {
         let (auth, dir) = makeSession()
         defer { cleanup(dir) }
