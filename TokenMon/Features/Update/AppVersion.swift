@@ -3,8 +3,10 @@ import Foundation
 /// A dotted release version (`1.4.2`), compared numerically rather than as a
 /// string so `1.10.0` sorts above `1.9.0`.
 ///
-/// Parses GitHub-style tags (`v1.4.2`, `1.4`, `1.4.2-beta.1`); an unparseable
-/// tag yields `nil`.
+/// Parses GitHub-style tags (`v1.4.2`, `1.4`, `1.4.2-beta.1`), tags carrying
+/// semver build metadata (`1.8.0+5`, ignored for ordering), and tags prefixed
+/// with a release name (`TokenMon-1.8.0`, `TokenMon v1.8.0`); an unparseable tag
+/// yields `nil`.
 struct AppVersion: Comparable, CustomStringConvertible, Sendable {
     let components: [Int]
     /// Pre-release suffix after `-`, e.g. `beta.1`. Absent on final releases.
@@ -19,6 +21,8 @@ struct AppVersion: Comparable, CustomStringConvertible, Sendable {
 
     init?(_ raw: String) {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let plus = text.firstIndex(of: "+") { text = String(text[..<plus]) }
+        text = Self.droppingReleaseNamePrefix(text)
         if text.lowercased().hasPrefix("v") { text.removeFirst() }
         guard !text.isEmpty else { return nil }
 
@@ -31,6 +35,20 @@ struct AppVersion: Comparable, CustomStringConvertible, Sendable {
 
         components = numbers.compactMap { $0 }
         prerelease = (suffix?.isEmpty == false) ? suffix : nil
+    }
+
+    /// Drops a leading release name such as `TokenMon-` or `TokenMon ` when a
+    /// version (optionally `v`-prefixed) follows the separator.
+    private static func droppingReleaseNamePrefix(_ text: String) -> String {
+        guard let first = text.first, first.isLetter,
+              let separator = text.firstIndex(where: { $0 == "-" || $0 == "_" || $0 == " " })
+        else { return text }
+        let name = text[..<separator]
+        guard name.allSatisfy({ $0.isLetter || $0.isNumber }) else { return text }
+        let rest = text[text.index(after: separator)...].drop { $0 == " " }
+        let digits = (rest.first == "v" || rest.first == "V") ? rest.dropFirst() : rest
+        guard digits.first?.isNumber == true else { return text }
+        return String(rest)
     }
 
     /// The version of the running bundle, from `CFBundleShortVersionString`.
