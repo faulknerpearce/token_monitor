@@ -91,4 +91,20 @@ final class GrokPollerGatingTests: XCTestCase {
         XCTAssertNotNil(poller.snapshot, "stale data stays visible")
         XCTAssertEqual(poller.lastError, "Grok network error: offline")
     }
+
+    /// A manual refresh (e.g. right after signing in from Settings) loads data
+    /// for an enabled provider even when its tab is not selected.
+    func testManualRefreshFetchesWhenEnabledButNotShown() async {
+        let settings = AppSettings(defaults: defaults)
+        settings.selectedProvider = .cursor
+        settings.showGrokBarInMenuBar = false
+        var fetches = 0
+        let (poller, _) = makePoller(settings: settings) { _, _ in
+            fetches += 1
+            return WeeklyUsageSnapshot(usedPercent: 10, remainingPercent: 90)
+        }
+        await poller.refreshNow()
+        XCTAssertEqual(fetches, 1)
+        XCTAssertNotNil(poller.snapshot)
+    }
 }
