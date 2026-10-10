@@ -76,9 +76,54 @@ final class ReleaseFeedTests: XCTestCase {
         XCTAssertFalse(ReleaseFeed.isTrustedDownload(URL(string: "https://example.com/TokenMon.zip")!))
     }
 
-    func testShellQuoteEscapesEmbeddedQuotes() {
-        XCTAssertEqual(AppInstaller.shellQuote("/tmp/TokenMon.app"), "'/tmp/TokenMon.app'")
-        XCTAssertEqual(AppInstaller.shellQuote("/tmp/it's.app"), "'/tmp/it'\\''s.app'")
+    func testAssetDigestAndInstallerPackageAreRead() throws {
+        let hex = String(repeating: "ab", count: 32)
+        let release = try parse("""
+        {"tag_name":"2.0.0","assets":[
+          {"name":"TokenMon-2.0.0.zip","digest":"sha256:\(hex.uppercased())",
+           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
+          {"name":"TokenMon-2.0.0.pkg","digest":"sha256:\(hex)",
+           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"}
+        ]}
+        """)
+        XCTAssertEqual(release?.archive?.sha256, hex)
+        XCTAssertEqual(release?.installerPackage?.url.lastPathComponent, "TokenMon-2.0.0.pkg")
+    }
+
+    func testMalformedDigestIsDropped() {
+        XCTAssertNil(ReleaseFeed.sha256(fromDigest: nil))
+        XCTAssertNil(ReleaseFeed.sha256(fromDigest: "sha1:" + String(repeating: "a", count: 40)))
+        XCTAssertNil(ReleaseFeed.sha256(fromDigest: "sha256:" + String(repeating: "g", count: 64)))
+        XCTAssertNil(ReleaseFeed.sha256(fromDigest: "sha256:abc"))
+        XCTAssertEqual(ReleaseFeed.sha256(fromDigest: "SHA256:" + String(repeating: "A", count: 64)), String(repeating: "a", count: 64))
+    }
+
+    /// Only this repository's release downloads, plus the CDN hosts GitHub
+    /// redirects them to, are trusted.
+    func testTrustedDownloadIsLimitedToThisRepositorysReleases() {
+        let trusted = [
+            "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
+            "https://github.com/FaulknerPearce/Token_Monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
+            "https://objects.githubusercontent.com/github-production-release-asset/1/abc",
+            "https://release-assets.githubusercontent.com/github-production-release-asset/1/abc"
+        ]
+        let untrusted = [
+            "https://github.com/someone/else/releases/download/v2.0.0/TokenMon-2.0.0.zip",
+            "https://github.com/faulknerpearce/token_monitor/raw/master/TokenMon.zip",
+            "https://github.com/faulknerpearce/token_monitor/releases/download/v2/../../x/TokenMon.zip",
+            "https://user:pass@github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "https://github.com:8443/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "http://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "https://raw.githubusercontent.com/faulknerpearce/token_monitor/master/TokenMon.zip",
+            "https://evil.githubusercontent.com/TokenMon.zip"
+        ]
+        for raw in trusted {
+            XCTAssertTrue(ReleaseFeed.isTrustedDownload(URL(string: raw)!), raw)
+        }
+        for raw in untrusted {
+            XCTAssertFalse(ReleaseFeed.isTrustedDownload(URL(string: raw)!), raw)
+        }
+        XCTAssertFalse(ReleaseFeed.isRepositoryReleaseDownload(URL(string: trusted[2])!))
     }
 
     /// An unusable tag is an error, not a silent "no update" — the check should

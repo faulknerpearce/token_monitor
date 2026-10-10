@@ -42,6 +42,7 @@ final class UpdateCheckerTests: XCTestCase {
         session = URLSession(configuration: config)
         StubURLProtocol.handler = nil
         StubURLProtocol.requestCount = 0
+        openedURLs = []
     }
 
     override func tearDown() async throws {
@@ -49,13 +50,48 @@ final class UpdateCheckerTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    private func makeChecker(currentVersion: AppVersion? = AppVersion("1.5.0")) -> UpdateChecker {
+    private var openedURLs: [URL] = []
+
+    private func makeChecker(
+        currentVersion: AppVersion? = AppVersion("1.5.0"),
+        installedAppURL: URL = URL(fileURLWithPath: "/nonexistent/TokenMon.app")
+    ) -> UpdateChecker {
         UpdateChecker(
             settings: AppSettings(defaults: defaults),
             currentVersion: currentVersion,
-            session: session
+            session: session,
+            bundleIdentifier: "com.modelmonitor.app",
+            installedAppURL: installedAppURL,
+            openURL: { [weak self] in self?.openedURLs.append($0) }
         )
     }
+
+    /// An `.app` folder inside a temporary folder; read-only when `writable` is false.
+    private func makeInstalledApp(writable: Bool) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UpdateCheckerTests-\(UUID().uuidString)", isDirectory: true)
+        let app = folder.appendingPathComponent("TokenMon.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        if !writable {
+            try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+        }
+        addTeardownBlock {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        return app
+    }
+
+    private static let releaseWithAssets = """
+    {"tag_name":"v1.6.0","draft":false,"prerelease":false,
+     "html_url":"https://github.com/faulknerpearce/token_monitor/releases/tag/v1.6.0",
+     "assets":[
+       {"name":"TokenMon-1.6.0.zip",
+        "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.zip"},
+       {"name":"TokenMon-1.6.0.pkg",
+        "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.pkg"}
+     ]}
+    """
 
     private func respond(status: Int, body: String) {
         StubURLProtocol.handler = { request in
@@ -154,5 +190,27 @@ final class UpdateCheckerTests: XCTestCase {
         let checker = makeChecker()
         await checker.checkNow()
         XCTAssertEqual(StubURLProtocol.requestCount, 0)
+    }
+
+    /// A copy that cannot replace itself is offered the installer package.
+    func testNotWritableInstallOffersInstallerPackage() async throws {
+        respond(status: 200, body: Self.releaseWithAssets)
+        let checker = try makeChecker(installedAppURL: makeInstalledApp(writable: false))
+        await checker.checkNow()
+        await checker.installAvailableUpdate()
+        XCTAssertEqual(openedURLs.map(\.lastPathComponent), ["TokenMon-1.6.0.pkg"])
+        XCTAssertEqual(StubURLProtocol.requestCount, 1, "nothing is downloaded in-app")
+        XCTAssertFalse(checker.isInstalling)
+    }
+
+    /// Without the asset digest the zip cannot be verified, so it is not installed.
+    func testMissingDigestOpensReleasePageInsteadOfInstalling() async throws {
+        respond(status: 200, body: Self.releaseWithAssets)
+        let checker = try makeChecker(installedAppURL: makeInstalledApp(writable: true))
+        await checker.checkNow()
+        await checker.installAvailableUpdate()
+        XCTAssertEqual(openedURLs.map(\.lastPathComponent), ["v1.6.0"])
+        XCTAssertEqual(checker.statusMessage, "The release has no checksum to verify — opening the release page.")
+        XCTAssertEqual(StubURLProtocol.requestCount, 1, "the zip is never requested")
     }
 }

@@ -39,14 +39,27 @@ final class UpdateChecker: ObservableObject {
         refresh: { [weak self] in await self?.checkNow() }
     )
 
+    private let bundleIdentifier: String?
+    private let installedAppURL: URL
+    private let openURL: (URL) -> Void
+
+    /// - Parameters:
+    ///   - installedAppURL: The app bundle an update replaces.
+    ///   - openURL: Opens release pages and installer downloads.
     init(
         settings: AppSettings,
         currentVersion: AppVersion? = AppVersion.current(),
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        installedAppURL: URL = Bundle.main.bundleURL,
+        openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         self.settings = settings
         self.currentVersion = currentVersion
         self.session = session
+        self.bundleIdentifier = bundleIdentifier
+        self.installedAppURL = installedAppURL
+        self.openURL = openURL
     }
 
     func start() {
@@ -81,7 +94,7 @@ final class UpdateChecker: ObservableObject {
         await performCheck(userInitiated: true)
     }
 
-    /// Installs the published zip, or opens the release page when there is no zip.
+    /// Installs the available update, or checks for one when none is pending.
     func performPrimaryAction() async {
         if availableRelease != nil {
             await installAvailableUpdate()
@@ -90,31 +103,66 @@ final class UpdateChecker: ObservableObject {
         }
     }
 
-    /// Installs the pending zip, or opens the release page when there is none.
+    /// Installs the pending zip after verifying it. Falls back to the
+    /// installer package when this copy cannot replace itself, and to the
+    /// release page when the zip is missing, unverifiable, or fails to install.
     func installAvailableUpdate() async {
         guard let release = availableRelease, !isInstalling else { return }
-        guard let archiveURL = release.archiveURL else {
-            statusMessage = "No installer was published — opening the release page."
-            NSWorkspace.shared.open(release.pageURL)
+        guard let archive = release.archive else {
+            openReleasePage(release, message: "No installer was published — opening the release page.")
             return
         }
-        guard AppInstaller.canReplaceRunningApp() else {
-            statusMessage = AppInstaller.isRunningTranslocated
-                ? "Move TokenMon into Applications, then update."
-                : AppInstaller.Failure.notWritable.localizedDescription
-            NSWorkspace.shared.open(release.pageURL)
+        guard AppInstaller.canReplaceRunningApp(bundleURL: installedAppURL) else {
+            offerManualInstall(release)
+            return
+        }
+        guard let sha256 = archive.sha256, let currentVersion, let bundleIdentifier else {
+            openReleasePage(release, message: "The release has no checksum to verify — opening the release page.")
             return
         }
         isInstalling = true
         defer { isInstalling = false }
+        let expectation = AppInstaller.Expectation(
+            sha256: sha256,
+            bundleIdentifier: bundleIdentifier,
+            currentVersion: currentVersion,
+            teamIdentifier: AppInstaller.runningTeamIdentifier()
+        )
         do {
-            let app = try await AppInstaller.downloadApp(from: archiveURL, session: downloadSession)
-            try AppInstaller.replaceAndRelaunch(newApp: app)
+            let app = try await AppInstaller.installUpdate(
+                from: archive.url,
+                expecting: expectation,
+                replacing: installedAppURL,
+                session: downloadSession
+            )
+            do {
+                try AppInstaller.relaunch(app)
+            } catch {
+                statusMessage = "TokenMon \(release.version.description) is installed. Quit and reopen TokenMon to finish."
+            }
         } catch {
-            statusMessage = error.localizedDescription
             logger.error("Update install failed: \(error.localizedDescription, privacy: .public)")
-            NSWorkspace.shared.open(release.pageURL)
+            openReleasePage(release, message: error.localizedDescription)
         }
+    }
+
+    /// This copy cannot replace itself: translocated copies are asked to move
+    /// into Applications; otherwise the installer package is downloaded when
+    /// the release has one.
+    private func offerManualInstall(_ release: AvailableRelease) {
+        if AppInstaller.isTranslocated(installedAppURL) {
+            openReleasePage(release, message: "Move TokenMon into Applications, then update.")
+        } else if let package = release.installerPackage {
+            statusMessage = "TokenMon cannot replace itself here. Downloading the installer package — open it to update."
+            openURL(package.url)
+        } else {
+            openReleasePage(release, message: AppInstaller.Failure.notWritable.localizedDescription)
+        }
+    }
+
+    private func openReleasePage(_ release: AvailableRelease, message: String) {
+        statusMessage = message
+        openURL(release.pageURL)
     }
 
     private lazy var downloadSession: URLSession = {
