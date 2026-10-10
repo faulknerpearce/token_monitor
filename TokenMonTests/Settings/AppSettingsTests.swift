@@ -65,6 +65,15 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(makeSettings().showSelectedProviderInMenuBar)
     }
 
+    /// The usage alert starts off; once the user turns it on, it stays on.
+    func testThresholdAlertDefaultsOffAndPersists() {
+        XCTAssertFalse(makeSettings().thresholdEnabled)
+
+        makeSettings().thresholdEnabled = true
+
+        XCTAssertTrue(makeSettings().thresholdEnabled)
+    }
+
     func testNeedsGrokPollingFollowsBarAndProvider() {
         let settings = makeSettings()
         settings.selectedProvider = .cursor

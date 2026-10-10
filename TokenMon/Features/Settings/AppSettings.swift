@@ -255,7 +255,7 @@ final class AppSettings: ObservableObject {
         // Clamps on load, since `didSet` runs only after init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
-        thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? true
+        thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? false
         thresholdPercent = Self.clampThreshold(defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80)
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
         let savedOrder = (defaults.stringArray(forKey: Keys.providerOrder) ?? [])
