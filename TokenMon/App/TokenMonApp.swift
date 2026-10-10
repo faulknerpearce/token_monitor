@@ -314,24 +314,42 @@ final class AppModel: ObservableObject {
                 }
                 .store(in: &cancellables)
         }
-        watch(claudePoller.$snapshot, .claude, account: { [claudeAuth] in claudeAuth.accountEmail }) {
-            ($0.headlineUsedPercent, $0.resetsAt)
-        }
-        watch(chatGPTPoller.$snapshot, .chatgpt, account: { [chatGPTAuth] in chatGPTAuth.accountEmail }) {
-            ($0.headlineUsedPercent, $0.resetsAt)
-        }
-        watch(cursorPoller.$snapshot, .cursor, account: { [cursorAuth] in cursorAuth.accountEmail }) {
-            ($0.usedPercent, $0.resetsAt)
-        }
-        watch(grokbotPoller.$snapshot, .grokbot, account: { [cursorAuth] in cursorAuth.accountEmail }) {
-            ($0.usedPercent, $0.resetsAt)
-        }
-        watch(openCodePoller.$snapshot, .opencode, account: { [openCodeAuth] in openCodeAuth.accountEmail }) {
-            ($0.primaryUsedPercent, nil)
-        }
-        watch(openRouterPoller.$snapshot, .openrouter, account: { nil }) {
-            ($0.usedPercent, nil)
-        }
+        watch(
+            claudePoller.$snapshot,
+            .claude,
+            account: { [claudeAuth] in claudeAuth.accountEmail },
+            reading: { ($0.headlineUsedPercent, $0.resetsAt) }
+        )
+        watch(
+            chatGPTPoller.$snapshot,
+            .chatgpt,
+            account: { [chatGPTAuth] in chatGPTAuth.accountEmail },
+            reading: { ($0.headlineUsedPercent, $0.resetsAt) }
+        )
+        watch(
+            cursorPoller.$snapshot,
+            .cursor,
+            account: { [cursorAuth] in cursorAuth.accountEmail },
+            reading: { ($0.usedPercent, $0.resetsAt) }
+        )
+        watch(
+            grokbotPoller.$snapshot,
+            .grokbot,
+            account: { [cursorAuth] in cursorAuth.accountEmail },
+            reading: { ($0.usedPercent, $0.resetsAt) }
+        )
+        watch(
+            openCodePoller.$snapshot,
+            .opencode,
+            account: { [openCodeAuth] in openCodeAuth.accountEmail },
+            reading: { ($0.primaryUsedPercent, nil) }
+        )
+        watch(
+            openRouterPoller.$snapshot,
+            .openrouter,
+            account: { nil },
+            reading: { ($0.usedPercent, nil) }
+        )
     }
 
     /// Flushes coalesced history writes on quit so the last samples are saved.
