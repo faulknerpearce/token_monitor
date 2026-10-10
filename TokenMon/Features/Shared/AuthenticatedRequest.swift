@@ -3,7 +3,7 @@ import Foundation
 /// Shared helpers for building and executing cookie/bearer-authenticated requests.
 ///
 /// Common contract: Cookie or Authorization header, JSON Accept, optional
-/// Referer, 401/403 → `.unauthorized`, other non-2xx → `.badResponse`, transport
+/// Referer, 401/403 → `.unauthorized`, 429 → `.rateLimited`, other non-2xx → `.badResponse`, transport
 /// errors → `.network`.
 enum AuthenticatedRequest {
     /// Applies the standard auth/content headers to a request.
@@ -33,10 +33,30 @@ enum AuthenticatedRequest {
         if response.statusCode == 401 || response.statusCode == 403 {
             return .unauthorized
         }
+        if response.statusCode == 429 {
+            return .rateLimited(retryAfter: retryAfter(from: response))
+        }
         guard (200..<300).contains(response.statusCode) else {
             return .badResponse("HTTP \(response.statusCode)")
         }
         return nil
+    }
+
+    /// `Retry-After` as seconds from now: either delta-seconds or an HTTP date.
+    /// Nil when the header is missing or unparseable.
+    static func retryAfter(from response: HTTPURLResponse, now: Date = Date()) -> TimeInterval? {
+        guard let raw = response.value(forHTTPHeaderField: "Retry-After")?
+            .trimmingCharacters(in: .whitespaces), !raw.isEmpty
+        else { return nil }
+        if let seconds = TimeInterval(raw) {
+            return max(0, seconds)
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: raw) else { return nil }
+        return max(0, date.timeIntervalSince(now))
     }
 
     /// Executes a request with the injected session, mapping errors onto the

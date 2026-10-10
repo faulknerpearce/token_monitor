@@ -9,6 +9,8 @@ enum UsageError: LocalizedError, Equatable {
     case unauthorized
     case network(String)
     case badResponse(String)
+    /// HTTP 429. `retryAfter` is the server's `Retry-After` delay in seconds, when sent.
+    case rateLimited(retryAfter: TimeInterval?)
 
     var errorDescription: String? {
         switch self {
@@ -20,7 +22,17 @@ enum UsageError: LocalizedError, Equatable {
             return "Network error: \(message)"
         case let .badResponse(message):
             return "Response error: \(message)"
+        case .rateLimited:
+            return "Rate limited. Retrying later."
         }
+    }
+}
+
+extension UsageError {
+    /// Server-requested wait before the next attempt, when this is a rate limit.
+    var retryAfter: TimeInterval? {
+        guard case let .rateLimited(retryAfter) = self else { return nil }
+        return retryAfter
     }
 }
 
