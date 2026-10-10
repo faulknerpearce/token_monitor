@@ -115,4 +115,21 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertTrue(store.recent.isEmpty)
         XCTAssertTrue(store.allSnapshots().isEmpty)
     }
+
+    // MARK: - Accounts
+
+    /// Another account's same-day poll gets its own row instead of overwriting
+    /// the first account's, and `recent` shows only the active account.
+    func testRowsAreKeyedByAccount() {
+        let start = Calendar.current.startOfDay(for: Date())
+        store.append(WeeklyUsageSnapshot(fetchedAt: start.addingTimeInterval(3600), usedPercent: 40, accountEmail: "a@example.com"))
+        store.append(WeeklyUsageSnapshot(fetchedAt: start.addingTimeInterval(7200), usedPercent: 5, accountEmail: "b@example.com"))
+
+        XCTAssertEqual(store.allSnapshots().count, 2)
+        XCTAssertEqual(store.activeAccount, "b@example.com")
+        XCTAssertEqual(store.recent.map(\.usedPercent), [5])
+
+        store.setActiveAccount("a@example.com")
+        XCTAssertEqual(store.recent.map(\.usedPercent), [40])
+    }
 }

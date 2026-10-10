@@ -53,6 +53,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchUsage = fetchUsage ?? { cookieHeader, accountEmail in
             try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
+        history.setActiveAccount(auth.accountEmail)
         observeSleep()
         // Signing out or switching accounts drops the snapshot and the
         // account-scoped hourly deltas immediately. An expired session keeps
