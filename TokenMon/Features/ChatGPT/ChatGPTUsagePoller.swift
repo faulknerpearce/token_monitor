@@ -15,6 +15,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     private let auth: ChatGPTAuthSession
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchUsage: (String) async throws -> ChatGPTUsageClient.Fetch
+    /// Access token reused across polls by the live client.
+    private let tokenCache: ChatGPTAccessTokenCache
     /// Wait before the one retry that precedes tearing the stored session down.
     private let unauthorizedRetryDelayNanoseconds: UInt64
     private let logger = Logger(category: "ChatGPT")
@@ -33,8 +35,10 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     ) {
         self.settings = settings
         self.auth = auth
+        let tokenCache = ChatGPTAccessTokenCache()
+        self.tokenCache = tokenCache
         self.fetchUsage = fetchUsage ?? { cookieHeader in
-            try await ChatGPTUsageClient(cookieHeader: cookieHeader).fetchUsage()
+            try await ChatGPTUsageClient(cookieHeader: cookieHeader, tokenCache: tokenCache).fetchUsage()
         }
         self.unauthorizedRetryDelayNanoseconds = unauthorizedRetryDelayNanoseconds
         auth.$isSignedIn
@@ -55,6 +59,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     func clearSnapshot() {
+        tokenCache.clear()
         snapshot = nil
         lastError = nil
         lastRefreshedAt = nil
@@ -107,6 +112,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
             try? await Task.sleep(nanoseconds: unauthorizedRetryDelayNanoseconds)
         }
         guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+        tokenCache.clear()
         if let fetch = try? await fetchUsage(cookieHeader), auth.isCurrent(generation) {
             publish(fetch)
             return

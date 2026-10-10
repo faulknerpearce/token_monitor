@@ -15,6 +15,7 @@
 		0A05E33E0D64AE786F3D5B2A /* SignInBrowserNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3D887594639B4F4DC1100B /* SignInBrowserNavigation.swift */; };
 		0BB018BAFAAC2ED403FC8B46 /* UsageErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45F0294D7F6833156223A81 /* UsageErrorTests.swift */; };
 		0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF58255DAC5BC7E940010E74 /* JSONTests.swift */; };
+		0DDE379B96487D22147F0C7D /* ChatGPTAccessTokenCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C600412C266CA8599522D27 /* ChatGPTAccessTokenCacheTests.swift */; };
 		0EF555B6CAAA225A6003760A /* CursorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF1A4C740FAB8D1701D593C /* CursorPanelView.swift */; };
 		123B5EDA89E592AC5FB1BB5C /* Percent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87147049DB3C7B775DB7AFF8 /* Percent.swift */; };
 		124129C65D6BF80A155888F8 /* OpenCodeMonthBudgetWeekTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13329ABE851F55C3E79CD56A /* OpenCodeMonthBudgetWeekTests.swift */; };
@@ -180,6 +181,7 @@
 		06706EABCCEE8BFBB27E4D34 /* ClaudeAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAuthSession.swift; sourceTree = "<group>"; };
 		08662DA61F7BDFBFB4B43515 /* OpenCodeAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeAuthSession.swift; sourceTree = "<group>"; };
 		099FD1BC2A4197A918E08DAC /* PanelTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelTypography.swift; sourceTree = "<group>"; };
+		0C600412C266CA8599522D27 /* ChatGPTAccessTokenCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAccessTokenCacheTests.swift; sourceTree = "<group>"; };
 		0D256F75FC792D8E73069426 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		0DB82058780239EE6F551759 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0DEFE8C9AC68FEC972D5F170 /* OpenRouterUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsageClientTests.swift; sourceTree = "<group>"; };
@@ -677,6 +679,7 @@
 		D9BC8B5C6AE4C1837F2E7C9E /* ChatGPT */ = {
 			isa = PBXGroup;
 			children = (
+				0C600412C266CA8599522D27 /* ChatGPTAccessTokenCacheTests.swift */,
 				452B08F89E54262C8C8C4BD9 /* ChatGPTUsageClientTests.swift */,
 			);
 			path = ChatGPT;
@@ -850,6 +853,7 @@
 				15F553874A8EE19A5C537A8D /* AuthenticatedRequestTests.swift in Sources */,
 				1542A10594C8C93D533C97CE /* BackoffTimerTests.swift in Sources */,
 				2F6B2B0C96F59867B928808B /* BillingPeriodWindowTests.swift in Sources */,
+				0DDE379B96487D22147F0C7D /* ChatGPTAccessTokenCacheTests.swift in Sources */,
 				FE68AB65CCB153879BB99EF9 /* ChatGPTUsageClientTests.swift in Sources */,
 				AEBCDAB3A1B0E33D416D3668 /* ClaudeUsageClientTests.swift in Sources */,
 				36D3EEAB4EBE83485D790F09 /* ClaudeUsagePollerTests.swift in Sources */,
