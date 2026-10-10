@@ -166,8 +166,8 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 
 ## Privacy
 
-- **Credentials** (session cookies, OpenRouter API key) are stored in the **macOS login Keychain** (service `com.modelmonitor.app.credentials`, this device only, never synced). The account email and OpenCode workspace id stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. Credentials saved by older versions in that folder are moved into the Keychain on first launch.
-- **Keychain prompts after updates.** Release builds are ad-hoc signed, so after each update macOS asks once whether the new TokenMon may read its Keychain items. Choose **Always Allow** to keep it from asking again until the next update.
+- **Credentials** (session cookies, OpenRouter API key) are stored in the **macOS login Keychain** (one item: service `com.modelmonitor.app.credentials`, account `vault`; this device only, never synced). The account email and OpenCode workspace id stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. Credentials saved by older versions in that folder are moved into the Keychain on first launch.
+- **Keychain prompts after updates.** Release builds are ad-hoc signed, so after each update macOS asks once whether the new TokenMon may read its Keychain item. Choose **Always Allow** to keep it from asking again until the next update.
 - **Network access** is limited to:
   - the connected providers' own hosts, for usage and sign-in: chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com / x.ai (plus the identity pages a provider's sign-in redirects to);
   - GitHub, for update checks and downloads: `api.github.com`, `github.com`, and its release-asset hosts `objects.githubusercontent.com` / `release-assets.githubusercontent.com`. Turn off automatic checks in Settings to stop these.

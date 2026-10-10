@@ -115,93 +115,191 @@ struct SecItemKeychainBackend: KeychainBackend {
     }
 }
 
-/// Credentials stored as one Keychain item per key under a stable service name.
+/// Every provider secret in a single Keychain item, stored as a JSON object
+/// keyed by account (`<prefix><key>`, e.g. `chatgpt_auth_session`).
 ///
-/// Values are cached in memory after the first read, so polling does not hit
-/// the Keychain (or re-trigger an access prompt) every tick. A read the user
-/// refuses is remembered as missing for the rest of the process.
-final class KeychainCredentialStore: CredentialStore {
-    /// Shared Keychain service for every provider's items.
+/// An ad-hoc-signed build is identified by its code hash, so the Keychain asks
+/// each new build for access to every item it reads. One item means one prompt
+/// per build instead of one per provider.
+///
+/// Secrets saved as separate items (one per account, same service) are copied
+/// in the first time their account is read, and the separate item is deleted
+/// when the Keychain allows it. Each account is checked once; the checked list
+/// is stored in the item, so a signed-out account is not restored from an old
+/// separate item.
+///
+/// The item is loaded on first use and cached. When the read fails for any
+/// reason other than "not found" (for example the user denied access), the
+/// vault reports every account as missing and refuses writes for the rest of
+/// the process, so it never overwrites secrets it could not read.
+final class KeychainVault {
+    static let shared = KeychainVault()
+
+    /// Keychain service of the vault item and of the separate items it replaces.
     static let service = "com.modelmonitor.app.credentials"
+    /// Account of the vault item.
+    static let vaultAccount = "vault"
+
+    private struct Payload: Codable, Equatable {
+        var entries: [String: String] = [:]
+        var checkedSeparateItems: Set<String> = []
+    }
+
+    private enum State {
+        case unloaded
+        case loaded(Payload)
+        case unavailable
+    }
 
     private let backend: any KeychainBackend
     private let service: String
-    private let accountPrefix: String
     private let lock = NSLock()
-    private var cache: [String: String?] = [:]
+    private var state = State.unloaded
     private let logger = Logger(category: "Keychain")
 
-    /// - Parameters:
-    ///   - accountPrefix: Per-provider prefix; the item account is `prefix + key`
-    ///     (e.g. `chatgpt_auth_session`), matching the legacy file name.
-    init(
-        accountPrefix: String,
-        service: String = KeychainCredentialStore.service,
-        backend: any KeychainBackend = SecItemKeychainBackend()
-    ) {
-        self.accountPrefix = accountPrefix
+    init(service: String = KeychainVault.service, backend: any KeychainBackend = SecItemKeychainBackend()) {
         self.service = service
         self.backend = backend
     }
 
-    func value(forKey key: String) -> String? {
+    func value(forAccount account: String) -> String? {
         lock.lock()
         defer { lock.unlock() }
-        if let cached = cache[key] { return cached }
-        let value = readItem(forKey: key)
-        cache[key] = value
+        guard case let .loaded(payload) = loadedState() else { return nil }
+        if let value = payload.entries[account] { return value }
+        guard !payload.checkedSeparateItems.contains(account) else { return nil }
+        return adoptSeparateItem(account: account, into: payload)
+    }
+
+    /// Stores `value` and verifies it by reading the item back.
+    @discardableResult
+    func set(_ value: String, forAccount account: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard case var .loaded(payload) = loadedState() else { return false }
+        payload.entries[account] = value
+        payload.checkedSeparateItems.insert(account)
+        return write(payload)
+    }
+
+    func remove(forAccount account: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard case var .loaded(payload) = loadedState() else { return }
+        let hadEntry = payload.entries.removeValue(forKey: account) != nil
+        let newlyChecked = payload.checkedSeparateItems.insert(account).inserted
+        deleteSeparateItem(account: account)
+        guard hadEntry || newlyChecked else { return }
+        write(payload)
+    }
+
+    // MARK: - Private (call with `lock` held)
+
+    private func loadedState() -> State {
+        if case .unloaded = state {
+            state = readVault()
+        }
+        return state
+    }
+
+    private func readVault() -> State {
+        let (status, data) = backend.read(service: service, account: Self.vaultAccount)
+        switch status {
+        case errSecSuccess:
+            guard let data, let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
+                logger.error("Keychain vault is unreadable; credentials stay unavailable")
+                return .unavailable
+            }
+            return .loaded(payload)
+        case errSecItemNotFound:
+            return .loaded(Payload())
+        default:
+            logger.error("Keychain vault read failed: \(status, privacy: .public)")
+            return .unavailable
+        }
+    }
+
+    /// Copies a separately stored secret into the vault and returns it.
+    private func adoptSeparateItem(account: String, into payload: Payload) -> String? {
+        var payload = payload
+        let (status, data) = backend.read(service: service, account: account)
+        let value: String?
+        switch status {
+        case errSecSuccess:
+            value = data.flatMap { String(data: $0, encoding: .utf8) }
+        case errSecItemNotFound:
+            value = nil
+        default:
+            // Denied or failed: the account reads as signed out and is not asked for again.
+            logger.error("Keychain read failed for \(account, privacy: .public): \(status, privacy: .public)")
+            value = nil
+        }
+        if let value {
+            payload.entries[account] = value
+        }
+        payload.checkedSeparateItems.insert(account)
+        if write(payload), value != nil {
+            deleteSeparateItem(account: account)
+            logger.info("Moved \(account, privacy: .public) into the Keychain vault")
+        }
         return value
     }
 
-    /// Writes the item and reads it back; the value is cached only when the
+    private func deleteSeparateItem(account: String) {
+        let status = backend.delete(service: service, account: account)
+        if status != errSecSuccess, status != errSecItemNotFound {
+            logger.info("Separate Keychain item \(account, privacy: .public) left in place: \(status, privacy: .public)")
+        }
+    }
+
+    /// Writes the vault, reads it back, and updates the cache only when the
     /// read-back matches.
     @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        let account = accountPrefix + key
-        let data = Data(value.utf8)
-        var status = backend.update(service: service, account: account, data: data)
+    private func write(_ payload: Payload) -> Bool {
+        guard let data = try? JSONEncoder().encode(payload) else { return false }
+        var status = backend.update(service: service, account: Self.vaultAccount, data: data)
         if status == errSecItemNotFound {
-            status = backend.add(service: service, account: account, data: data)
+            status = backend.add(service: service, account: Self.vaultAccount, data: data)
         }
         guard status == errSecSuccess else {
-            logger.error("Keychain write failed for \(account, privacy: .public): \(status, privacy: .public)")
-            cache[key] = nil
+            logger.error("Keychain vault write failed: \(status, privacy: .public)")
             return false
         }
-        guard readItem(forKey: key) == value else {
-            logger.error("Keychain read-back mismatch for \(account, privacy: .public)")
-            cache[key] = nil
+        let (readStatus, readBack) = backend.read(service: service, account: Self.vaultAccount)
+        guard readStatus == errSecSuccess,
+              let readBack,
+              (try? JSONDecoder().decode(Payload.self, from: readBack)) == payload else {
+            logger.error("Keychain vault read-back mismatch")
             return false
         }
-        cache[key] = .some(value)
+        state = .loaded(payload)
         return true
+    }
+}
+
+/// One provider's view of the `KeychainVault`: key `k` is account `accountPrefix + k`.
+final class KeychainCredentialStore: CredentialStore {
+    private let vault: KeychainVault
+    private let accountPrefix: String
+
+    /// - Parameter accountPrefix: Per-provider prefix, matching the provider's
+    ///   Application Support file prefix (e.g. `chatgpt_auth_`).
+    init(accountPrefix: String, vault: KeychainVault = .shared) {
+        self.accountPrefix = accountPrefix
+        self.vault = vault
+    }
+
+    func value(forKey key: String) -> String? {
+        vault.value(forAccount: accountPrefix + key)
+    }
+
+    @discardableResult
+    func set(_ value: String, forKey key: String) -> Bool {
+        vault.set(value, forAccount: accountPrefix + key)
     }
 
     func remove(forKey key: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        let account = accountPrefix + key
-        let status = backend.delete(service: service, account: account)
-        if status != errSecSuccess, status != errSecItemNotFound {
-            logger.error("Keychain delete failed for \(account, privacy: .public): \(status, privacy: .public)")
-        }
-        cache[key] = .some(nil)
-    }
-
-    private func readItem(forKey key: String) -> String? {
-        let account = accountPrefix + key
-        let (status, data) = backend.read(service: service, account: account)
-        switch status {
-        case errSecSuccess:
-            return data.flatMap { String(data: $0, encoding: .utf8) }
-        case errSecItemNotFound:
-            return nil
-        default:
-            logger.error("Keychain read failed for \(account, privacy: .public): \(status, privacy: .public)")
-            return nil
-        }
+        vault.remove(forAccount: accountPrefix + key)
     }
 }
 

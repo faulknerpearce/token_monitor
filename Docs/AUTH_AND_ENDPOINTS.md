@@ -61,11 +61,11 @@ Every poll captures the session's `sessionGeneration` before its request and che
 
 Secrets live in the login Keychain; identifiers that cannot authenticate stay in files.
 
-- **Keychain** (`KeychainCredentialStore`): one generic-password item per secret under the service `com.modelmonitor.app.credentials`, account `<prefix><key>` (for example `chatgpt_auth_session`, `openrouter_auth_key`), accessible after first unlock, this device only, never synced. Secrets are each cookie provider's `session` header and OpenRouter's `key`. Values are cached in memory after the first read, so polling does not touch the Keychain every tick, and a read the user refuses is remembered as missing for the rest of the process.
+- **Keychain** (`KeychainVault`, viewed per provider through `KeychainCredentialStore`): one generic-password item, service `com.modelmonitor.app.credentials`, account `vault`, holding a JSON object keyed by `<prefix><key>` (for example `chatgpt_auth_session`, `openrouter_auth_key`); accessible after first unlock, this device only, never synced. Secrets are each cookie provider's `session` header and OpenRouter's `key`. A single item means a new build triggers one access prompt, not one per provider. The vault is read once and cached, so polling does not touch the Keychain every tick. If the user refuses the read, every secret reads as missing and the vault is never written for the rest of the process. Secrets stored as separate per-account items under the same service are copied into the vault the first time their account is read; the separate item is deleted when the Keychain allows it, and each account is checked only once.
 - **Files** (`~/Library/Application Support/TokenMon/`, folder `0700`, files `0600`): the account email and identity, and OpenCode's workspace id, as `<prefix><key>.dat`.
 - **Migration** (`SecretRoutingCredentialStore`): a secret still held in a legacy `.dat` file is copied into the Keychain, read back to verify it, and only then deleted from disk. If the Keychain write fails, the file stays authoritative, so a Keychain problem never signs the user out.
 
-Release builds are ad-hoc signed, so macOS ties Keychain access to the exact binary. After each update macOS asks once whether the new build may read the TokenMon items; choosing **Always Allow** stops the prompt until the next update.
+Release builds are ad-hoc signed, so macOS ties Keychain access to the exact binary. After each update macOS asks once whether the new build may read the TokenMon item; choosing **Always Allow** stops the prompt until the next update.
 
 The XCTest host uses `InMemoryCredentialStore` and never reads, migrates, or writes real credentials.
 
@@ -249,7 +249,7 @@ The access token is cached in memory (`ChatGPTAccessTokenCache`) until five minu
 
 ## OpenRouter
 
-No browser sign-in: the user pastes an API key (`sk-or-v1-…`) in Settings. It is stored in the Keychain as `openrouter_auth_key`.
+No browser sign-in: the user pastes an API key (`sk-or-v1-…`) in Settings. It is stored in the Keychain vault as `openrouter_auth_key`.
 
 | Method | URL | Notes |
 |--------|-----|-------|

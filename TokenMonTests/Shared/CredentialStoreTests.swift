@@ -146,12 +146,13 @@ final class CredentialStoreTests: XCTestCase {
         var items: [String: Data] = [:]
         var reads = 0
         var addStatus: OSStatus = errSecSuccess
-        var readStatus: OSStatus?
+        var deleteStatus: OSStatus?
+        var refusedAccounts: Set<String> = []
         var corruptsWrites = false
 
         func read(service: String, account: String) -> (status: OSStatus, data: Data?) {
             reads += 1
-            if let readStatus { return (readStatus, nil) }
+            if refusedAccounts.contains(account) { return (errSecAuthFailed, nil) }
             guard let data = items["\(service)/\(account)"] else { return (errSecItemNotFound, nil) }
             return (errSecSuccess, data)
         }
@@ -169,53 +170,111 @@ final class CredentialStoreTests: XCTestCase {
         }
 
         func delete(service: String, account: String) -> OSStatus {
-            items.removeValue(forKey: "\(service)/\(account)") == nil ? errSecItemNotFound : errSecSuccess
+            if let deleteStatus { return deleteStatus }
+            return items.removeValue(forKey: "\(service)/\(account)") == nil ? errSecItemNotFound : errSecSuccess
         }
     }
 
-    func testKeychainStoreUsesOneItemPerKeyUnderStableService() {
-        let keychain = FakeKeychain()
-        let store = KeychainCredentialStore(accountPrefix: "chatgpt_auth_", backend: keychain)
+    private let vaultKey = "com.modelmonitor.app.credentials/vault"
 
-        XCTAssertTrue(store.set("sid=abc", forKey: "session"))
-        XCTAssertTrue(store.set("sid=def", forKey: "session"))
-
-        XCTAssertEqual(
-            Set(keychain.items.keys),
-            ["com.modelmonitor.app.credentials/chatgpt_auth_session"]
-        )
-        XCTAssertEqual(store.value(forKey: "session"), "sid=def")
-        store.remove(forKey: "session")
-        XCTAssertNil(store.value(forKey: "session"))
-        XCTAssertTrue(keychain.items.isEmpty)
+    private func makeStore(_ prefix: String, _ keychain: FakeKeychain) -> KeychainCredentialStore {
+        KeychainCredentialStore(accountPrefix: prefix, vault: KeychainVault(backend: keychain))
     }
 
-    /// Reads are cached, so polling does not query the Keychain every tick.
-    func testKeychainStoreCachesReads() {
+    /// Every provider's secret lives in the one vault item.
+    func testProvidersShareOneVaultItem() {
+        let keychain = FakeKeychain()
+        let vault = KeychainVault(backend: keychain)
+        let chatGPT = KeychainCredentialStore(accountPrefix: "chatgpt_auth_", vault: vault)
+        let openRouter = KeychainCredentialStore(accountPrefix: "openrouter_auth_", vault: vault)
+
+        XCTAssertTrue(chatGPT.set("sid=abc", forKey: "session"))
+        XCTAssertTrue(chatGPT.set("sid=def", forKey: "session"))
+        XCTAssertTrue(openRouter.set("sk-or-v1-x", forKey: "key"))
+
+        XCTAssertEqual(Set(keychain.items.keys), [vaultKey])
+        XCTAssertEqual(chatGPT.value(forKey: "session"), "sid=def")
+        XCTAssertEqual(openRouter.value(forKey: "key"), "sk-or-v1-x")
+
+        // A fresh vault over the same Keychain sees both secrets.
+        let reloaded = KeychainVault(backend: keychain)
+        XCTAssertEqual(reloaded.value(forAccount: "chatgpt_auth_session"), "sid=def")
+        chatGPT.remove(forKey: "session")
+        XCTAssertNil(chatGPT.value(forKey: "session"))
+        XCTAssertNil(KeychainVault(backend: keychain).value(forAccount: "chatgpt_auth_session"))
+        XCTAssertEqual(openRouter.value(forKey: "key"), "sk-or-v1-x")
+    }
+
+    /// The vault is read once; later lookups come from memory.
+    func testVaultCachesReads() {
+        let keychain = FakeKeychain()
+        XCTAssertTrue(makeStore("auth_", keychain).set("sso=z", forKey: "session"))
+        let store = makeStore("auth_", keychain)
+        keychain.reads = 0
+
+        XCTAssertEqual(store.value(forKey: "session"), "sso=z")
+        XCTAssertEqual(store.value(forKey: "session"), "sso=z")
+        XCTAssertEqual(keychain.reads, 1)
+    }
+
+    /// A separately stored secret is copied into the vault and the separate item deleted.
+    func testSeparateItemMovesIntoVault() {
+        let keychain = FakeKeychain()
+        keychain.items["com.modelmonitor.app.credentials/opencode_auth_session"] = Data("auth=1".utf8)
+        let store = makeStore("opencode_auth_", keychain)
+
+        XCTAssertEqual(store.value(forKey: "session"), "auth=1")
+
+        XCTAssertEqual(Set(keychain.items.keys), [vaultKey])
+        XCTAssertEqual(KeychainVault(backend: keychain).value(forAccount: "opencode_auth_session"), "auth=1")
+    }
+
+    /// A separate item the Keychain will not delete is not restored after sign-out.
+    func testSignedOutAccountIsNotRestoredFromSeparateItem() {
+        let keychain = FakeKeychain()
+        keychain.items["com.modelmonitor.app.credentials/opencode_auth_session"] = Data("auth=1".utf8)
+        keychain.deleteStatus = errSecInvalidOwnerEdit
+        let store = makeStore("opencode_auth_", keychain)
+        XCTAssertEqual(store.value(forKey: "session"), "auth=1")
+
+        store.remove(forKey: "session")
+
+        XCTAssertNil(store.value(forKey: "session"))
+        XCTAssertNil(makeStore("opencode_auth_", keychain).value(forKey: "session"))
+    }
+
+    /// A refused separate item reads as signed out and is not asked for again.
+    func testRefusedSeparateItemIsNotRetried() {
         let keychain = FakeKeychain()
         keychain.items["com.modelmonitor.app.credentials/auth_session"] = Data("sso=z".utf8)
-        let store = KeychainCredentialStore(accountPrefix: "auth_", backend: keychain)
+        keychain.refusedAccounts = ["auth_session"]
+        let store = makeStore("auth_", keychain)
 
-        XCTAssertEqual(store.value(forKey: "session"), "sso=z")
-        XCTAssertEqual(store.value(forKey: "session"), "sso=z")
-        XCTAssertEqual(keychain.reads, 1)
+        XCTAssertNil(store.value(forKey: "session"))
+        let reads = keychain.reads
+        XCTAssertNil(store.value(forKey: "session"))
+        XCTAssertNil(makeStore("auth_", keychain).value(forKey: "session"))
+        XCTAssertEqual(keychain.reads, reads + 1, "only the fresh vault's own read")
     }
 
-    /// A refused read (e.g. the user denied access) is not retried every poll.
-    func testKeychainStoreRemembersRefusedRead() {
+    /// A refused vault read reports secrets as missing and never overwrites the item.
+    func testRefusedVaultIsNeverOverwritten() {
         let keychain = FakeKeychain()
-        keychain.readStatus = errSecAuthFailed
-        let store = KeychainCredentialStore(accountPrefix: "auth_", backend: keychain)
+        XCTAssertTrue(makeStore("auth_", keychain).set("sso=z", forKey: "session"))
+        let stored = keychain.items[vaultKey]
+        keychain.refusedAccounts = ["vault"]
+        let store = makeStore("auth_", keychain)
 
         XCTAssertNil(store.value(forKey: "session"))
-        XCTAssertNil(store.value(forKey: "session"))
-        XCTAssertEqual(keychain.reads, 1)
+        XCTAssertFalse(store.set("sso=new", forKey: "session"))
+        store.remove(forKey: "session")
+        XCTAssertEqual(keychain.items[vaultKey], stored)
     }
 
     func testKeychainStoreReportsFailedWrite() {
         let keychain = FakeKeychain()
         keychain.addStatus = errSecInteractionNotAllowed
-        let store = KeychainCredentialStore(accountPrefix: "auth_", backend: keychain)
+        let store = makeStore("auth_", keychain)
 
         XCTAssertFalse(store.set("sso=z", forKey: "session"))
         XCTAssertNil(store.value(forKey: "session"))
@@ -225,7 +284,7 @@ final class CredentialStoreTests: XCTestCase {
     func testKeychainStoreVerifiesWriteByReadingBack() {
         let keychain = FakeKeychain()
         keychain.corruptsWrites = true
-        let secure = KeychainCredentialStore(accountPrefix: "auth_", backend: keychain)
+        let secure = makeStore("auth_", keychain)
         let files = InMemoryStore()
         files.values = ["session": "sso=z"]
 
