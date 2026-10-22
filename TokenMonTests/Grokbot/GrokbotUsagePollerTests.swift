@@ -172,23 +172,23 @@ final class GrokbotUsagePollerTests: XCTestCase {
     /// small forward drift within the same period is not.
     func testIsNewWindowDetectsRollover() {
         let previous = date(2026, 8, 20, hour: 11)
-        XCTAssertTrue(GrokbotUsagePoller.isNewWindow(
+        XCTAssertTrue(QuotaWindowTransition.isRollover(
             previousResetsAt: previous,
             nextResetsAt: date(2026, 8, 27, hour: 11),
             periodDays: 7
         ))
-        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+        XCTAssertFalse(QuotaWindowTransition.isRollover(
             previousResetsAt: previous,
             nextResetsAt: date(2026, 8, 21, hour: 11),
             periodDays: 7
         ))
         // No prior anchor, or a backwards move, is never a rollover.
-        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+        XCTAssertFalse(QuotaWindowTransition.isRollover(
             previousResetsAt: nil,
             nextResetsAt: previous,
             periodDays: 7
         ))
-        XCTAssertFalse(GrokbotUsagePoller.isNewWindow(
+        XCTAssertFalse(QuotaWindowTransition.isRollover(
             previousResetsAt: previous,
             nextResetsAt: date(2026, 8, 19, hour: 11),
             periodDays: 7

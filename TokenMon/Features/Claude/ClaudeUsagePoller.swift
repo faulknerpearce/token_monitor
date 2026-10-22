@@ -22,6 +22,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let daily: DailyQuotaDeltaStore
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchUsage: (String) async throws -> (ClaudeUsageResponse, Date)
+    /// Claude Code usage seam `(now)`; reads Claude Code's local logs and the
+    /// saved daily totals in the app, and returns nil under an injected
+    /// `fetchUsage` unless a test supplies one.
+    private let loadCodeUsage: (Date) async -> ClaudeCodeUsageSummary?
     private let logger = Logger(category: "Claude")
     private var cancellables = Set<AnyCancellable>()
 
@@ -42,7 +46,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         auth: ClaudeAuthSession,
         hourly: HourlyDeltaActivityStore,
         daily: DailyQuotaDeltaStore,
-        fetchUsage: ((String) async throws -> (ClaudeUsageResponse, Date))? = nil
+        fetchUsage: ((String) async throws -> (ClaudeUsageResponse, Date))? = nil,
+        loadCodeUsage: ((Date) async -> ClaudeCodeUsageSummary?)? = nil
     ) {
         self.settings = settings
         self.auth = auth
@@ -50,6 +55,21 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         self.daily = daily
         self.fetchUsage = fetchUsage ?? { cookieHeader in
             try await ClaudeUsageClient(cookieHeader: cookieHeader).fetchUsage()
+        }
+        if let loadCodeUsage {
+            self.loadCodeUsage = loadCodeUsage
+        } else if fetchUsage != nil {
+            // Tests with a fake fetch stay hermetic: no reads of the real home.
+            self.loadCodeUsage = { _ in nil }
+        } else {
+            let ledger = ClaudeCodeUsageLedger()
+            self.loadCodeUsage = { now in
+                await Task.detached(priority: .utility) {
+                    let calendar = ClaudeCodeUsageLedger.dayCalendar
+                    guard let scanned = ClaudeCodeLocalStats.scanDailyTokens(calendar: calendar) else { return nil }
+                    return ClaudeCodeUsageSummary.make(days: ledger.merge(scanned), now: now, calendar: calendar)
+                }.value
+            }
         }
         // The persisted hourly and daily history is wiped only on sign-out or
         // an account change; an expired session keeps it.
@@ -83,8 +103,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.claude) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.claude), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -100,16 +119,21 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         do {
             let (response, fetchedAt) = try await fetchUsage(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
+            let codeUsage = await loadCodeUsage(fetchedAt)
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,
                 sevenDay: response.sevenDay,
-                accountEmail: auth.accountEmail
+                accountEmail: auth.accountEmail,
+                codeUsage: codeUsage
             )
             lastError = nil
             lastRefreshedAt = Date()
             auth.needsSignIn = false
             auth.recordAuthSuccess()
+            // The 5-hour window counts every model, unlike a model-scoped
+            // weekly limit, so it drives the hourly activity series.
             if let percent = response.fiveHour?.usedPercent {
                 hourly.record(usedPercent: percent, at: fetchedAt)
                 logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")

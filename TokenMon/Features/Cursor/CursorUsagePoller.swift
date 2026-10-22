@@ -99,8 +99,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.cursor) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.cursor), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 

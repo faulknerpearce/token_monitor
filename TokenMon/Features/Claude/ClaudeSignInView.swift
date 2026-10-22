@@ -33,8 +33,7 @@ struct ClaudeSignInView: View {
     /// (`clerk.claude.ai`) and login/signin/auth paths, so capture fires only
     /// on a signed-in page.
     static func isReturnPage(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased() else { return false }
-        guard host == "claude.ai" || host == "www.claude.ai" else { return false }
+        guard let host = url.host?.lowercased(), host == "claude.ai" || host == "www.claude.ai" else { return false }
         let path = url.path.lowercased()
         if path.contains("login") || path.contains("signin") || path.contains("/auth") {
             return false

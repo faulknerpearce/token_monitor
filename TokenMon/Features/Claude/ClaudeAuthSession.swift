@@ -1,14 +1,14 @@
 import Foundation
 
+private let claudeHosts = [
+    "claude.ai",
+    "www.claude.ai",
+    "api.claude.ai"
+]
+
 /// Session for claude.ai (`sessionKey` auth cookie + `lastActiveOrg` org id).
 @MainActor
 final class ClaudeAuthSession: ProviderAuthSession {
-    private static let claudeHosts = [
-        "claude.ai",
-        "www.claude.ai",
-        "api.claude.ai"
-    ]
-
     static func claudePolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Domain.matches(domain, hosts: claudeHosts) },

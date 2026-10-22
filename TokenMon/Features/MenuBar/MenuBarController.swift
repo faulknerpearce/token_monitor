@@ -19,6 +19,8 @@ final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     private let panel = MenuBarPanel()
     private var hosting: NSHostingController<MenuBarPanelContent>?
+    /// Whether the panel is shorter than its content; drives the scroll bar.
+    private let scrollState = MenuBarPanelScrollState()
     private var cancellables = Set<AnyCancellable>()
     private var regions: [MenuBarStatusRenderer.Region] = []
     private var escapeMonitor: Any?
@@ -60,13 +62,16 @@ final class MenuBarController: NSObject {
         })
 
         // Local monitors run on the main thread, so the MainActor state is safe.
+        // The event stays on this thread; only the panel check crosses into
+        // the main actor.
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard event.keyCode == 53 else { return event } // Escape
-            return MainActor.assumeIsolated {
-                guard self?.panel.isVisible == true else { return event }
-                self?.hidePanel()
-                return nil
+            let dismissed = MainActor.assumeIsolated { () -> Bool in
+                guard let self, self.panel.isVisible else { return false }
+                self.hidePanel()
+                return true
             }
+            return dismissed ? nil : event
         }
 
         observeStatusInputs()
@@ -186,11 +191,11 @@ final class MenuBarController: NSObject {
         // `sizingOptions` stays at its default: a window AppKit resizes itself
         // grows from the wrong edge and the content shifts, so the panel frame
         // is set explicitly from the status item.
-        let hosting = NSHostingController(rootView: MenuBarPanelContent(model: model))
+        let hosting = NSHostingController(rootView: MenuBarPanelContent(model: model, scrollState: scrollState))
         self.hosting = hosting
         panel.contentViewController = hosting
 
-        panel.setFrame(panelFrame(for: panelContentSize()), display: true)
+        panel.setFrame(fittedFrame(for: panelContentSize()), display: true)
         panel.makeKeyAndOrderFront(nil)
         model.setMenuOpen(true)
     }
@@ -208,12 +213,22 @@ final class MenuBarController: NSObject {
     /// tall provider view stays above the bottom of the display.
     private func resizePanelIfNeeded() {
         guard panel.isVisible, hosting != nil else { return }
-        let size = panelContentSize()
-        let frame = panelFrame(for: size)
+        let frame = fittedFrame(for: panelContentSize())
         guard abs(frame.height - panel.frame.height) > 0.5
             || abs(frame.origin.x - panel.frame.origin.x) > 0.5
             || abs(frame.origin.y - panel.frame.origin.y) > 0.5 else { return }
         panel.setFrame(frame, display: true)
+    }
+
+    /// `panelFrame(for:)`, also recording whether the screen cut the panel
+    /// short of `size`, which is the only case that needs a scroll bar.
+    private func fittedFrame(for size: NSSize) -> NSRect {
+        let frame = panelFrame(for: size)
+        let isClamped = size.height > frame.height + 0.5
+        if scrollState.isHeightClamped != isClamped {
+            scrollState.isHeightClamped = isClamped
+        }
+        return frame
     }
 
     private func panelContentSize() -> NSSize {
@@ -277,14 +292,27 @@ final class MenuBarController: NSObject {
 /// scroll view: measured unconstrained (the hosting view's `fittingSize`) it
 /// reports the content's full height, it bounces only when the content is
 /// taller than the panel, and once the panel is shorter the content scrolls.
+///
+/// The scroll bar shows only while the screen cuts the panel short. Content
+/// that grows (a section opening) is briefly taller than the panel until the
+/// panel re-fits a tick later, and a scroll bar would flash in that gap.
 private struct MenuBarPanelContent: View {
     let model: AppModel
+    @ObservedObject var scrollState: MenuBarPanelScrollState
 
     var body: some View {
         ScrollView(.vertical) {
             MenuBarRoot(model: model)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(scrollState.isHeightClamped ? .automatic : .never)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
+
+/// Whether the dropdown panel is shorter than its content because the screen
+/// clamped its height.
+@MainActor
+final class MenuBarPanelScrollState: ObservableObject {
+    @Published var isHeightClamped = false
 }

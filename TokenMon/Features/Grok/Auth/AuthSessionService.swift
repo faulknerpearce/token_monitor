@@ -1,22 +1,22 @@
 import Foundation
 
+private let grokHosts = ["grok.com", "x.ai"]
+
+/// Cookie names present only in an authenticated session.
+private let authCookieHints: Set<String> = [
+    "sso", "session", "auth", "token", "jwt", "sid", "user", "account",
+    "x-session", "xai", "oidc", "refresh", "access"
+]
+
 /// Session for grok.com (`sso` / `sso-rw` cookies).
 ///
 /// Sign-in may pass through x.com / twitter.com (see `SignInView.authHosts`);
 /// the session captures and stores only the grok.com/xAI cookies.
 @MainActor
 final class AuthSessionService: ProviderAuthSession {
-    private static let grokHosts = ["grok.com", "x.ai"]
-
-    /// Cookie names present only in an authenticated session.
-    private static let authCookieHints: Set<String> = [
-        "sso", "session", "auth", "token", "jwt", "sid", "user", "account",
-        "x-session", "xai", "oidc", "refresh", "access"
-    ]
-
     /// The grok.com/xAI session cookies the usage requests send. Capture stores
     /// only these, and waits until one of them is present.
-    static let essentialCookieNames: Set<String> = ["sso", "sso-rw"]
+    nonisolated static let essentialCookieNames: Set<String> = ["sso", "sso-rw"]
 
     convenience init() {
         self.init(directory: nil)
@@ -29,7 +29,7 @@ final class AuthSessionService: ProviderAuthSession {
                 storeFilenamePrefix: "auth_",
                 logCategory: "Auth",
                 extraStoreKeys: [],
-                signOutHosts: Self.grokHosts,
+                signOutHosts: grokHosts,
                 capturePolicy: Self.grokPolicy(),
                 isDomain: { domain in Self.isGrokDomain(domain) }
             ),
@@ -47,7 +47,7 @@ final class AuthSessionService: ProviderAuthSession {
             },
             looksLikeAuthCookie: { cookie in
                 let name = cookie.name.lowercased()
-                guard Self.authCookieHints.contains(where: { name.contains($0) }) else { return false }
+                guard authCookieHints.contains(where: { name.contains($0) }) else { return false }
                 return cookie.isSecure || cookie.isHTTPOnly
             },
             includeAllDomainCookiesWhenSessionFound: true,

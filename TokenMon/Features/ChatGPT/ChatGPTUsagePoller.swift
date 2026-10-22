@@ -70,8 +70,7 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.chatgpt) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.chatgpt), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 

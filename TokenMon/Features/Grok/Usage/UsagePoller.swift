@@ -74,8 +74,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.grok) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.grok), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 

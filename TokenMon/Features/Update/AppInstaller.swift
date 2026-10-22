@@ -54,10 +54,6 @@ enum AppInstaller {
 
     /// App Translocation runs a downloaded app from a read-only copy. Replacing
     /// that copy leaves the file the user actually opens unchanged.
-    static var isRunningTranslocated: Bool {
-        isTranslocated(Bundle.main.bundleURL)
-    }
-
     static func isTranslocated(_ bundleURL: URL) -> Bool {
         bundleURL.path.contains("/AppTranslocation/")
     }

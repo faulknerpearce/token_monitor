@@ -51,8 +51,7 @@ enum AppSupport {
     /// No-op if the legacy folder is missing or the current folder already exists.
     static func migrateLegacyDirectoryIfNeeded(from legacy: URL, to current: URL) {
         let fm = FileManager.default
-        guard fm.fileExists(atPath: legacy.path) else { return }
-        guard !fm.fileExists(atPath: current.path) else { return }
+        guard fm.fileExists(atPath: legacy.path), !fm.fileExists(atPath: current.path) else { return }
         try? fm.moveItem(at: legacy, to: current)
     }
 }

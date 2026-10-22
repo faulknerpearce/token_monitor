@@ -98,6 +98,8 @@ final class AppModel: ObservableObject {
     let cursorDaily = DailyQuotaDeltaStore(storageKey: "cursor_daily_usage")
     let grokbotHourly = HourlyDeltaActivityStore(storageKey: "grokbot_hourly_today")
     let grokbotDaily = DailyQuotaDeltaStore(storageKey: "grokbot_daily_usage")
+    /// Earlier days of the Overview hourly chart.
+    let overviewHistory = OverviewHourlyHistoryStore()
     let poller: UsagePoller
     let openCodePoller: OpenCodeUsagePoller
     let cursorPoller: CursorUsagePoller
@@ -193,7 +195,11 @@ final class AppModel: ObservableObject {
         // One coalesced change per burst, delivered after the values are set.
         childChanges
             .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] in self?.objectWillChange.send() }
+            .sink { [weak self] in
+                self?.objectWillChange.send()
+                // The history is not forwarded, so recording it does not loop.
+                self?.recordOverviewHistory()
+            }
             .store(in: &cancellables)
         forwardChanges(from: settings)
         forwardChanges(from: history)
@@ -359,7 +365,8 @@ final class AppModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.history.flush()
+            // Delivered on the main queue.
+            MainActor.assumeIsolated { self?.history.flush() }
         }
     }
 

@@ -90,20 +90,6 @@ enum DailyBudget {
         return days
     }
 
-    /// Filters `all` to the 7 calendar days ending on `now` (inclusive). If `now`
-    /// is outside `all`'s period, returns the last 7 of `all`.
-    static func last7(from all: [DailyBudgetDay], now: Date, calendar: Calendar) -> [DailyBudgetDay] {
-        let today = calendar.startOfDay(for: now)
-        if let idx = all.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
-            let start = max(0, idx - 6)
-            let end = min(all.count, start + 7)
-            return Array(all[start..<end])
-        }
-        // Today outside the period (e.g. preview data): the last 7 days.
-        if all.count <= 7 { return all }
-        return Array(all.suffix(7))
-    }
-
     /// Bars for the full weekly window. The first bar is the day the pool
     /// opened (a Thursday reset → Thursday first) and stays there until the
     /// reset instant, when the window rolls to the new period. A stale

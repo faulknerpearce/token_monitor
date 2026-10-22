@@ -3,7 +3,7 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Settings window: providers, menu bar, accounts, refresh, alerts, and data.
+/// Settings window, in four tabs: General, Providers, Accounts, and Data.
 ///
 /// Observes only the objects its own rows read (`settings`, `history`,
 /// `updateChecker`); account and refresh rows are subviews that observe their
@@ -14,200 +14,90 @@ struct PreferencesView: View {
     @ObservedObject var history: HistoryStore
     @ObservedObject var updateChecker: UpdateChecker
     let openWindow: (AppWindowID) -> Void
-    @State private var exportError: String?
-    @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
-        List {
-            Section {
-                ForEach(settings.orderedUsageProviders) { provider in
-                    HStack(spacing: 8) {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, height: 24)
-                            .contentShape(Rectangle())
-                            .onDrag {
-                                draggingProvider = provider
-                                return NSItemProvider(object: NSString(string: provider.rawValue))
-                            }
-                        Image(nsImage: ProviderLogo.image(for: provider))
-                            .resizable()
-                            .interpolation(.high)
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
-                        Toggle(provider.displayName, isOn: Binding(
-                            get: { settings.enabledProviderIDs.contains(provider) },
-                            set: { on in
-                                if on {
-                                    settings.enabledProviderIDs.insert(provider)
-                                } else {
-                                    settings.enabledProviderIDs.remove(provider)
-                                }
-                            }
-                        ))
-                        .toggleStyle(.switch)
-                        .disabled(settings.enabledProviderIDs == [provider])
-                    }
-                    .contentShape(Rectangle())
-                    .onDrop(
-                        of: [.utf8PlainText, .text, .plainText],
-                        delegate: ProviderReorderDropDelegate(
-                            target: provider,
-                            dragging: $draggingProvider,
-                            move: settings.moveProvider
-                        )
-                    )
-                }
-                // Reordering uses the explicit drop delegate above, since `onMove`
-                // is effectively inert on a macOS `List`.
-            } header: {
-                Text("Providers")
-            } footer: {
-                Text("Toggle which tabs appear in the menu dropdown. Drag a row (or its handle) to set tab, Overview, and menu-bar graph order.")
-            }
+        TabView {
+            GeneralSettingsTab(model: model, settings: settings, updateChecker: updateChecker)
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ProvidersSettingsTab(settings: settings)
+                .tabItem { Label("Providers", systemImage: "square.stack.3d.up") }
+            AccountsSettingsTab(model: model, openWindow: openWindow)
+                .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
+            DataSettingsTab(settings: settings, history: history)
+                .tabItem { Label("Data", systemImage: "externaldrive") }
+        }
+        .font(.system(size: 14))
+        .padding()
+        .frame(minWidth: 460, minHeight: 520)
+        .onAppear {
+            settings.refreshLaunchAtLoginStatus()
+        }
+        .onDisappear {
+            AppDelegate.hideDockIfNoWindows()
+        }
+    }
+}
 
-            Section {
-                Toggle("Show selected provider", isOn: $settings.showSelectedProviderInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
-                    .toggleStyle(.switch)
-            } header: {
-                Text("Menu Bar")
-            } footer: {
-                Text("Show selected provider replaces the pinned graphs with just the active provider's icon, percentage, and usage bar.")
-            }
+/// Startup, updates, refresh timing, alerts, and quitting.
+private struct GeneralSettingsTab: View {
+    let model: AppModel
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var updateChecker: UpdateChecker
 
-            ProviderAccountSection(
-                title: "Grok Account",
-                auth: model.auth,
-                accountFallback: "Grok account",
-                signInTitle: "Sign In to grok.com…",
-                clearSnapshot: model.poller.clearSnapshot,
-                openSignIn: { openWindow(.grokSignIn) }
-            )
-            ProviderAccountSection(
-                title: "OpenCode Account",
-                auth: model.openCodeAuth,
-                accountFallback: "OpenCode account",
-                signInTitle: "Sign In to OpenCode…",
-                clearSnapshot: model.openCodePoller.clearSnapshot,
-                openSignIn: { openWindow(.openCodeSignIn) }
-            )
-            ProviderAccountSection(
-                title: "Cursor Account",
-                auth: model.cursorAuth,
-                accountFallback: "Cursor account",
-                signInTitle: "Sign In to Cursor…",
-                clearSnapshot: model.cursorPoller.clearSnapshot,
-                openSignIn: { openWindow(.cursorSignIn) }
-            )
-            ProviderAccountSection(
-                title: "Claude Account",
-                auth: model.claudeAuth,
-                accountFallback: "Claude account",
-                signInTitle: "Sign In to Claude…",
-                clearSnapshot: model.claudePoller.clearSnapshot,
-                openSignIn: { openWindow(.claudeSignIn) }
-            )
-            ProviderAccountSection(
-                title: "ChatGPT Account",
-                auth: model.chatGPTAuth,
-                accountFallback: "ChatGPT account",
-                signInTitle: "Sign In to ChatGPT…",
-                clearSnapshot: model.chatGPTPoller.clearSnapshot,
-                openSignIn: { openWindow(.chatGPTSignIn) }
-            )
-            OpenRouterAccountSection(auth: model.openRouterAuth, poller: model.openRouterPoller)
-
-            Section("Refresh") {
-                Stepper(value: $settings.activePollSeconds, in: AppSettings.activePollRange, step: 15) {
-                    Text("While menu open: \(settings.activePollSeconds)s")
-                }
-                Stepper(value: $settings.idlePollSeconds, in: AppSettings.idlePollRange, step: 60) {
-                    Text("While idle: \(settings.idlePollSeconds)s")
-                }
-                refreshStatus
-            }
-
-            Section("Alerts") {
-                Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
-                    .toggleStyle(.switch)
-                if settings.thresholdEnabled {
-                    Slider(value: $settings.thresholdPercent, in: AppSettings.thresholdRange, step: 1) {
-                        Text("Threshold")
-                    } minimumValueLabel: {
-                        Text("\(Int(AppSettings.thresholdRange.lowerBound))%")
-                    } maximumValueLabel: {
-                        Text("\(Int(AppSettings.thresholdRange.upperBound))%")
-                    }
-                    Text("Alert at \(Int(settings.thresholdPercent))% used")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Categories") {
-                ForEach(ProductCatalog.knownIDs, id: \.self) { id in
-                    Toggle(ProductCatalog.displayName(for: id), isOn: Binding(
-                        get: { settings.visibleProductIDs.contains(id) },
-                        set: { on in
-                            if on { settings.visibleProductIDs.insert(id) } else { settings.visibleProductIDs.remove(id) }
-                        }
-                    ))
-                    .toggleStyle(.switch)
-                }
-            }
-
-            Section("System") {
+    var body: some View {
+        Form {
+            Section("Startup") {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
-                    .toggleStyle(.switch)
+                    .settingsSwitch()
                 if settings.launchAtLoginNeedsApproval {
                     Text("Waiting for approval in System Settings › General › Login Items.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
-                Toggle("Check for Updates", isOn: $settings.checksForUpdates)
-                    .toggleStyle(.switch)
-                Button(updateChecker.actionTitle) {
-                    Task { await updateChecker.performPrimaryAction() }
+            }
+
+            Section {
+                Toggle("Check automatically", isOn: $settings.checksForUpdates)
+                    .settingsSwitch()
+                LabeledContent("Version \(Self.appVersion)") {
+                    Button(updateChecker.actionTitle) {
+                        Task { await updateChecker.performPrimaryAction() }
+                    }
+                    .disabled(!updateChecker.canAct)
                 }
-                .disabled(!updateChecker.canAct)
                 if let statusMessage = updateChecker.statusMessage {
                     Text(statusMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("Checks GitHub for a newer release. Update downloads the release "
-                    + "and replaces this copy of TokenMon.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Checks GitHub for a newer release. Update downloads the release and replaces this copy of TokenMon.")
             }
 
-            Section("Data") {
-                Button("Export CSV…") { export(.csv) }
-                Button("Export JSON…") { export(.json) }
-                Button("Clear Local History", role: .destructive) {
-                    history.clear()
+            Section("Refresh") {
+                Stepper(value: $settings.activePollSeconds, in: AppSettings.activePollRange, step: 15) {
+                    LabeledContent("While menu is open", value: "\(settings.activePollSeconds)s")
                 }
-                Text("Clearing history does not reset your SuperGrok weekly pool.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if history.storeFailed {
-                    Text("History storage is unavailable — usage is kept for this session only "
-                        + "and will not survive a relaunch.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                Stepper(value: $settings.idlePollSeconds, in: AppSettings.idlePollRange, step: 60) {
+                    LabeledContent("While idle", value: "\(settings.idlePollSeconds)s")
+                }
+                refreshStatus
+            }
+
+            Section("Alerts") {
+                Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
+                    .settingsSwitch()
+                if settings.thresholdEnabled {
+                    Slider(value: $settings.thresholdPercent, in: AppSettings.thresholdRange, step: 1) {
+                        Text("Alert at \(Int(settings.thresholdPercent))%")
+                    } minimumValueLabel: {
+                        Text("\(Int(AppSettings.thresholdRange.lowerBound))%")
+                    } maximumValueLabel: {
+                        Text("\(Int(AppSettings.thresholdRange.upperBound))%")
+                    }
                 }
             }
 
@@ -216,23 +106,12 @@ struct PreferencesView: View {
                     NSApp.terminate(nil)
                 }
             }
-
-            if let exportError {
-                Section {
-                    Text(exportError).foregroundStyle(.red)
-                }
-            }
         }
         .formStyle(.grouped)
-        .font(.system(size: 14))
-        .padding()
-        .frame(minWidth: 440, minHeight: 520)
-        .onAppear {
-            settings.refreshLaunchAtLoginStatus()
-        }
-        .onDisappear {
-            AppDelegate.hideDockIfNoWindows()
-        }
+    }
+
+    private static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
     }
 
     /// Last refresh (and error) of the selected provider, or every provider's
@@ -251,10 +130,208 @@ struct PreferencesView: View {
     private func pollerStatus(_ poller: some ProviderUsagePoller, label: String?) -> AnyView {
         AnyView(PollerRefreshStatus(poller: poller, label: label))
     }
+}
+
+/// Which provider tabs show and in what order, and what the menu bar draws.
+private struct ProvidersSettingsTab: View {
+    @ObservedObject var settings: AppSettings
+    @State private var draggingProvider: MonitorProvider?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(settings.orderedUsageProviders) { provider in
+                    providerRow(provider)
+                }
+                // Reordering uses the explicit drop delegate in `providerRow`,
+                // since `onMove` is effectively inert on a macOS `Form`.
+            } header: {
+                Text("Providers")
+            } footer: {
+                Text("Turn a provider on to show its tab in the menu. Drag a row to set the order of tabs, Overview cards, and menu bar graphs.")
+            }
+
+            Section {
+                Toggle("Show selected provider only", isOn: $settings.showSelectedProviderInMenuBar)
+                    .settingsSwitch()
+                if !settings.showSelectedProviderInMenuBar {
+                    Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
+                        .settingsSwitch()
+                    Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
+                        .settingsSwitch()
+                    Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
+                        .settingsSwitch()
+                    Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+                        .settingsSwitch()
+                    Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
+                        .settingsSwitch()
+                    Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
+                        .settingsSwitch()
+                }
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text(settings.showSelectedProviderInMenuBar
+                    ? "The menu bar shows only the active provider's icon, percentage, and usage bar."
+                    : "Choose which graphs stay pinned in the menu bar.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func providerRow(_ provider: MonitorProvider) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 24)
+                .contentShape(Rectangle())
+                .onDrag {
+                    draggingProvider = provider
+                    return NSItemProvider(object: NSString(string: provider.rawValue))
+                }
+            Image(nsImage: ProviderLogo.image(for: provider))
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+            Toggle(provider.displayName, isOn: Binding(
+                get: { settings.enabledProviderIDs.contains(provider) },
+                set: { on in
+                    if on {
+                        settings.enabledProviderIDs.insert(provider)
+                    } else {
+                        settings.enabledProviderIDs.remove(provider)
+                    }
+                }
+            ))
+            .settingsSwitch()
+            .disabled(settings.enabledProviderIDs == [provider])
+        }
+        .contentShape(Rectangle())
+        .onDrop(
+            of: [.utf8PlainText, .text, .plainText],
+            delegate: ProviderReorderDropDelegate(
+                target: provider,
+                dragging: $draggingProvider,
+                move: settings.moveProvider
+            )
+        )
+    }
+}
+
+/// One row per provider account: who is signed in, and sign-in actions.
+private struct AccountsSettingsTab: View {
+    let model: AppModel
+    let openWindow: (AppWindowID) -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                ProviderAccountRow(
+                    provider: .grok,
+                    auth: model.auth,
+                    signInTitle: "Sign In…",
+                    clearSnapshot: model.poller.clearSnapshot,
+                    openSignIn: { openWindow(.grokSignIn) }
+                )
+                ProviderAccountRow(
+                    provider: .claude,
+                    auth: model.claudeAuth,
+                    signInTitle: "Sign In…",
+                    clearSnapshot: model.claudePoller.clearSnapshot,
+                    openSignIn: { openWindow(.claudeSignIn) }
+                )
+                ProviderAccountRow(
+                    provider: .chatgpt,
+                    auth: model.chatGPTAuth,
+                    signInTitle: "Sign In…",
+                    clearSnapshot: model.chatGPTPoller.clearSnapshot,
+                    openSignIn: { openWindow(.chatGPTSignIn) }
+                )
+                ProviderAccountRow(
+                    provider: .cursor,
+                    auth: model.cursorAuth,
+                    signInTitle: "Sign In…",
+                    clearSnapshot: model.cursorPoller.clearSnapshot,
+                    openSignIn: { openWindow(.cursorSignIn) }
+                )
+                ProviderAccountRow(
+                    provider: .opencode,
+                    auth: model.openCodeAuth,
+                    signInTitle: "Sign In…",
+                    clearSnapshot: model.openCodePoller.clearSnapshot,
+                    openSignIn: { openWindow(.openCodeSignIn) }
+                )
+            } header: {
+                Text("Accounts")
+            } footer: {
+                Text("Grokbot uses your Cursor account.")
+            }
+
+            OpenRouterAccountSection(auth: model.openRouterAuth, poller: model.openRouterPoller)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// SuperGrok categories plus exporting and clearing local history.
+private struct DataSettingsTab: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var history: HistoryStore
+    @State private var exportError: String?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(ProductCatalog.knownIDs, id: \.self) { id in
+                    Toggle(ProductCatalog.displayName(for: id), isOn: Binding(
+                        get: { settings.visibleProductIDs.contains(id) },
+                        set: { on in
+                            if on { settings.visibleProductIDs.insert(id) } else { settings.visibleProductIDs.remove(id) }
+                        }
+                    ))
+                    .settingsSwitch()
+                }
+            } header: {
+                Text("SuperGrok Categories")
+            } footer: {
+                Text("Categories shown in the Grok breakdown.")
+            }
+
+            Section {
+                LabeledContent("Export history") {
+                    HStack {
+                        Button("CSV…") { export(.csv) }
+                        Button("JSON…") { export(.json) }
+                    }
+                }
+                Button("Clear Local History", role: .destructive) {
+                    history.clear()
+                }
+                if let exportError {
+                    Text(exportError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                if history.storeFailed {
+                    Text("History storage is unavailable — usage is kept for this session only "
+                        + "and will not survive a relaunch.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("SuperGrok History")
+            } footer: {
+                Text("Clearing history does not reset your SuperGrok weekly pool.")
+            }
+        }
+        .formStyle(.grouped)
+    }
 
     private func export(_ format: ExportService.Format) {
         // Clears any prior failure so a successful export dismisses the red
-        // banner.
+        // message.
         exportError = nil
         do {
             let data = try ExportService.export(history.allSnapshots(), format: format)
@@ -296,31 +373,40 @@ private struct ProviderReorderDropDelegate: DropDelegate {
     }
 }
 
-/// One cookie-session provider's account rows: who is signed in, sign out,
-/// and (re-)authenticate.
-private struct ProviderAccountSection: View {
-    let title: String
+/// One cookie-session provider's account on a single row: its logo and name,
+/// who is signed in, and the sign-in actions.
+private struct ProviderAccountRow: View {
+    let provider: MonitorProvider
     @ObservedObject var auth: ProviderAuthSession
-    let accountFallback: String
     let signInTitle: String
     let clearSnapshot: () -> Void
     let openSignIn: () -> Void
 
     var body: some View {
-        Section(title) {
-            if auth.isSignedIn {
-                LabeledContent("Signed in as") {
-                    Text(auth.accountEmail ?? accountFallback)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Image(nsImage: ProviderLogo.image(for: provider))
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(provider.displayName)
+                    Text(auth.isSignedIn ? (auth.accountEmail ?? "Signed in") : "Not signed in")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                Button("Sign Out", role: .destructive) {
-                    auth.signOut()
-                    clearSnapshot()
+                Spacer(minLength: 8)
+                if auth.isSignedIn {
+                    Button("Re-authenticate…") { openSignIn() }
+                    Button("Sign Out", role: .destructive) {
+                        auth.signOut()
+                        clearSnapshot()
+                    }
+                } else {
+                    Button(signInTitle) { openSignIn() }
                 }
-                Button("Re-authenticate…") { openSignIn() }
-            } else {
-                Text("Not signed in")
-                    .foregroundStyle(.secondary)
-                Button(signInTitle) { openSignIn() }
             }
             if let err = auth.lastAuthError {
                 Text(err).foregroundStyle(.red).font(.caption)
@@ -336,7 +422,7 @@ private struct OpenRouterAccountSection: View {
     @State private var keyDraft = ""
 
     var body: some View {
-        Section("OpenRouter Account") {
+        Section("OpenRouter") {
             if auth.isSignedIn {
                 LabeledContent("Connected with") {
                     Text("OpenRouter API key")
@@ -384,5 +470,12 @@ private struct PollerRefreshStatus<Poller: ProviderUsagePoller>: View {
                 .foregroundStyle(.red)
                 .font(.caption)
         }
+    }
+}
+
+private extension View {
+    /// A switch at the compact mini size macOS System Settings uses.
+    func settingsSwitch() -> some View {
+        toggleStyle(.switch).controlSize(.mini)
     }
 }

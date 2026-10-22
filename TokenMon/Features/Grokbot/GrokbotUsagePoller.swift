@@ -86,8 +86,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.grokbot) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.grokbot), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -162,22 +161,6 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
 
     private func pollInterval() -> TimeInterval? {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsGrokbotPolling)
-    }
-
-    /// True when `nextResetsAt` represents a genuinely new allowance period;
-    /// the same period's reset instant creeping forward returns false. Forwards to
-    /// the shared rule used by `DailyQuotaDeltaStore`.
-    static func isNewWindow(
-        previousResetsAt: Date?,
-        nextResetsAt: Date?,
-        periodDays: Int,
-        calendar: Calendar = .current
-    ) -> Bool {
-        QuotaWindowTransition.isRollover(
-            previousResetsAt: previousResetsAt,
-            nextResetsAt: nextResetsAt,
-            periodDays: periodDays
-        )
     }
 
     /// Daily bars for the current allowance period, anchored to the provider's
