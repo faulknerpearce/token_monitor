@@ -22,7 +22,7 @@ Adding a provider is a registry entry away: `ProviderRegistry` wires each `Monit
 | Provider | Usage pools surfaced | Daily Budget chart |
 |----------|----------------------|--------------------|
 | **ChatGPT (Codex)** | 5-hour primary + weekly secondary pool | — |
-| **Claude** | 5-hour session + weekly (7-day) pool | Weekly window |
+| **Claude** | 5-hour session + weekly (7-day) pool; Claude Code tokens and API-rate spend for this month and all time, by model | Weekly window |
 | **Cursor** | Monthly billing cycle (usage-summary %) | Last 7 days of the billing cycle |
 | **Grokbot** | Weekly Bot allowance, anchored to the plan's own reset instant | Weekly window |
 | **OpenCode Go** | 5-hour + weekly + monthly limits (console); local estimate when signed out | Weekly + subscription-month sections |
@@ -37,13 +37,13 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 |------|---------|
 | **Menu bar** | Compact status: provider icon, used %, optional filling usage bar |
 | **Dropdown** | Per-provider panel headed by its usage pool (Weekly / Monthly / Mixed), plus used / remaining, segmented bar, category or window breakdown, daily chart, reset time |
-| **Overview tab** | All connected providers at a glance with hourly multi-provider chart |
+| **Overview tab** | All connected providers at a glance with an hourly multi-provider chart; arrows step back through the last 30 days |
 | **Daily Budget** | Per-pool daily charts (weekly windows, subscription months) paced against the provider's own consumed % |
 | **Auth** | Guided one-tap sign-in per provider in an isolated web view; the window confirms and closes itself once you're signed in, and session credentials are kept in the macOS Keychain |
 | **Polling** | Faster refresh while the menu is open, slower when idle; failed refreshes are retried on later polls |
 | **History** | SwiftData snapshots, charts window, CSV / JSON export |
-| **Alerts** | Optional notification when any provider's usage crosses a threshold (off by default; turn on in Preferences) |
-| **Preferences** | Menu bar toggles, poll intervals, provider order, visible products, launch at login |
+| **Alerts** | Optional notification when any provider's usage crosses a threshold (off by default; turn on in Settings › General) |
+| **Settings** | Four tabs: General (launch at login, updates, refresh intervals, alerts), Providers (tab order and menu bar graphs), Accounts (sign-in for each provider), and Data (SuperGrok categories, export) |
 | **Updates** | Optional check for new GitHub releases; verified in-place install (see [Docs/NOTARIZATION.md](Docs/NOTARIZATION.md#in-app-updates)) |
 | **Agent app** | No Dock icon by default (`LSUIElement`) |
 
@@ -145,7 +145,7 @@ TokenMon/
   App/           Entry point, AppDelegate
   Features/
     ChatGPT/     ChatGPT/Codex usage pools and panel
-    Claude/      Claude auth, weekly usage, and panel
+    Claude/      Claude auth, weekly usage, Claude Code spend, and panel
     Cursor/      Cursor auth, dashboard usage, and panel
     Grok/        Grok auth, usage, history, and alerts
     Grokbot/     Grokbot weekly allowance and panel (borrows the Cursor session)
@@ -178,9 +178,9 @@ Tests/Manual/    Optional CLT-only subset (see Scripts/run_core_tests.sh)
 - **Network access** is limited to:
   - the connected providers' own hosts, for usage and sign-in: chatgpt.com, claude.ai, cursor.com, opencode.ai, openrouter.ai, grok.com / x.ai (plus the identity pages a provider's sign-in redirects to);
   - GitHub, for update checks and downloads: `api.github.com`, `github.com`, and its release-asset hosts `objects.githubusercontent.com` / `release-assets.githubusercontent.com`. Turn off automatic checks in Settings to stop these.
-- **Local files read:** for OpenCode, TokenMon reads `~/.local/share/opencode/opencode.db` **read-only** to estimate costs and activity. The data never leaves the Mac.
+- **Local files read:** for OpenCode, TokenMon reads `~/.local/share/opencode/opencode.db` **read-only** to estimate costs and activity. For Claude, it reads Claude Code's session logs (`~/.claude/projects` and `~/.config/claude/projects`, or each `CLAUDE_CONFIG_DIR`) **read-only** for token counts, and saves daily per-model token totals to `~/Library/Application Support/TokenMon/` so all-time totals outlast Claude Code's log cleanup. The data never leaves the Mac.
 - Provider responses are never cached to disk, and provider cookies never enter a shared cookie jar.
-- The app is **not sandboxed** (needed to read the OpenCode database).
+- The app is **not sandboxed** (needed to read the OpenCode database and Claude Code logs).
 - History stays on this Mac (SwiftData). No third-party telemetry.
 
 ## Documentation

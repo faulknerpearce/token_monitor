@@ -59,13 +59,6 @@ enum OpenCodeLocalStats {
         OpenCodeZenCostEstimate.isPlanProvider(providerID)
     }
 
-    /// Grok used through the OpenCode harness (counts toward Overview Grok).
-    static func grokViaOpenCode(providerID: String, modelID: String = "") -> Bool {
-        let provider = providerID.lowercased()
-        if provider == "xai" { return true }
-        return modelID.lowercased().contains("grok")
-    }
-
     /// UTC Monday–Sunday week, matching OpenCode server `getWeekBounds`.
     static func weeklyBounds(now: Date = Date()) -> (start: Date, end: Date) {
         var calendar = Calendar(identifier: .gregorian)
@@ -477,14 +470,14 @@ enum OpenCodeLocalStats {
     /// home directory containing `#`, `?`, or `%` truncating a `file:` URI;
     /// `SQLITE_OPEN_READONLY` already implies the `mode=ro` behavior.
     private static func openConnection(at dbURL: URL) throws -> OpaquePointer {
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
-            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown error"
-            sqlite3_close(db)
+        var handle: OpaquePointer?
+        guard sqlite3_open_v2(dbURL.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db = handle else {
+            let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown error"
+            sqlite3_close(handle)
             throw OpenCodeLocalStatsError.openFailed(message)
         }
         sqlite3_busy_timeout(db, 2000)
-        return db!
+        return db
     }
 
     /// First unarchived Go session: the subscription anchor for the monthly window.
@@ -819,11 +812,5 @@ final class OpenCodeLocalScanCache: @unchecked Sendable {
         let scan = try load()
         entry = (dbURL.path, fingerprint, scan)
         return scan
-    }
-
-    func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        entry = nil
     }
 }

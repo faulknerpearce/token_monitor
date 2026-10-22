@@ -11,9 +11,13 @@ struct OverviewPanelView: View {
     @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var grokbotPoller: GrokbotUsagePoller
     @ObservedObject var settings: AppSettings
+    // The hourly stores are observed so today's chart redraws when they grow.
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
     @ObservedObject var claudeHourly: HourlyDeltaActivityStore
     @ObservedObject var grokbotHourly: HourlyDeltaActivityStore
+    @ObservedObject var hourlyHistory: OverviewHourlyHistoryStore
+    /// Today's live chart inputs for a moment in today.
+    var todaySeries: (Date) -> OverviewDaySeries
     @ObservedObject var grokAuth: AuthSessionService
     @ObservedObject var openCodeAuth: OpenCodeAuthSession
     @ObservedObject var cursorAuth: CursorAuthSession
@@ -57,14 +61,11 @@ struct OverviewPanelView: View {
                 usageCard(for: provider)
             }
 
-            PanelCard {
-                PanelSectionHeader(title: "Usage Today")
-                // Re-evaluates at each local midnight so a panel left open
-                // across the day boundary switches to the new day. The schedule
-                // starts at today's midnight, so the first render shows today.
-                TimelineView(.explicit(Self.midnightSchedule(from: Date()))) { context in
-                    OverviewHourlyUsageChart(usage: providerHourlyUsage(now: context.date))
-                }
+            // Re-evaluates at each local midnight so a panel left open across
+            // the day boundary switches to the new day. The schedule starts at
+            // today's midnight, so the first render shows today.
+            TimelineView(.explicit(Self.midnightSchedule(from: Date()))) { context in
+                OverviewDailyUsageCard(now: context.date, history: hourlyHistory, todaySeries: todaySeries)
             }
         }
     }
@@ -76,115 +77,6 @@ struct OverviewPanelView: View {
     static func midnightSchedule(from date: Date, calendar: Calendar = .current) -> [Date] {
         let today = calendar.startOfDay(for: date)
         return (0...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
-    }
-
-    private func providerHourlyUsage(now: Date) -> ProviderDayHourlyUsage? {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: now)
-
-        let openCodeWeights: (openCodeGo: [Double], openCodeZen: [Double]) = {
-            guard settings.enabledProviderIDs.contains(.opencode),
-                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
-                  let hourly = openCodePoller.dayHourlyUsage,
-                  calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-                  hourly.hours.count == 24
-            else {
-                let empty = Array(repeating: 0.0, count: 24)
-                return (empty, empty)
-            }
-            let monthlyLimit = openCodePoller.snapshot?.windows
-                .first { $0.kind == .monthly }?.limitUSD
-                ?? OpenCodeWindowKind.monthly.defaultLimitUSD
-            return hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimit)
-        }()
-
-        let openCodeTokenWeights: (openCodeGo: [Int64], openCodeZen: [Int64]) = {
-            guard settings.enabledProviderIDs.contains(.opencode),
-                  openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
-                  let hourly = openCodePoller.dayHourlyUsage,
-                  calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-                  hourly.hours.count == 24
-            else {
-                let empty = Array(repeating: Int64(0), count: 24)
-                return (empty, empty)
-            }
-            let raw = hourly.overviewProviderHourTokenCounts()
-            return (raw.openCodeGo, raw.openCodeZen)
-        }()
-
-        let grokPollWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.grok),
-                  grokAuth.isSignedIn, !grokAuth.needsSignIn else {
-                return Array(repeating: 0, count: 24)
-            }
-            if calendar.isDate(grokHourly.dayStart, inSameDayAs: dayStart),
-               grokHourly.hourWeights.count == 24 {
-                return grokHourly.hourWeights
-            }
-            return Array(repeating: 0, count: 24)
-        }()
-
-        let cursorWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.cursor),
-                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn,
-                  let hourly = cursorPoller.dayHourlyUsage,
-                  calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-                  hourly.quotaHourWeights.count == 24
-            else {
-                return Array(repeating: 0, count: 24)
-            }
-            return hourly.quotaHourWeights
-        }()
-
-        let claudeWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.claude),
-                  claudeAuth.isSignedIn, !claudeAuth.needsSignIn else {
-                return Array(repeating: 0, count: 24)
-            }
-            if calendar.isDate(claudeHourly.dayStart, inSameDayAs: dayStart),
-               claudeHourly.hourWeights.count == 24 {
-                return claudeHourly.hourWeights
-            }
-            return Array(repeating: 0, count: 24)
-        }()
-
-        let grokbotWeights: [Double] = {
-            guard settings.enabledProviderIDs.contains(.grokbot),
-                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn else {
-                return Array(repeating: 0, count: 24)
-            }
-            if calendar.isDate(grokbotHourly.dayStart, inSameDayAs: dayStart),
-               grokbotHourly.hourWeights.count == 24 {
-                return grokbotHourly.hourWeights
-            }
-            return Array(repeating: 0, count: 24)
-        }()
-
-        let cursorTokenWeights: [Int64] = {
-            guard settings.enabledProviderIDs.contains(.cursor),
-                  cursorAuth.isSignedIn, !cursorAuth.needsSignIn,
-                  let hourly = cursorPoller.dayHourlyUsage,
-                  calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-                  hourly.hourTokenWeights.count == 24
-            else {
-                return Array(repeating: Int64(0), count: 24)
-            }
-            return hourly.hourTokenWeights
-        }()
-
-        let built = ProviderDayHourlyUsage.build(
-            dayStart: dayStart,
-            grokHourWeights: grokPollWeights,
-            openCodeGoHourWeights: openCodeWeights.openCodeGo,
-            openCodeZenHourWeights: openCodeWeights.openCodeZen,
-            cursorHourWeights: cursorWeights,
-            claudeHourWeights: claudeWeights,
-            grokbotHourWeights: grokbotWeights,
-            openCodeGoHourTokens: openCodeTokenWeights.openCodeGo,
-            openCodeZenHourTokens: openCodeTokenWeights.openCodeZen,
-            cursorHourTokens: cursorTokenWeights
-        )
-        return built.isEmpty ? nil : built
     }
 
     @ViewBuilder
@@ -535,5 +427,64 @@ struct OverviewPanelView: View {
                 }
             }
         }
+    }
+}
+
+/// The hourly usage chart for today or an earlier saved day, with arrows to
+/// step between days.
+struct OverviewDailyUsageCard: View {
+    let now: Date
+    @ObservedObject var history: OverviewHourlyHistoryStore
+    let todaySeries: (Date) -> OverviewDaySeries
+    var calendar: Calendar = .current
+
+    /// 0 is today; -1 is yesterday.
+    @State private var dayOffset = 0
+
+    private var day: Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: dayOffset, to: today) ?? today
+    }
+
+    private var series: OverviewDaySeries? {
+        dayOffset == 0 ? todaySeries(now) : history.series(on: day)
+    }
+
+    var body: some View {
+        let day = day
+        let usage = series.map { ProviderDayHourlyUsage.build(dayStart: day, series: $0) }
+        PanelCard {
+            PanelSectionHeader(title: Self.title(dayOffset: dayOffset, day: day))
+            OverviewHourlyUsageChart(
+                usage: usage?.isEmpty == false ? usage : nil,
+                emptyMessage: dayOffset == 0
+                    ? "No Grok, Grokbot, OpenCode, Cursor, or Claude activity yet today."
+                    : "No activity recorded on this day."
+            )
+            if Self.canGoBack(from: day, earliestDay: history.earliestDay, calendar: calendar) || dayOffset < 0 {
+                WeekChartNavigation(
+                    onPreviousWeek: Self.canGoBack(from: day, earliestDay: history.earliestDay, calendar: calendar)
+                        ? { dayOffset -= 1 }
+                        : nil,
+                    onNextWeek: { dayOffset = min(0, dayOffset + 1) },
+                    canGoNext: dayOffset < 0
+                )
+            }
+        }
+    }
+
+    /// "Usage Today", "Usage Yesterday", or "Usage Mon, Oct 20".
+    static func title(dayOffset: Int, day: Date) -> String {
+        switch dayOffset {
+        case 0: return "Usage Today"
+        case -1: return "Usage Yesterday"
+        default: return "Usage \(Format.date(day, dateFormat: "EEE, MMM d"))"
+        }
+    }
+
+    /// True when a saved day exists before `day`.
+    static func canGoBack(from day: Date, earliestDay: Date?, calendar: Calendar) -> Bool {
+        guard let earliestDay else { return false }
+        return calendar.startOfDay(for: earliestDay) < calendar.startOfDay(for: day)
     }
 }

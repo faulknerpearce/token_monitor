@@ -75,6 +75,19 @@ final class FormatTests: XCTestCase {
 
     func testParseFlexibleRejectsGarbage() {
         XCTAssertNil(ISO8601DateFormatter.parseFlexible("not a date"))
+        XCTAssertNil(ISO8601DateFormatter.parseFlexible("2026-07-16"))
+        XCTAssertNil(ISO8601DateFormatter.parseFlexible("2026-07-16T20:25:00"))
+    }
+
+    func testParseFlexibleHandlesOffsetsAndMicroseconds() throws {
+        let offset = try XCTUnwrap(ISO8601DateFormatter.parseFlexible("2026-07-16T14:25:00-06:00"))
+        XCTAssertEqual(offset.timeIntervalSince1970, 1_784_233_500, accuracy: 0.001)
+
+        let compactOffset = try XCTUnwrap(ISO8601DateFormatter.parseFlexible("2026-07-17T01:55:00+0530"))
+        XCTAssertEqual(compactOffset.timeIntervalSince1970, 1_784_233_500, accuracy: 0.001)
+
+        let micro = try XCTUnwrap(ISO8601DateFormatter.parseFlexible("2026-07-16T20:25:00.123456+00:00"))
+        XCTAssertEqual(micro.timeIntervalSince1970, 1_784_233_500.123456, accuracy: 0.000001)
     }
 
     // MARK: resetDate

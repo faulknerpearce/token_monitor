@@ -56,6 +56,28 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(second.showGrokbotBarInMenuBar)
     }
 
+    /// Panel sections start open; a closed section stays closed on the next
+    /// launch, and reopening it is saved too.
+    func testPanelSectionsDefaultOpenAndPersist() {
+        let first = makeSettings()
+        XCTAssertTrue(PanelSection.allCases.allSatisfy(first.isExpanded))
+
+        first.setExpanded(false, for: .claudeModels)
+        let second = makeSettings()
+        XCTAssertFalse(second.isExpanded(.claudeModels))
+        XCTAssertTrue(second.isExpanded(.openCodeModels))
+
+        second.setExpanded(true, for: .claudeModels)
+        XCTAssertTrue(makeSettings().isExpanded(.claudeModels))
+    }
+
+    func testPanelSectionIgnoresUnknownSavedValues() {
+        defaults.set(["openCodeModels", "retiredSection"], forKey: "collapsedPanelSections")
+        XCTAssertEqual(makeSettings().collapsedPanelSections, [.openCodeModels])
+        XCTAssertNil(PanelSection(rawValue: "retiredSection"))
+        XCTAssertEqual(PanelSection(rawValue: PanelSection.claudeModels.rawValue), .claudeModels)
+    }
+
     func testShowSelectedProviderDefaultsOffAndPersists() throws {
         XCTAssertFalse(makeSettings().showSelectedProviderInMenuBar)
 

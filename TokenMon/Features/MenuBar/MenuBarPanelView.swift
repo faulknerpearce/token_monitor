@@ -62,10 +62,19 @@ struct MenuBarPanelView: View {
         )
     }
 
+    /// Open/closed state of `section`, read from and saved to settings.
+    private func expansion(of section: PanelSection) -> Binding<Bool> {
+        Binding(
+            get: { settings.isExpanded(section) },
+            set: { settings.setExpanded($0, for: section) }
+        )
+    }
+
     private var openCodeContent: some View {
         OpenCodePanelView(
             poller: model.openCodePoller,
             auth: model.openCodeAuth,
+            modelsExpanded: expansion(of: .openCodeModels),
             openSignIn: { openWindow(.openCodeSignIn) }
         )
     }
@@ -82,6 +91,7 @@ struct MenuBarPanelView: View {
         ClaudePanelView(
             poller: model.claudePoller,
             auth: model.claudeAuth,
+            modelsExpanded: expansion(of: .claudeModels),
             openSignIn: { openWindow(.claudeSignIn) }
         )
     }
@@ -122,6 +132,8 @@ struct MenuBarPanelView: View {
             grokHourly: model.grokHourly,
             claudeHourly: model.claudeHourly,
             grokbotHourly: model.grokbotHourly,
+            hourlyHistory: model.overviewHistory,
+            todaySeries: { [model] date in model.overviewSeries(on: date) },
             grokAuth: model.auth,
             openCodeAuth: model.openCodeAuth,
             cursorAuth: model.cursorAuth,

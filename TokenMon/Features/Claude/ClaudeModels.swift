@@ -79,6 +79,9 @@ struct ClaudeSnapshot: Identifiable, Hashable, Sendable {
     var fiveHour: ClaudeUsageWindow?
     var sevenDay: ClaudeUsageWindow?
     var accountEmail: String?
+    /// Claude Code usage on this Mac, valued at API rates; `nil` when Claude
+    /// Code has no logs on this Mac.
+    var codeUsage: ClaudeCodeUsageSummary?
 
     var resetsAt: Date? { fiveHour?.resetsAt ?? sevenDay?.resetsAt }
 

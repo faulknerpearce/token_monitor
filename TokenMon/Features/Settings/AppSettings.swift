@@ -13,6 +13,14 @@ protocol LoginItemService: AnyObject {
 
 extension SMAppService: LoginItemService {}
 
+/// A dropdown panel section the user can open and close.
+///
+/// - Note: Raw values are saved in `UserDefaults`; do not rename them.
+enum PanelSection: String, Codable, CaseIterable, Hashable, Sendable {
+    case claudeModels
+    case openCodeModels
+}
+
 /// Persisted user settings published to pollers and menu-bar surfaces.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -116,6 +124,28 @@ final class AppSettings: ObservableObject {
     @Published var visibleProductIDs: Set<String> {
         didSet {
             defaults.set(Array(visibleProductIDs), forKey: Keys.visibleProducts)
+        }
+    }
+
+    /// Panel sections the user has closed; every other section is open.
+    @Published var collapsedPanelSections: Set<PanelSection> {
+        didSet {
+            guard collapsedPanelSections != oldValue else { return }
+            defaults.set(collapsedPanelSections.map(\.rawValue).sorted(), forKey: Keys.collapsedPanelSections)
+        }
+    }
+
+    /// Whether `section` is open.
+    func isExpanded(_ section: PanelSection) -> Bool {
+        !collapsedPanelSections.contains(section)
+    }
+
+    /// Opens or closes `section` and saves the choice.
+    func setExpanded(_ expanded: Bool, for section: PanelSection) {
+        if expanded {
+            collapsedPanelSections.remove(section)
+        } else {
+            collapsedPanelSections.insert(section)
         }
     }
 
@@ -258,6 +288,9 @@ final class AppSettings: ObservableObject {
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? false
         thresholdPercent = Self.clampThreshold(defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80)
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
+        collapsedPanelSections = Set(
+            (defaults.stringArray(forKey: Keys.collapsedPanelSections) ?? []).compactMap(PanelSection.init(rawValue:))
+        )
         let savedOrder = (defaults.stringArray(forKey: Keys.providerOrder) ?? [])
             .compactMap(MonitorProvider.init(rawValue:))
         providerOrder = MonitorProvider.normalizedOrder(savedOrder)
@@ -350,6 +383,7 @@ final class AppSettings: ObservableObject {
         static let enabledProviders = "enabledProviderIDs"
         static let providerOrder = "providerOrder"
         static let visibleProducts = "visibleProductIDs"
+        static let collapsedPanelSections = "collapsedPanelSections"
     }
 
     /// Live drag: move `moving` to the slot currently occupied by `target`.

@@ -165,9 +165,42 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertLessThanOrEqual(reset.timeIntervalSinceNow, 7 * 86_400)
     }
 
+    /// The snapshot carries the Claude Code usage loaded for the fetch time,
+    /// and a poller with an injected fetch reads no local logs by default.
+    func testRefreshAttachesClaudeCodeUsage() async throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fetchedAt = Date()
+        let response = ClaudeUsageResponse(fiveHour: ClaudeUsageWindow(usedPercent: 1, resetsAt: nil), sevenDay: nil)
+        let summary = ClaudeCodeUsageSummary(
+            month: ClaudeUsageTotals(tokens: 10, costUSD: 1),
+            allTime: ClaudeUsageTotals(tokens: 20, costUSD: 2),
+            monthModels: []
+        )
+        var requestedAt: Date?
+        let poller = try makePoller(
+            daily: store,
+            dir: dir,
+            loadCodeUsage: { now in
+                requestedAt = now
+                return summary
+            },
+            fetch: { _ in (response, fetchedAt) }
+        )
+        await poller.refreshNow()
+        XCTAssertEqual(poller.snapshot?.codeUsage, summary)
+        XCTAssertEqual(requestedAt, fetchedAt)
+
+        let hermetic = try makePoller(daily: store, dir: dir) { _ in (response, fetchedAt) }
+        await hermetic.refreshNow()
+        XCTAssertNotNil(hermetic.snapshot)
+        XCTAssertNil(hermetic.snapshot?.codeUsage)
+    }
+
     private func makePoller(
         daily: DailyQuotaDeltaStore,
         dir: URL,
+        loadCodeUsage: ((Date) async -> ClaudeCodeUsageSummary?)? = nil,
         fetch: @escaping (String) async throws -> (ClaudeUsageResponse, Date)
     ) throws -> ClaudeUsagePoller {
         let suite = "ClaudePoller-\(UUID().uuidString)"
@@ -181,6 +214,13 @@ final class ClaudeUsagePollerTests: XCTestCase {
             store: FileBackedStringStore(directory: dir, filenamePrefix: "hourly_"),
             storageKey: "claude_hourly"
         )
-        return ClaudeUsagePoller(settings: settings, auth: auth, hourly: hourly, daily: daily, fetchUsage: fetch)
+        return ClaudeUsagePoller(
+            settings: settings,
+            auth: auth,
+            hourly: hourly,
+            daily: daily,
+            fetchUsage: fetch,
+            loadCodeUsage: loadCodeUsage
+        )
     }
 }

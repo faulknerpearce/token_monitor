@@ -1,16 +1,16 @@
 import Foundation
 
+private let cursorHosts = [
+    "cursor.com",
+    "cursor.sh",
+    "authenticator.cursor.sh",
+    "api2.cursor.sh"
+]
+
 /// Session for cursor.com (`WorkosCursorSessionToken`).
 /// Uses its own cookie store, isolated from the Grok / OpenCode sessions.
 @MainActor
 final class CursorAuthSession: ProviderAuthSession {
-    private static let cursorHosts = [
-        "cursor.com",
-        "cursor.sh",
-        "authenticator.cursor.sh",
-        "api2.cursor.sh"
-    ]
-
     static func cursorPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(
             isDomain: { domain in Self.isCursorDomain(domain) },

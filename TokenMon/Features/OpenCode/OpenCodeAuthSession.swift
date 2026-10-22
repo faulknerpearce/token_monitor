@@ -3,18 +3,18 @@ import Foundation
 import os
 import WebKit
 
+private let openCodeHosts = ["opencode.ai", "auth.opencode.ai"]
+
 /// Console session for opencode.ai (OpenAuth cookie `auth`).
 /// Kept separate from Grok WebKit cookies so each provider keeps its own session.
 @MainActor
 final class OpenCodeAuthSession: ProviderAuthSession {
-    private static let openCodeHosts = ["opencode.ai", "auth.opencode.ai"]
-
     /// Last known workspace id (`wrk_…`) from redirect or prior fetch.
     @Published private(set) var workspaceID: String?
 
     /// Console session cookie. The console authenticates separately from the
     /// site's `auth` cookie, so this is captured and sent to `/console/api/*`.
-    static let consoleSessionCookieName = "__host-console_session"
+    nonisolated static let consoleSessionCookieName = "__host-console_session"
 
     static func openCodePolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(

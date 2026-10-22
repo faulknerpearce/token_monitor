@@ -75,16 +75,14 @@ enum DailyUsageBuilder {
         // Local day-over-day history is the source of truth for tracked usage.
         // Fall back to a server daily series only when local samples cannot paint bars.
         var samples = history
-        if let current {
-            if samples.isEmpty || (samples.last.map { $0.fetchedAt < current.fetchedAt } ?? true) {
-                if let last = samples.last,
-                   abs(last.usedPercent - current.usedPercent) < 0.05,
-                   abs(last.fetchedAt.timeIntervalSince(current.fetchedAt)) < 60,
-                   cal.isDate(last.fetchedAt, inSameDayAs: current.fetchedAt) {
-                    // same-day near-duplicate — keep history only
-                } else {
-                    samples.append(current)
-                }
+        if let current, samples.isEmpty || (samples.last.map { $0.fetchedAt < current.fetchedAt } ?? true) {
+            if let last = samples.last,
+               abs(last.usedPercent - current.usedPercent) < 0.05,
+               abs(last.fetchedAt.timeIntervalSince(current.fetchedAt)) < 60,
+               cal.isDate(last.fetchedAt, inSameDayAs: current.fetchedAt) {
+                // same-day near-duplicate — keep history only
+            } else {
+                samples.append(current)
             }
         }
         samples.sort { $0.fetchedAt < $1.fetchedAt }

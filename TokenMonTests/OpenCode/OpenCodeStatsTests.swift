@@ -484,14 +484,6 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertFalse(OpenCodeLocalStats.planEligibleProvider("anthropic"))
     }
 
-    func testGrokViaOpenCode() {
-        XCTAssertTrue(OpenCodeLocalStats.grokViaOpenCode(providerID: "xai", modelID: "grok-4.5"))
-        XCTAssertTrue(OpenCodeLocalStats.grokViaOpenCode(providerID: "XAI", modelID: "anything"))
-        XCTAssertTrue(OpenCodeLocalStats.grokViaOpenCode(providerID: "openrouter", modelID: "x-ai/grok-4"))
-        XCTAssertFalse(OpenCodeLocalStats.grokViaOpenCode(providerID: "deepseek", modelID: "deepseek-v4-pro"))
-        XCTAssertFalse(OpenCodeLocalStats.grokViaOpenCode(providerID: "opencode-go", modelID: "minimax-m3"))
-    }
-
     func testBYOKProvidersExcludedFromModels() throws {
         let now = Date(timeIntervalSince1970: 1_785_592_600)
         insert(timeCreated: now.addingTimeInterval(-3600), cost: 2, input: 1, model: modelJSON(provider: "opencode-go", id: "minimax-m3"))
@@ -509,7 +501,9 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertEqual(rolling.usedUSD, 2, accuracy: 0.001)
     }
 
-    func testOverviewSplitsGrokViaOpenCodeFromPlanUsage() throws {
+    /// Overview counts only Go and Zen plan usage; direct xAI and DeepSeek
+    /// keys have no OpenCode quota and add nothing.
+    func testOverviewCountsOnlyPlanUsage() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
         let dayStart = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_785_592_600))
@@ -529,18 +523,6 @@ final class OpenCodeStatsTests: XCTestCase {
         XCTAssertTrue(hourly.hours[11].segments.contains { $0.providerID == "xai" })
         XCTAssertTrue(hourly.hours[12].segments.contains { $0.providerID == "deepseek" })
 
-        let split = hourly.overviewProviderHourWeights()
-        XCTAssertEqual(split.openCodeGo[10], 3, accuracy: 0.001)
-        XCTAssertEqual(split.openCodeZen[10], 1, accuracy: 0.001)
-        XCTAssertEqual(split.openCodeGo[11], 0, accuracy: 0.001)
-        XCTAssertEqual(split.openCodeZen[11], 0, accuracy: 0.001)
-        XCTAssertEqual(split.grokViaOpenCode[11], 2, accuracy: 0.001)
-        XCTAssertEqual(split.grokViaOpenCode[10], 0, accuracy: 0.001)
-        // Direct DeepSeek BYOK is excluded from Overview entirely.
-        XCTAssertEqual(split.openCodeGo[12], 0, accuracy: 0.001)
-        XCTAssertEqual(split.openCodeZen[12], 0, accuracy: 0.001)
-        XCTAssertEqual(split.grokViaOpenCode[12], 0, accuracy: 0.001)
-
         let quotaSplit = hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: 10)
         XCTAssertEqual(
             quotaSplit.openCodeGo[10],
@@ -552,16 +534,21 @@ final class OpenCodeStatsTests: XCTestCase {
             10 * QuotaNormalization.averageWeeksPerMonth,
             accuracy: 0.001
         )
+        for hour in [11, 12] {
+            XCTAssertEqual(quotaSplit.openCodeGo[hour], 0, accuracy: 0.001)
+            XCTAssertEqual(quotaSplit.openCodeZen[hour], 0, accuracy: 0.001)
+        }
 
         let tokenSplit = hourly.overviewProviderHourTokenCounts()
         XCTAssertEqual(tokenSplit.openCodeGo[10], 1)
         XCTAssertEqual(tokenSplit.openCodeZen[10], 1)
 
+        let zeros = Array(repeating: 0.0, count: 24)
         let built = ProviderDayHourlyUsage.build(
             dayStart: dayStart,
-            grokHourWeights: split.grokViaOpenCode,
-            openCodeGoHourWeights: split.openCodeGo,
-            openCodeZenHourWeights: split.openCodeZen
+            grokHourWeights: zeros,
+            openCodeGoHourWeights: quotaSplit.openCodeGo,
+            openCodeZenHourWeights: quotaSplit.openCodeZen
         )
         XCTAssertFalse(built.isEmpty)
         XCTAssertGreaterThan(
@@ -570,7 +557,7 @@ final class OpenCodeStatsTests: XCTestCase {
         )
         XCTAssertGreaterThan(built.hours[10].openCodeGoSharePercent, 74)
         XCTAssertGreaterThan(built.hours[10].openCodeZenSharePercent, 24)
-        XCTAssertGreaterThan(built.hours[11].grokSharePercent, 99)
+        XCTAssertFalse(built.hours[11].hasActivity)
         XCTAssertFalse(built.hours[12].hasActivity)
     }
 

@@ -32,10 +32,10 @@ TokenMon is an agent-style macOS app (`LSUIElement` + a custom `NSStatusItem`, n
 | `Grokbot/` | Grokbot weekly allowance client/poller and panel. Owns no session: Grok Bot is a Cursor-backed product (`com.anysphere.sand`), so it borrows `CursorAuthSession` and its sign-in window |
 | `OpenCode/` | OpenCode auth, console/local usage, models, and panel |
 | `Cursor/` | Cursor auth, dashboard usage client/poller, and panel |
-| `Claude/` | Claude auth, usage client/poller, and panel |
+| `Claude/` | Claude auth, usage client/poller, Claude Code log reader with saved daily totals and API-rate pricing, and panel |
 | `ChatGPT/` | ChatGPT/Codex auth, usage client/poller, and panel |
 | `OpenRouter/` | OpenRouter bearer-key auth, usage client/poller, and panel |
-| `Overview/` | Multi-provider hourly chart and shared provider accent colors |
+| `Overview/` | Multi-provider hourly chart, its saved per-day history (30 days, recorded as `AppModel` changes), and shared provider accent colors |
 | `Provider/` | Provider identity, switching, and logos |
 | `Shared/Auth/` | `ProviderAuthSession`, `KeychainVault` / credential stores, WebKit cookie bridge and capture, sign-in window and buttons |
 | `Shared/Networking/` | `ProviderURLSession` / `AuthenticatedRequest`, `UsageError` / `ProviderError` mapping, `Domain` host matching, static URLs |

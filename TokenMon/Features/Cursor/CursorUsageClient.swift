@@ -301,8 +301,7 @@ struct CursorUsageClient: Sendable {
         var cycleOutput: Int64 = 0
 
         for event in events {
-            guard !isGrokBotEvent(event) else { continue }
-            guard let date = eventTimestamp(event), date >= cycleStart else { continue }
+            guard !isGrokBotEvent(event), let date = eventTimestamp(event), date >= cycleStart else { continue }
             meteredCycleCents += chargedCents(event)
             cycleTokens += tokenCount(event)
             cycleInput += inputTokenCount(event)
@@ -326,8 +325,7 @@ struct CursorUsageClient: Sendable {
     ) -> [Double] {
         var weights = Array(repeating: 0.0, count: 24)
         for event in events {
-            guard !isGrokBotEvent(event) else { continue }
-            guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
+            guard !isGrokBotEvent(event), let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
             weights[hour] += eventWeight(event)
@@ -346,8 +344,7 @@ struct CursorUsageClient: Sendable {
         guard let planLimitUSD, planLimitUSD > 0 else { return weights }
         let planLimitCents = planLimitUSD * 100 / QuotaNormalization.averageWeeksPerMonth
         for event in events {
-            guard !isGrokBotEvent(event) else { continue }
-            guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
+            guard !isGrokBotEvent(event), let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
             let cents = chargedCents(event)
@@ -365,8 +362,7 @@ struct CursorUsageClient: Sendable {
     ) -> [Int64] {
         var weights = Array(repeating: Int64(0), count: 24)
         for event in events {
-            guard !isGrokBotEvent(event) else { continue }
-            guard let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
+            guard !isGrokBotEvent(event), let hour = hourIndex(for: event, dayStart: dayStart, calendar: calendar) else {
                 continue
             }
             weights[hour] += tokenCount(event)
@@ -392,8 +388,7 @@ struct CursorUsageClient: Sendable {
         dayStart: Date,
         calendar: Calendar
     ) -> Int? {
-        guard let date = eventTimestamp(event) else { return nil }
-        guard calendar.isDate(date, inSameDayAs: dayStart) else { return nil }
+        guard let date = eventTimestamp(event), calendar.isDate(date, inSameDayAs: dayStart) else { return nil }
         return calendar.component(.hour, from: date)
     }
 

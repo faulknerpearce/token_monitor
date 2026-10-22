@@ -46,7 +46,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 .fetchGoUsageSnapshot(knownOrgID: knownOrgID)
         }
         self.fetchLocal = fetchLocal ?? {
-            try await Task.detached(priority: .userInitiated) {
+            await Task.detached(priority: .userInitiated) {
                 // Fetch independently, so a successful hourly read reaches the Overview
                 // chart even when the snapshot fails.
                 (
@@ -85,8 +85,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.opencode) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.opencode), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 

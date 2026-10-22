@@ -90,12 +90,6 @@ struct OpenCodeHourSegment: Identifiable, Hashable, Sendable {
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
     }
-
-    /// Activity weight for Overview: prefer $; fall back to message count so free turns count.
-    var activityWeight: Double {
-        if costUSD > 0 { return costUSD }
-        return Double(messageCount) * 0.01
-    }
 }
 
 /// One hour of the local day (0…23), with model cost stacks.
@@ -139,38 +133,6 @@ struct OpenCodeDayHourlyUsage: Hashable, Sendable {
 
     var isEmpty: Bool {
         maxHourUSD <= 0 && hours.allSatisfy { $0.messageCount == 0 }
-    }
-
-    /// Overview weights: Go and Zen stay separate; xAI/Grok-via-harness → Grok;
-    /// other BYOK providers are excluded.
-    func overviewProviderHourWeights() -> (
-        openCodeGo: [Double],
-        openCodeZen: [Double],
-        grokViaOpenCode: [Double]
-    ) {
-        var openCodeGo = Array(repeating: 0.0, count: 24)
-        var openCodeZen = Array(repeating: 0.0, count: 24)
-        var grok = Array(repeating: 0.0, count: 24)
-        for hour in hours where (0..<24).contains(hour.hour) {
-            for segment in hour.segments {
-                let weight = segment.activityWeight
-                guard weight > 0 else { continue }
-                switch segment.providerID.lowercased() {
-                case "opencode-go":
-                    openCodeGo[hour.hour] += weight
-                case "opencode":
-                    openCodeZen[hour.hour] += weight
-                default:
-                    if OpenCodeLocalStats.grokViaOpenCode(
-                        providerID: segment.providerID,
-                        modelID: segment.modelID
-                    ) {
-                        grok[hour.hour] += weight
-                    }
-                }
-            }
-        }
-        return (openCodeGo, openCodeZen, grok)
     }
 
     /// Hourly percentage-point consumption of the estimated OpenCode weekly quota.

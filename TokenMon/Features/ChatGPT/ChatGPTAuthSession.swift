@@ -1,28 +1,28 @@
 import Foundation
 
+private let chatgptHosts = [
+    "chatgpt.com",
+    "www.chatgpt.com",
+    "auth.openai.com",
+    "auth0.openai.com",
+    "api.openai.com"
+]
+
 /// Session for chatgpt.com (`__Secure-next-auth.session-token` cookie).
 ///
 /// The usage endpoint requires an OAuth bearer token; the poller exchanges the
 /// captured session cookie for a short-lived access token via `/api/auth/session`.
 @MainActor
 final class ChatGPTAuthSession: ProviderAuthSession {
-    private static let chatgptHosts = [
-        "chatgpt.com",
-        "www.chatgpt.com",
-        "auth.openai.com",
-        "auth0.openai.com",
-        "api.openai.com"
-    ]
-
     /// NextAuth's ChatGPT session cookie family. A large session JWT is chunked
     /// into `__Secure-next-auth.session-token.0`, `.1`, …, so the whole family is
     /// the session credential.
-    static let sessionTokenPrefix = "__secure-next-auth.session-token"
+    nonisolated static let sessionTokenPrefix = "__secure-next-auth.session-token"
 
     /// The cookies the usage token exchange sends: the session family only.
     /// The CSRF cookie is present on the sign-in page before sign-in, so it is
     /// excluded from the credential.
-    static let essentialCookiePrefixes: Set<String> = [sessionTokenPrefix]
+    nonisolated static let essentialCookiePrefixes: Set<String> = [sessionTokenPrefix]
 
     static func chatgptPolicy() -> WebKitCookieCapture.Policy {
         WebKitCookieCapture.Policy(

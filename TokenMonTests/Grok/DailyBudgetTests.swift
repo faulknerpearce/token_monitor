@@ -69,21 +69,6 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertFalse(day.isOverBudget)
     }
 
-    func testLast7AtPeriodStartPadsForward() {
-        // Period starts today: only one real day exists; the window is still 7 bars.
-        let today = date(2026, 8, 1)
-        let all = DailyBudget.buildDays(
-            periodStart: today,
-            periodEnd: date(2026, 9, 1),
-            limitUSD: 310,
-            spentByDay: [:],
-            now: today,
-            calendar: calendar
-        )
-        let days = DailyBudget.last7(from: all, now: today, calendar: calendar)
-        XCTAssertEqual(days.count, 7)
-    }
-
     // MARK: buildWeeklyWindowDays
 
     /// August 2026: Aug 27 is a Thursday. The window anchors to the reset

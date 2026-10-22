@@ -18,8 +18,7 @@ struct OpenCodeSignInView: View {
                         || path.contains("/console/login")
                 },
                 isReturnPage: { url in
-                    guard let host = url.host?.lowercased() else { return false }
-                    guard host == "opencode.ai" || host.hasSuffix(".opencode.ai"),
+                    guard let host = url.host?.lowercased(), host == "opencode.ai" || host.hasSuffix(".opencode.ai"),
                           !host.contains("auth.") else { return false }
                     let path = url.path
                     if path.hasPrefix("/console") {

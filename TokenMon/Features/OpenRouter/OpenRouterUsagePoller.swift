@@ -60,8 +60,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func performRefresh() async -> PollOutcome {
-        guard settings.isProviderEnabled(.openrouter) else { return .skipped }
-        guard !isRefreshing else { return .skipped }
+        guard settings.isProviderEnabled(.openrouter), !isRefreshing else { return .skipped }
         isRefreshing = true
         defer { isRefreshing = false }
 
