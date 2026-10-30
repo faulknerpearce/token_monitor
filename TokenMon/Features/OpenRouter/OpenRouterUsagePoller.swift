@@ -35,7 +35,7 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { apiKey in
             try await OpenRouterUsageClient(apiKey: apiKey).fetchSnapshot()
         }
-        auth.accountReset
+        auth.signedOut
             .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }

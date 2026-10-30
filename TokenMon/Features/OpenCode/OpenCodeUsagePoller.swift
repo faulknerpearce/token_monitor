@@ -55,7 +55,8 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
                 )
             }.value
         }
-        auth.accountReset
+        auth.signedOut
+            .merge(with: auth.accountReset)
             .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }

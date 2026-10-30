@@ -1,8 +1,8 @@
 @testable import TokenMon
 import XCTest
 
-/// What an expired session keeps and what an explicit sign-out or account
-/// change clears. Uses in-memory credential stores, temp-dir activity stores,
+/// What an expired session and an explicit sign-out keep, and what an
+/// account change clears. Uses in-memory credential stores, temp-dir activity stores,
 /// and injected fetch seams; no network, Keychain, or WebKit is touched.
 @MainActor
 final class AuthInvalidationTests: XCTestCase {
@@ -111,16 +111,37 @@ final class AuthInvalidationTests: XCTestCase {
         XCTAssertNotNil(poller.lastError)
     }
 
-    func testClaudeSignOutClearsHistory() async {
+    /// Sign-out drops the snapshot but keeps the daily history for the same
+    /// account; a different account's sign-in clears it.
+    func testClaudeSignOutKeepsHistoryUntilAnotherAccountSignsIn() async {
         let (poller, auth, daily, _) = makeClaude()
+        auth.adopt(claudeCapture(org: "org-1"))
         await poller.refreshNow()
         await poller.refreshNow()
-        XCTAssertFalse(daily.spentByDay.isEmpty)
+        let recorded = daily.spentByDay
+        XCTAssertFalse(recorded.isEmpty)
 
         auth.signOut()
-
         XCTAssertNil(poller.snapshot)
+        XCTAssertEqual(daily.spentByDay, recorded)
+
+        auth.adopt(claudeCapture(org: "org-1"))
+        XCTAssertEqual(daily.spentByDay, recorded)
+
+        auth.signOut()
+        auth.adopt(claudeCapture(org: "org-2"))
         XCTAssertTrue(daily.spentByDay.isEmpty)
+    }
+
+    private func claudeCapture(org: String) -> WebKitCookieCapture.CaptureResult {
+        let cookies = [("sessionKey", "live"), ("lastActiveOrg", org)]
+        return WebKitCookieCapture.CaptureResult(
+            cookies: cookies.compactMap { name, value in
+                HTTPCookie(properties: [.domain: "claude.ai", .path: "/", .name: name, .value: value])
+            },
+            cookieHeader: cookies.map { "\($0.0)=\($0.1)" }.joined(separator: "; "),
+            email: nil
+        )
     }
 
     // MARK: - Grokbot on the shared Cursor session
@@ -174,7 +195,7 @@ final class AuthInvalidationTests: XCTestCase {
 
     // MARK: - Grok
 
-    func testGrokInvalidationKeepsHourlyDeltasButSignOutClearsThem() async {
+    func testGrokInvalidationAndSignOutKeepHourlyDeltas() async {
         let auth = AuthSessionService(directory: nil, store: InMemoryCredentialStore())
         auth.save(cookieHeader: "sso=live")
         let hourly = hourlyStore("grok")
@@ -198,6 +219,7 @@ final class AuthInvalidationTests: XCTestCase {
         XCTAssertEqual(hourly.hourWeights, recorded)
 
         auth.signOut()
-        XCTAssertTrue(hourly.hourWeights.allSatisfy { $0 == 0 })
+        XCTAssertNil(poller.snapshot)
+        XCTAssertEqual(hourly.hourWeights, recorded)
     }
 }

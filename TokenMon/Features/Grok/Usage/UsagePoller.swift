@@ -45,11 +45,16 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
             try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         history.setActiveAccount(auth.accountEmail)
-        // Signing out or switching accounts drops the snapshot and the
-        // account-scoped hourly deltas immediately. An expired session keeps
-        // them: the same account usually signs back in.
-        auth.accountReset
+        // Signing out drops the snapshot; the account-scoped hourly deltas are
+        // kept for the same account and cleared when a different account signs in.
+        auth.signedOut
             .sink { [weak self] in self?.clearSnapshot() }
+            .store(in: &cancellables)
+        auth.accountReset
+            .sink { [weak self] in
+                self?.clearSnapshot()
+                self?.clearAccountHistory()
+            }
             .store(in: &cancellables)
     }
 
@@ -65,6 +70,10 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         snapshot = nil
         lastError = nil
         lastRefreshedAt = nil
+    }
+
+    /// Clears the previous account's hourly deltas.
+    private func clearAccountHistory() {
         grokHourly.clear()
     }
 

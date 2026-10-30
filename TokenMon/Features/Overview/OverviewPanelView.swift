@@ -134,7 +134,6 @@ struct OverviewPanelView: View {
             if grokAuth.isSignedIn && !grokAuth.needsSignIn {
                 ProviderSignOutButton(provider: .grok) {
                     grokAuth.signOut()
-                    grokPoller.clearSnapshot()
                 }
             }
         }
@@ -182,7 +181,6 @@ struct OverviewPanelView: View {
             if !openCodeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .opencode) {
                     openCodeAuth.signOut()
-                    openCodePoller.clearSnapshot()
                 }
             }
         }
@@ -229,7 +227,6 @@ struct OverviewPanelView: View {
             if !cursorAuth.needsSignIn {
                 ProviderSignOutButton(provider: .cursor) {
                     cursorAuth.signOut()
-                    cursorPoller.clearSnapshot()
                 }
             }
         }
@@ -276,7 +273,6 @@ struct OverviewPanelView: View {
             if !claudeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .claude) {
                     claudeAuth.signOut()
-                    claudePoller.clearSnapshot()
                 }
             }
         }
@@ -323,7 +319,6 @@ struct OverviewPanelView: View {
             if !chatGPTAuth.needsSignIn {
                 ProviderSignOutButton(provider: .chatgpt) {
                     chatGPTAuth.signOut()
-                    chatGPTPoller.clearSnapshot()
                 }
             }
         }
@@ -423,7 +418,6 @@ struct OverviewPanelView: View {
             if !openRouterAuth.needsSignIn {
                 ProviderSignOutButton(provider: .openrouter) {
                     openRouterAuth.signOut()
-                    openRouterPoller.clearSnapshot()
                 }
             }
         }

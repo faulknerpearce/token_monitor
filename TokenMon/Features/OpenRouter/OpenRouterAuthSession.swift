@@ -12,8 +12,8 @@ final class OpenRouterAuthSession: ObservableObject {
     @Published var needsSignIn = true
     @Published private(set) var lastAuthError: String?
 
-    /// Fires on explicit sign-out; see `ProviderAuthSession.accountReset`.
-    let accountReset = PassthroughSubject<Void, Never>()
+    /// Fires on explicit sign-out; see `ProviderAuthSession.signedOut`.
+    let signedOut = PassthroughSubject<Void, Never>()
 
     /// Rejections of the live key since its last successful request; see
     /// `ProviderAuthSession.authFailureThreshold`.
@@ -111,7 +111,7 @@ final class OpenRouterAuthSession: ObservableObject {
         consecutiveAuthFailures = 0
         sessionGeneration += 1
         logger.info("OpenRouter signed out")
-        accountReset.send()
+        signedOut.send()
     }
 
     static func looksLikeAPIKey(_ key: String) -> Bool {

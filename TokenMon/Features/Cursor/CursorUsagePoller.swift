@@ -65,10 +65,17 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader in
             try await CursorUsageClient(cookieHeader: cookieHeader, eventCache: eventCache).fetchSnapshot()
         }
-        // Drop the Cursor snapshot and daily history as soon as this shared
-        // session signs out or changes account; an expired session keeps them.
-        auth.accountReset
+        // Signing out of this shared session drops the snapshot; the daily
+        // history is kept for the same account and cleared when a different
+        // account signs in.
+        auth.signedOut
             .sink { [weak self] in self?.clearSnapshot() }
+            .store(in: &cancellables)
+        auth.accountReset
+            .sink { [weak self] in
+                self?.clearSnapshot()
+                self?.clearAccountHistory()
+            }
             .store(in: &cancellables)
     }
 
@@ -90,6 +97,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
         dataSourceLabel = nil
         lastRefreshedAt = nil
         eventCache.clear()
+    }
+
+    /// Clears the previous account's daily history.
+    private func clearAccountHistory() {
         daily.clear()
     }
 

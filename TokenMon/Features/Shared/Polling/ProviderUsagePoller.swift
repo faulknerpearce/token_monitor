@@ -17,5 +17,6 @@ protocol ProviderUsagePoller: ObservableObject {
     func stop()
     /// Fetches now (when the provider is enabled) and restarts the poll wait.
     func refreshNow() async
+    /// Drops the displayed snapshot. Stored history is kept.
     func clearSnapshot()
 }

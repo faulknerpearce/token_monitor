@@ -44,7 +44,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
                 tokenCacheKey: String(generation)
             ).fetchUsage()
         }
-        auth.accountReset
+        auth.signedOut
+            .merge(with: auth.accountReset)
             .sink { [weak self] in self?.clearSnapshot() }
             .store(in: &cancellables)
     }

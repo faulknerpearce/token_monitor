@@ -38,10 +38,14 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
     @Published private(set) var lastAuthError: String?
 
     /// Fires when locally stored usage history stops belonging to the session:
-    /// an explicit sign-out, or a capture for a different account. Those are its
-    /// only triggers, so history survives invalidation after rejected requests
-    /// and a re-login to the same account.
+    /// a capture or poll for a different account than the stored identity. That
+    /// is its only trigger, so history survives sign-out, invalidation after
+    /// rejected requests, and a re-login to the same account.
     let accountReset = PassthroughSubject<Void, Never>()
+
+    /// Fires on explicit sign-out, so pollers drop the displayed snapshot.
+    /// Stored history and the account identity are kept.
+    let signedOut = PassthroughSubject<Void, Never>()
 
     /// Consecutive rejections of the live session required before it is
     /// invalidated. One rejection can be a token-exchange hiccup or an edge
@@ -322,18 +326,19 @@ class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
         logger.info("Captured \(result.cookies.count, privacy: .public) session cookies")
     }
 
-    /// Explicit sign-out: clears credentials, the account identity, and fires
-    /// `accountReset` so pollers drop that account's stored history.
+    /// Explicit sign-out: clears credentials and fires `signedOut` so pollers
+    /// drop the displayed snapshot. The account identity is kept, so stored
+    /// history continues when the same account signs back in and is cleared
+    /// (`accountReset`) when a different one does.
     func signOut() {
         clearBrowserState()
-        removeStore(key: "account")
         isSignedIn = false
         accountEmail = nil
         needsSignIn = true
         lastAuthError = nil
         consecutiveAuthFailures = 0
         logger.info("\(self.config.logCategory, privacy: .public) signed out")
-        accountReset.send()
+        signedOut.send()
     }
 
     /// Clears persisted session keys and browser cookies (the provider's isolated

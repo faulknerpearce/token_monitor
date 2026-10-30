@@ -54,7 +54,6 @@ struct CursorPanelView: View {
 
                 ProviderSignOutButton(provider: .cursor) {
                     auth.signOut()
-                    poller.clearSnapshot()
                 }
             }
         } else {

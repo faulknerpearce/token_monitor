@@ -232,35 +232,30 @@ private struct AccountsSettingsTab: View {
                     provider: .grok,
                     auth: model.auth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.poller.clearSnapshot,
                     openSignIn: { openWindow(.grokSignIn) }
                 )
                 ProviderAccountRow(
                     provider: .claude,
                     auth: model.claudeAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.claudePoller.clearSnapshot,
                     openSignIn: { openWindow(.claudeSignIn) }
                 )
                 ProviderAccountRow(
                     provider: .chatgpt,
                     auth: model.chatGPTAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.chatGPTPoller.clearSnapshot,
                     openSignIn: { openWindow(.chatGPTSignIn) }
                 )
                 ProviderAccountRow(
                     provider: .cursor,
                     auth: model.cursorAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.cursorPoller.clearSnapshot,
                     openSignIn: { openWindow(.cursorSignIn) }
                 )
                 ProviderAccountRow(
                     provider: .opencode,
                     auth: model.openCodeAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.openCodePoller.clearSnapshot,
                     openSignIn: { openWindow(.openCodeSignIn) }
                 )
             } header: {
@@ -379,7 +374,6 @@ private struct ProviderAccountRow: View {
     let provider: MonitorProvider
     @ObservedObject var auth: ProviderAuthSession
     let signInTitle: String
-    let clearSnapshot: () -> Void
     let openSignIn: () -> Void
 
     var body: some View {
@@ -402,7 +396,6 @@ private struct ProviderAccountRow: View {
                     Button("Re-authenticate…") { openSignIn() }
                     Button("Sign Out", role: .destructive) {
                         auth.signOut()
-                        clearSnapshot()
                     }
                 } else {
                     Button(signInTitle) { openSignIn() }
@@ -429,7 +422,6 @@ private struct OpenRouterAccountSection: View {
                 }
                 Button("Sign Out", role: .destructive) {
                     auth.signOut()
-                    poller.clearSnapshot()
                     keyDraft = ""
                 }
             } else {

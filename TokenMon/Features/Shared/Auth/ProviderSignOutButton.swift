@@ -8,8 +8,7 @@ import SwiftUI
 ///
 /// - Parameters:
 ///   - provider: Provider whose session this button ends; names the confirm prompt.
-///   - action: Invoked after the user confirms; typically `auth.signOut()` plus
-///     `poller.clearSnapshot()`.
+///   - action: Invoked after the user confirms; typically `auth.signOut()`.
 struct ProviderSignOutButton: View {
     let provider: MonitorProvider
     let action: () -> Void

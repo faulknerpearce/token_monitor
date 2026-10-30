@@ -68,7 +68,6 @@ struct OpenCodePanelView: View {
 
                 ProviderSignOutButton(provider: .opencode) {
                     auth.signOut()
-                    poller.clearSnapshot()
                 }
             }
         } else {

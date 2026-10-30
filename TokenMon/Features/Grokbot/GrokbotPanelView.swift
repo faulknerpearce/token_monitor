@@ -62,7 +62,6 @@ struct GrokbotPanelView: View {
                 // signing out here also ends the Cursor provider's session.
                 ProviderSignOutButton(provider: .cursor) {
                     auth.signOut()
-                    poller.clearSnapshot()
                 }
             }
         } else {

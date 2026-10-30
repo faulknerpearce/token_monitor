@@ -74,7 +74,6 @@ struct OpenRouterPanelView: View {
 
                 ProviderSignOutButton(provider: .openrouter) {
                     auth.signOut()
-                    poller.clearSnapshot()
                     apiKeyDraft = ""
                     isReplacingKey = false
                 }

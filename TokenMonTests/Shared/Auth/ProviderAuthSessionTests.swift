@@ -227,14 +227,29 @@ final class ProviderAuthSessionTests: XCTestCase {
         XCTAssertEqual(resets.count, 0)
     }
 
-    func testSignOutResetsAccountData() {
+    /// Sign-out fires `signedOut` but keeps history: signing back in as the
+    /// same account fires no reset, and a different account does.
+    func testSignOutKeepsAccountDataUntilAnotherAccountSignsIn() {
         let auth = ProviderAuthSession(config: makeConfig(), store: InMemoryCredentialStore())
         auth.save(cookieHeader: "session=abc")
+        auth.saveAccountEmail("one@example.com")
         let (resets, token) = observeResets(auth)
         defer { token.cancel() }
+        var signOuts = 0
+        let signOutToken = auth.signedOut.sink { signOuts += 1 }
+        defer { signOutToken.cancel() }
 
         auth.signOut()
+        XCTAssertEqual(signOuts, 1)
+        XCTAssertEqual(resets.count, 0)
 
+        auth.save(cookieHeader: "session=def")
+        auth.saveAccountEmail("one@example.com")
+        XCTAssertEqual(resets.count, 0)
+
+        auth.signOut()
+        auth.save(cookieHeader: "session=ghi")
+        auth.saveAccountEmail("two@example.com")
         XCTAssertEqual(resets.count, 1)
     }
 

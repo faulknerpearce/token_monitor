@@ -52,7 +52,6 @@ struct ChatGPTPanelView: View {
 
                 ProviderSignOutButton(provider: .chatgpt) {
                     auth.signOut()
-                    poller.clearSnapshot()
                 }
             }
         } else {

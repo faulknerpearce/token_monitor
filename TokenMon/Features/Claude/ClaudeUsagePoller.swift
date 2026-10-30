@@ -75,10 +75,16 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
                 }.value
             }
         }
-        // The persisted hourly and daily history is wiped only on sign-out or
-        // an account change; an expired session keeps it.
-        auth.accountReset
+        // Signing out drops the snapshot. The persisted hourly and daily
+        // history is wiped only when a different account signs in.
+        auth.signedOut
             .sink { [weak self] in self?.clearSnapshot() }
+            .store(in: &cancellables)
+        auth.accountReset
+            .sink { [weak self] in
+                self?.clearSnapshot()
+                self?.clearAccountHistory()
+            }
             .store(in: &cancellables)
     }
 
@@ -97,6 +103,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         budgetReferenceNow = nil
         lastError = nil
         lastRefreshedAt = nil
+    }
+
+    /// Clears the previous account's hourly and daily history.
+    private func clearAccountHistory() {
         hourly.clear()
         daily.clear()
     }

@@ -53,11 +53,17 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader, accountEmail in
             try await GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchSnapshot()
         }
-        // The session is shared with Cursor. Signing out or switching accounts
-        // from either surface drops this snapshot and its history immediately;
-        // an expired session keeps them.
-        auth.accountReset
+        // The session is shared with Cursor. Signing out from either surface
+        // drops this snapshot; its history is kept for the same account and
+        // cleared when a different account signs in.
+        auth.signedOut
             .sink { [weak self] in self?.clearSnapshot() }
+            .store(in: &cancellables)
+        auth.accountReset
+            .sink { [weak self] in
+                self?.clearSnapshot()
+                self?.clearAccountHistory()
+            }
             .store(in: &cancellables)
     }
 
@@ -76,6 +82,10 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
         budgetReferenceNow = nil
         lastError = nil
         lastRefreshedAt = nil
+    }
+
+    /// Clears the previous account's hourly and daily history.
+    private func clearAccountHistory() {
         hourly.clear()
         daily.clear()
     }

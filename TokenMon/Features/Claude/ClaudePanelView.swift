@@ -54,7 +54,6 @@ struct ClaudePanelView: View {
 
                 ProviderSignOutButton(provider: .claude) {
                     auth.signOut()
-                    poller.clearSnapshot()
                 }
             }
         } else {
