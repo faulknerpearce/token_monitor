@@ -28,6 +28,8 @@ final class MenuBarController: NSObject {
     private var appearanceObservation: NSKeyValueObservation?
     /// Key of the image currently on the button.
     private var statusKey: String?
+    /// The dropdown content's laid-out height, as SwiftUI last reported it.
+    private var contentHeight: CGFloat?
 
     /// Gap between the status item and the top of the panel.
     private let panelGap: CGFloat = 4
@@ -172,8 +174,9 @@ final class MenuBarController: NSObject {
         let hosting = NSHostingController(rootView: MenuBarPanelContent(
             model: model,
             scrollState: scrollState,
-            contentHeightChanged: { [weak self] in
-                // Re-fit after SwiftUI has laid out the new height.
+            contentHeightChanged: { [weak self] height in
+                self?.contentHeight = height
+                // Re-fit outside SwiftUI's layout pass.
                 DispatchQueue.main.async { self?.resizePanelIfNeeded() }
             }
         ))
@@ -190,6 +193,7 @@ final class MenuBarController: NSObject {
         panel.orderOut(nil)
         panel.contentViewController = nil
         hosting = nil
+        contentHeight = nil
         model.setMenuOpen(false)
     }
 
@@ -216,11 +220,18 @@ final class MenuBarController: NSObject {
         return frame
     }
 
+    /// The content's full height: the height SwiftUI reported for it, or the
+    /// hosting view's fitting size before the first report.
     private func panelContentSize() -> NSSize {
         guard let hosting else { return NSSize(width: MenuBarPanelView.panelWidth, height: 480) }
-        hosting.view.layoutSubtreeIfNeeded()
-        let height = max(200, hosting.view.fittingSize.height)
-        return NSSize(width: MenuBarPanelView.panelWidth, height: height)
+        let measured: CGFloat
+        if let contentHeight {
+            measured = contentHeight
+        } else {
+            hosting.view.layoutSubtreeIfNeeded()
+            measured = hosting.view.fittingSize.height
+        }
+        return NSSize(width: MenuBarPanelView.panelWidth, height: max(200, ceil(measured)))
     }
 
     /// Frame for `size`, anchored just under the status item and clamped to the
@@ -274,9 +285,10 @@ final class MenuBarController: NSObject {
 /// anchoring to the top keeps them fixed.
 ///
 /// The panel's height is clamped to the screen. The content sits in one
-/// scroll view: measured unconstrained (the hosting view's `fittingSize`) it
-/// reports the content's full height, it bounces only when the content is
-/// taller than the panel, and once the panel is shorter the content scrolls.
+/// scroll view, which lays it out at its full height; that height is reported
+/// on every change (a tab switch, a section opening, new data) and the panel
+/// re-fits to it. The content bounces only when it is taller than the panel,
+/// and once the panel is shorter the content scrolls.
 ///
 /// The scroll bar shows only while the screen cuts the panel short. Content
 /// that grows (a section opening) is briefly taller than the panel until the
@@ -284,18 +296,15 @@ final class MenuBarController: NSObject {
 private struct MenuBarPanelContent: View {
     let model: AppModel
     let scrollState: MenuBarPanelScrollState
-    /// Called when the content's height changes (a tab switch, a section
-    /// opening, new data), so the panel can re-fit its bottom edge.
-    let contentHeightChanged: () -> Void
+    /// Called with the content's new height whenever it changes, so the
+    /// panel can re-fit its bottom edge.
+    let contentHeightChanged: (CGFloat) -> Void
 
     var body: some View {
         ScrollView(.vertical) {
             MenuBarRoot(model: model)
-                .background(GeometryReader { geometry in
-                    Color.clear.preference(key: PanelContentHeightKey.self, value: geometry.size.height)
-                })
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }, action: contentHeightChanged)
         }
-        .onPreferenceChange(PanelContentHeightKey.self) { _ in contentHeightChanged() }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(scrollState.isHeightClamped ? .automatic : .never)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -308,13 +317,4 @@ private struct MenuBarPanelContent: View {
 @Observable
 final class MenuBarPanelScrollState {
     var isHeightClamped = false
-}
-
-/// The dropdown content's laid-out height.
-private struct PanelContentHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
 }
