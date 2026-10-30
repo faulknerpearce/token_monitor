@@ -1,16 +1,17 @@
 import AppKit
-import Combine
 import Foundation
+import Observation
 import os
 
 /// Checks GitHub for a newer TokenMon release and can install its zip in place.
 @MainActor
-final class UpdateChecker: ObservableObject {
-    @Published private(set) var availableRelease: AvailableRelease?
-    @Published private(set) var isChecking = false
-    @Published private(set) var isInstalling = false
+@Observable
+final class UpdateChecker {
+    private(set) var availableRelease: AvailableRelease?
+    private(set) var isChecking = false
+    private(set) var isInstalling = false
     /// Result of a manual check ("You're up to date.") or the last failure.
-    @Published private(set) var statusMessage: String?
+    private(set) var statusMessage: String?
     /// Last check failure, kept for tests. `statusMessage` is what the UI shows.
     private(set) var lastError: String?
 
@@ -34,7 +35,7 @@ final class UpdateChecker: ObservableObject {
     private let session: URLSession
     private let logger = Logger(category: "Update")
 
-    private lazy var loop = PollingLoop(
+    @ObservationIgnored private lazy var loop = PollingLoop(
         interval: { [weak self] in self?.currentInterval() },
         refresh: { [weak self] in await self?.checkNow() }
     )
@@ -169,7 +170,7 @@ final class UpdateChecker: ObservableObject {
         openURL(release.pageURL)
     }
 
-    private lazy var downloadSession: URLSession = {
+    @ObservationIgnored private lazy var downloadSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         return URLSession(configuration: configuration, delegate: TrustedReleaseRedirect(), delegateQueue: nil)
     }()

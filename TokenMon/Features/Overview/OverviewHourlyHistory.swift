@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// A provider series on the Overview hourly chart.
 ///
@@ -32,6 +32,23 @@ struct OverviewDaySeries: Codable, Hashable, Sendable {
             weights: weights.merging(other.weights) { Self.hourwiseMax($0, $1) },
             tokens: tokens.merging(other.tokens) { Self.hourwiseMax($0, $1) }
         )
+    }
+
+    /// Adds OpenCode Go and Zen hours from `hourly` when it covers the day
+    /// starting at `dayStart`.
+    mutating func addOpenCode(
+        _ hourly: OpenCodeDayHourlyUsage,
+        monthlyLimitUSD: Double,
+        dayStart: Date,
+        calendar: Calendar
+    ) {
+        guard calendar.isDate(hourly.dayStart, inSameDayAs: dayStart), hourly.hours.count == 24 else { return }
+        let weights = hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimitUSD)
+        let tokens = hourly.overviewProviderHourTokenCounts()
+        self.weights[.openCodeGo] = weights.openCodeGo
+        self.weights[.openCodeZen] = weights.openCodeZen
+        self.tokens[.openCodeGo] = tokens.openCodeGo
+        self.tokens[.openCodeZen] = tokens.openCodeZen
     }
 
     private static func hourwiseMax<T: Comparable & AdditiveArithmetic>(_ lhs: [T], _ rhs: [T]) -> [T] {
@@ -67,12 +84,13 @@ extension ProviderDayHourlyUsage {
 /// current day's hours, so earlier days exist only from when they were
 /// recorded here. Days older than `retentionDays` are dropped.
 @MainActor
-final class OverviewHourlyHistoryStore: ObservableObject {
+@Observable
+final class OverviewHourlyHistoryStore {
     /// Number of days kept, including today.
     static let retentionDays = 30
 
     /// Saved days keyed by ``DayKey``.
-    @Published private(set) var days: [String: OverviewDaySeries]
+    private(set) var days: [String: OverviewDaySeries]
 
     private struct Payload: Codable, Equatable {
         var version = 1
@@ -104,17 +122,25 @@ final class OverviewHourlyHistoryStore: ObservableObject {
     }
 
     /// Merges `series` into the day containing `date`, drops days past the
-    /// retention window, and saves when anything changed.
+    /// retention window, and saves when anything changed. Only that day's
+    /// entry is compared, so an unchanged record costs one day's merge.
     func record(_ series: OverviewDaySeries, at date: Date) {
         let key = DayKey.key(for: date, calendar: calendar)
         var next = days
+        var changed = false
         if series.hasActivity || next[key] != nil {
-            next[key] = (next[key] ?? OverviewDaySeries()).merging(series)
+            let merged = (next[key] ?? OverviewDaySeries()).merging(series)
+            if merged != next[key] {
+                next[key] = merged
+                changed = true
+            }
         }
-        if let oldest = DayKey.adding(days: -(Self.retentionDays - 1), to: key, calendar: calendar) {
+        if let oldest = DayKey.adding(days: -(Self.retentionDays - 1), to: key, calendar: calendar),
+           next.keys.contains(where: { $0 < oldest }) {
             next = next.filter { $0.key >= oldest }
+            changed = true
         }
-        guard next != days else { return }
+        guard changed else { return }
         days = next
         save()
     }
@@ -141,7 +167,8 @@ final class OverviewHourlyHistoryStore: ObservableObject {
 
 extension AppModel {
     /// Today's Overview chart inputs from the providers that are enabled and
-    /// signed in, in the units ``OverviewDaySeries`` describes.
+    /// signed in (OpenCode needs only to be enabled), in the units
+    /// ``OverviewDaySeries`` describes.
     func overviewSeries(on date: Date, calendar: Calendar = .current) -> OverviewDaySeries {
         let dayStart = calendar.startOfDay(for: date)
         var series = OverviewDaySeries()
@@ -152,7 +179,7 @@ extension AppModel {
             return store.hourWeights
         }
 
-        if enabled.contains(.grok), auth.isSignedIn, !auth.needsSignIn {
+        if enabled.contains(.grok), grokAuth.isSignedIn, !grokAuth.needsSignIn {
             series.weights[.grok] = today(grokHourly)
         }
         if enabled.contains(.claude), claudeAuth.isSignedIn, !claudeAuth.needsSignIn {
@@ -167,19 +194,13 @@ extension AppModel {
             if hourly.quotaHourWeights.count == 24 { series.weights[.cursor] = hourly.quotaHourWeights }
             if hourly.hourTokenWeights.count == 24 { series.tokens[.cursor] = hourly.hourTokenWeights }
         }
-        if enabled.contains(.opencode), openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
-           let hourly = openCodePoller.dayHourlyUsage,
-           calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-           hourly.hours.count == 24 {
+        // OpenCode's hours come from the local database, which needs no
+        // console session, so they count whether or not OpenCode is signed in.
+        if enabled.contains(.opencode), let hourly = openCodePoller.dayHourlyUsage {
             let monthlyLimit = openCodePoller.snapshot?.windows
                 .first { $0.kind == .monthly }?.limitUSD
                 ?? OpenCodeWindowKind.monthly.defaultLimitUSD
-            let weights = hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimit)
-            let tokens = hourly.overviewProviderHourTokenCounts()
-            series.weights[.openCodeGo] = weights.openCodeGo
-            series.weights[.openCodeZen] = weights.openCodeZen
-            series.tokens[.openCodeGo] = tokens.openCodeGo
-            series.tokens[.openCodeZen] = tokens.openCodeZen
+            series.addOpenCode(hourly, monthlyLimitUSD: monthlyLimit, dayStart: dayStart, calendar: calendar)
         }
         return series
     }

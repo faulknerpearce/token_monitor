@@ -3,33 +3,29 @@ import SwiftUI
 
 /// Aggregate cards for every enabled provider plus the hourly chart.
 struct OverviewPanelView: View {
-    @ObservedObject var grokPoller: UsagePoller
-    @ObservedObject var openCodePoller: OpenCodeUsagePoller
-    @ObservedObject var cursorPoller: CursorUsagePoller
-    @ObservedObject var claudePoller: ClaudeUsagePoller
-    @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
-    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
-    @ObservedObject var grokbotPoller: GrokbotUsagePoller
-    @ObservedObject var settings: AppSettings
+    let grokPoller: GrokUsagePoller
+    let openCodePoller: OpenCodeUsagePoller
+    let cursorPoller: CursorUsagePoller
+    let claudePoller: ClaudeUsagePoller
+    let chatGPTPoller: ChatGPTUsagePoller
+    let openRouterPoller: OpenRouterUsagePoller
+    let grokbotPoller: GrokbotUsagePoller
+    let settings: AppSettings
     // The hourly stores are observed so today's chart redraws when they grow.
-    @ObservedObject var grokHourly: HourlyDeltaActivityStore
-    @ObservedObject var claudeHourly: HourlyDeltaActivityStore
-    @ObservedObject var grokbotHourly: HourlyDeltaActivityStore
-    @ObservedObject var hourlyHistory: OverviewHourlyHistoryStore
+    let grokHourly: HourlyDeltaActivityStore
+    let claudeHourly: HourlyDeltaActivityStore
+    let grokbotHourly: HourlyDeltaActivityStore
+    let hourlyHistory: OverviewHourlyHistoryStore
     /// Today's live chart inputs for a moment in today.
     var todaySeries: (Date) -> OverviewDaySeries
-    @ObservedObject var grokAuth: AuthSessionService
-    @ObservedObject var openCodeAuth: OpenCodeAuthSession
-    @ObservedObject var cursorAuth: CursorAuthSession
-    @ObservedObject var claudeAuth: ClaudeAuthSession
-    @ObservedObject var chatGPTAuth: ChatGPTAuthSession
-    @ObservedObject var openRouterAuth: OpenRouterAuthSession
-
-    var openGrokSignIn: () -> Void
-    var openOpenCodeSignIn: () -> Void
-    var openCursorSignIn: () -> Void
-    var openClaudeSignIn: () -> Void
-    var openChatGPTSignIn: () -> Void
+    let grokAuth: GrokAuthSession
+    let openCodeAuth: OpenCodeAuthSession
+    let cursorAuth: CursorAuthSession
+    let claudeAuth: ClaudeAuthSession
+    let chatGPTAuth: ChatGPTAuthSession
+    let openRouterAuth: OpenRouterAuthSession
+    /// Opens the sign-in window for a provider's session.
+    var openSignIn: (MonitorProvider) -> Void
     var selectOpenRouter: () -> Void
     var openPreferences: () -> Void
 
@@ -116,7 +112,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.grokColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.grok.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -129,12 +125,11 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if !grokAuth.isSignedIn || grokAuth.needsSignIn {
-                ProviderSignInButton(provider: .grok, action: openGrokSignIn)
+                ProviderSignInButton(provider: .grok, action: { openSignIn(.grok) })
             }
             if grokAuth.isSignedIn && !grokAuth.needsSignIn {
                 ProviderSignOutButton(provider: .grok) {
                     grokAuth.signOut()
-                    grokPoller.clearSnapshot()
                 }
             }
         }
@@ -177,12 +172,11 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if openCodeAuth.needsSignIn && openCodePoller.snapshot == nil {
-                ProviderSignInButton(provider: .opencode, action: openOpenCodeSignIn)
+                ProviderSignInButton(provider: .opencode, action: { openSignIn(.opencode) })
             }
             if !openCodeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .opencode) {
                     openCodeAuth.signOut()
-                    openCodePoller.clearSnapshot()
                 }
             }
         }
@@ -211,7 +205,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.cursorColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.cursor.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -224,12 +218,11 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if cursorAuth.needsSignIn && cursorPoller.snapshot == nil {
-                ProviderSignInButton(provider: .cursor, action: openCursorSignIn)
+                ProviderSignInButton(provider: .cursor, action: { openSignIn(.cursor) })
             }
             if !cursorAuth.needsSignIn {
                 ProviderSignOutButton(provider: .cursor) {
                     cursorAuth.signOut()
-                    cursorPoller.clearSnapshot()
                 }
             }
         }
@@ -258,7 +251,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.claudeColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.claude.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -271,12 +264,11 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if claudeAuth.needsSignIn && claudePoller.snapshot == nil {
-                ProviderSignInButton(provider: .claude, action: openClaudeSignIn)
+                ProviderSignInButton(provider: .claude, action: { openSignIn(.claude) })
             }
             if !claudeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .claude) {
                     claudeAuth.signOut()
-                    claudePoller.clearSnapshot()
                 }
             }
         }
@@ -305,7 +297,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.chatgptColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.chatgpt.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -318,12 +310,11 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if chatGPTAuth.needsSignIn && chatGPTPoller.snapshot == nil {
-                ProviderSignInButton(provider: .chatgpt, action: openChatGPTSignIn)
+                ProviderSignInButton(provider: .chatgpt, action: { openSignIn(.chatgpt) })
             }
             if !chatGPTAuth.needsSignIn {
                 ProviderSignOutButton(provider: .chatgpt) {
                     chatGPTAuth.signOut()
-                    chatGPTPoller.clearSnapshot()
                 }
             }
         }
@@ -352,7 +343,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.grokbotColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.grokbot.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -369,7 +360,7 @@ struct OverviewPanelView: View {
                 ProviderSignInButton(
                     provider: .grokbot,
                     title: "Sign In to Cursor…",
-                    action: openCursorSignIn
+                    action: { openSignIn(.cursor) }
                 )
             }
         }
@@ -400,7 +391,7 @@ struct OverviewPanelView: View {
                 let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.openRouterColor).frame(width: fillWidth)
+                    Capsule().fill(MonitorProvider.openrouter.accentColor).frame(width: fillWidth)
                 }
             }
             .frame(height: 8)
@@ -423,7 +414,6 @@ struct OverviewPanelView: View {
             if !openRouterAuth.needsSignIn {
                 ProviderSignOutButton(provider: .openrouter) {
                     openRouterAuth.signOut()
-                    openRouterPoller.clearSnapshot()
                 }
             }
         }
@@ -434,7 +424,7 @@ struct OverviewPanelView: View {
 /// step between days.
 struct OverviewDailyUsageCard: View {
     let now: Date
-    @ObservedObject var history: OverviewHourlyHistoryStore
+    let history: OverviewHourlyHistoryStore
     let todaySeries: (Date) -> OverviewDaySeries
     var calendar: Calendar = .current
 

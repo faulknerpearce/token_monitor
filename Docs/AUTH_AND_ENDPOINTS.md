@@ -53,7 +53,7 @@ Some providers signal an expired session without a 401: Grokbot and OpenCode are
 
 A single rejection can be a token-exchange hiccup or an edge challenge, and invalidating deletes the stored credential, so it takes **three consecutive** `.unauthorized` / `.notSignedIn` results on the live session (`ProviderAuthSession.authFailureThreshold = 3`) before a session is invalidated. Any successful request resets the count (`recordAuthSuccess`). The rule applies to every provider, including OpenRouter's API key and Grokbot (which counts against the shared Cursor session).
 
-On the third strike `markSessionInvalid` clears the stored credential and the provider's browser cookies so "Sign in again" cannot recapture the same expired session. Usage history is kept, and the account identity survives so a re-login to the same account continues it. An explicit **Sign Out** also clears the account identity and fires `accountReset`, which drops that account's stored history.
+On the third strike `markSessionInvalid` clears the stored credential and the provider's browser cookies so "Sign in again" cannot recapture the same expired session. Usage history is kept, and the account identity survives so a re-login to the same account continues it. An explicit **Sign Out** clears the credential and fires `signedOut`, which drops the displayed snapshot; stored history and the account identity are kept. `accountReset` fires only when a different account signs in, and drops the previous account's stored history.
 
 Every poll captures the session's `sessionGeneration` before its request and checks it afterwards (`isCurrent(_:)`), so a response that arrives after a sign-out or account switch is discarded and cannot count as a strike against the new session.
 
@@ -122,7 +122,7 @@ The billing API returns no per-day series:
 | `GetGrokUsageInfo` / `GetGrokBuildBillingHistory` | HTTP 200, **empty body** (even with period params) |
 | `GetUsage` / `GetDailyUsage` / REST `/usage/daily` | Empty or 404 |
 
-The daily chart is therefore built from local samples (`DailyUsageBuilder`):
+The daily chart is therefore built from local samples (`GrokDailyUsageBuilder`):
 
 1. It shows the **billing-period** week: seven days starting at the previous reset's calendar day (for example Thu→Wed). On the reset day itself, before the reset instant, the running period still owns today, so the reset day appears as an eighth bar.
 2. Bars are deltas between successive local end-of-day samples in the same billing period. They stay empty until two same-period sample days exist.

@@ -25,8 +25,7 @@ struct UpdateAvailableIndicator: View {
 }
 
 private struct UpdateAvailableRow: View {
-    @ObservedObject var checker: UpdateChecker
-
+    let checker: UpdateChecker
     var body: some View {
         if let release = checker.availableRelease {
             VStack(alignment: .leading, spacing: 2) {

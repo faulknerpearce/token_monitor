@@ -10,10 +10,10 @@ import UniformTypeIdentifiers
 /// provider's session or poller.
 struct PreferencesView: View {
     let model: AppModel
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var history: HistoryStore
-    @ObservedObject var updateChecker: UpdateChecker
-    let openWindow: (AppWindowID) -> Void
+    @Bindable var settings: AppSettings
+    let history: GrokHistoryStore
+    let updateChecker: UpdateChecker
+    let openWindow: (AppWindow) -> Void
 
     var body: some View {
         TabView {
@@ -41,9 +41,8 @@ struct PreferencesView: View {
 /// Startup, updates, refresh timing, alerts, and quitting.
 private struct GeneralSettingsTab: View {
     let model: AppModel
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var updateChecker: UpdateChecker
-
+    @Bindable var settings: AppSettings
+    let updateChecker: UpdateChecker
     var body: some View {
         Form {
             Section("Startup") {
@@ -87,7 +86,7 @@ private struct GeneralSettingsTab: View {
                 refreshStatus
             }
 
-            Section("Alerts") {
+            Section {
                 Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
                     .settingsSwitch()
                 if settings.thresholdEnabled {
@@ -98,6 +97,25 @@ private struct GeneralSettingsTab: View {
                     } maximumValueLabel: {
                         Text("\(Int(AppSettings.thresholdRange.upperBound))%")
                     }
+                    ForEach(settings.visibleUsageProviders) { provider in
+                        Toggle(provider.displayName, isOn: Binding(
+                            get: { settings.alertProviders.contains(provider) },
+                            set: { on in
+                                if on {
+                                    settings.alertProviders.insert(provider)
+                                } else {
+                                    settings.alertProviders.remove(provider)
+                                }
+                            }
+                        ))
+                        .settingsSwitch()
+                    }
+                }
+            } header: {
+                Text("Alerts")
+            } footer: {
+                if settings.thresholdEnabled {
+                    Text("Providers the alert watches keep refreshing in the background.")
                 }
             }
 
@@ -134,7 +152,7 @@ private struct GeneralSettingsTab: View {
 
 /// Which provider tabs show and in what order, and what the menu bar draws.
 private struct ProvidersSettingsTab: View {
-    @ObservedObject var settings: AppSettings
+    @Bindable var settings: AppSettings
     @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
@@ -155,18 +173,17 @@ private struct ProvidersSettingsTab: View {
                 Toggle("Show selected provider only", isOn: $settings.showSelectedProviderInMenuBar)
                     .settingsSwitch()
                 if !settings.showSelectedProviderInMenuBar {
-                    Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
+                    ForEach(MonitorProvider.menuBarGraphProviders) { provider in
+                        Toggle("\(provider.displayName) bar graph", isOn: Binding(
+                            get: { settings.showsMenuBarGraph(provider) },
+                            set: { settings.setMenuBarGraph(provider, shown: $0) }
+                        ))
                         .settingsSwitch()
-                    Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
-                        .settingsSwitch()
+                        if provider == .grok {
+                            Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
+                                .settingsSwitch()
+                        }
+                    }
                 }
             } header: {
                 Text("Menu Bar")
@@ -223,45 +240,40 @@ private struct ProvidersSettingsTab: View {
 /// One row per provider account: who is signed in, and sign-in actions.
 private struct AccountsSettingsTab: View {
     let model: AppModel
-    let openWindow: (AppWindowID) -> Void
+    let openWindow: (AppWindow) -> Void
 
     var body: some View {
         Form {
             Section {
                 ProviderAccountRow(
                     provider: .grok,
-                    auth: model.auth,
+                    auth: model.grokAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.poller.clearSnapshot,
-                    openSignIn: { openWindow(.grokSignIn) }
+                    openSignIn: { openWindow(.signIn(.grok)) }
                 )
                 ProviderAccountRow(
                     provider: .claude,
                     auth: model.claudeAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.claudePoller.clearSnapshot,
-                    openSignIn: { openWindow(.claudeSignIn) }
+                    openSignIn: { openWindow(.signIn(.claude)) }
                 )
                 ProviderAccountRow(
                     provider: .chatgpt,
                     auth: model.chatGPTAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.chatGPTPoller.clearSnapshot,
-                    openSignIn: { openWindow(.chatGPTSignIn) }
+                    openSignIn: { openWindow(.signIn(.chatgpt)) }
                 )
                 ProviderAccountRow(
                     provider: .cursor,
                     auth: model.cursorAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.cursorPoller.clearSnapshot,
-                    openSignIn: { openWindow(.cursorSignIn) }
+                    openSignIn: { openWindow(.signIn(.cursor)) }
                 )
                 ProviderAccountRow(
                     provider: .opencode,
                     auth: model.openCodeAuth,
                     signInTitle: "Sign In…",
-                    clearSnapshot: model.openCodePoller.clearSnapshot,
-                    openSignIn: { openWindow(.openCodeSignIn) }
+                    openSignIn: { openWindow(.signIn(.opencode)) }
                 )
             } header: {
                 Text("Accounts")
@@ -277,8 +289,8 @@ private struct AccountsSettingsTab: View {
 
 /// SuperGrok categories plus exporting and clearing local history.
 private struct DataSettingsTab: View {
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var history: HistoryStore
+    @Bindable var settings: AppSettings
+    let history: GrokHistoryStore
     @State private var exportError: String?
 
     var body: some View {
@@ -288,7 +300,11 @@ private struct DataSettingsTab: View {
                     Toggle(ProductCatalog.displayName(for: id), isOn: Binding(
                         get: { settings.visibleProductIDs.contains(id) },
                         set: { on in
-                            if on { settings.visibleProductIDs.insert(id) } else { settings.visibleProductIDs.remove(id) }
+                            if on {
+                                settings.visibleProductIDs.insert(id)
+                            } else {
+                                settings.visibleProductIDs.remove(id)
+                            }
                         }
                     ))
                     .settingsSwitch()
@@ -329,12 +345,12 @@ private struct DataSettingsTab: View {
         .formStyle(.grouped)
     }
 
-    private func export(_ format: ExportService.Format) {
+    private func export(_ format: GrokExportService.Format) {
         // Clears any prior failure so a successful export dismisses the red
         // message.
         exportError = nil
         do {
-            let data = try ExportService.export(history.allSnapshots(), format: format)
+            let data = try GrokExportService.export(history.allSnapshots(), format: format)
             let panel = NSSavePanel()
             panel.allowedContentTypes = [format == .csv ? .commaSeparatedText : .json]
             panel.nameFieldStringValue = format == .csv ? "grok-usage.csv" : "grok-usage.json"
@@ -377,9 +393,8 @@ private struct ProviderReorderDropDelegate: DropDelegate {
 /// who is signed in, and the sign-in actions.
 private struct ProviderAccountRow: View {
     let provider: MonitorProvider
-    @ObservedObject var auth: ProviderAuthSession
+    let auth: ProviderAuthSession
     let signInTitle: String
-    let clearSnapshot: () -> Void
     let openSignIn: () -> Void
 
     var body: some View {
@@ -402,7 +417,6 @@ private struct ProviderAccountRow: View {
                     Button("Re-authenticate…") { openSignIn() }
                     Button("Sign Out", role: .destructive) {
                         auth.signOut()
-                        clearSnapshot()
                     }
                 } else {
                     Button(signInTitle) { openSignIn() }
@@ -417,7 +431,7 @@ private struct ProviderAccountRow: View {
 
 /// OpenRouter account rows; OpenRouter connects with an API key.
 private struct OpenRouterAccountSection: View {
-    @ObservedObject var auth: OpenRouterAuthSession
+    let auth: OpenRouterAuthSession
     let poller: OpenRouterUsagePoller
     @State private var keyDraft = ""
 
@@ -429,7 +443,6 @@ private struct OpenRouterAccountSection: View {
                 }
                 Button("Sign Out", role: .destructive) {
                     auth.signOut()
-                    poller.clearSnapshot()
                     keyDraft = ""
                 }
             } else {
@@ -455,7 +468,7 @@ private struct OpenRouterAccountSection: View {
 
 /// A poller's last refresh time and, without a `label`, its last error.
 private struct PollerRefreshStatus<Poller: ProviderUsagePoller>: View {
-    @ObservedObject var poller: Poller
+    let poller: Poller
     /// Prefixes the time with the provider name (Overview lists every provider).
     let label: String?
 

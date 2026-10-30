@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
-# Compiles the host-free core sources with Tests/Manual/CoreTestsMain.swift and
-# runs the result. The list below is every app source CoreTestsMain needs; the
-# script fails with the missing path when a listed file has moved or been
-# removed, so the list stays in sync with the tree.
+# Compiles every source under TokenMon/Core (the layer that imports no UI
+# framework) plus the Grok parsers CoreTestsMain exercises, with
+# Tests/Manual/CoreTestsMain.swift, and runs the result. The script fails with
+# the missing path when a listed provider file has moved or been removed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/.build/manual"
 mkdir -p "$OUT"
 
-CORE_SOURCES=(
-  TokenMon/Features/Shared/Utilities/AppLog.swift
-  TokenMon/Features/Shared/Networking/StaticURL.swift
-  TokenMon/Features/Grok/Usage/UsageModels.swift
-  TokenMon/Features/Grok/Usage/UsageClient.swift
-  TokenMon/Features/Grok/Usage/DailyUsageBuilder.swift
-  TokenMon/Features/Grok/History/ExportService.swift
-  TokenMon/Features/Shared/Usage/Percent.swift
-  TokenMon/Features/Shared/Utilities/Format.swift
-  TokenMon/Features/Shared/Utilities/JSON.swift
-  TokenMon/Features/Shared/UI/ColorPalette.swift
-  TokenMon/Features/Shared/Utilities/ISO8601.swift
-  TokenMon/Features/Shared/Networking/UsageError.swift
-  TokenMon/Features/Shared/Networking/AuthenticatedRequest.swift
-  TokenMon/Features/Shared/Networking/ProviderError.swift
+PROVIDER_SOURCES=(
+  TokenMon/Providers/Registry/MonitorProvider.swift
+  TokenMon/UI/Components/ColorPalette.swift
+  TokenMon/UI/Components/ProviderColors.swift
+  TokenMon/Providers/Grok/GrokModels.swift
+  TokenMon/Providers/Grok/GrokUsageClient.swift
+  TokenMon/Providers/Grok/GrokUsageResponseParser.swift
+  TokenMon/Providers/Grok/GRPCWebParser.swift
+  TokenMon/Providers/Grok/GrokDailyUsageBuilder.swift
+  TokenMon/Providers/Grok/GrokDailyUsagePreview.swift
+  TokenMon/Providers/Grok/GrokExportService.swift
   Tests/Manual/CoreTestsMain.swift
 )
 
 SOURCES=()
-for source in "${CORE_SOURCES[@]}"; do
+while IFS= read -r source; do
+  SOURCES+=("$source")
+done < <(find "$ROOT/TokenMon/Core" -name '*.swift' | sort)
+for source in "${PROVIDER_SOURCES[@]}"; do
   if [[ ! -f "$ROOT/$source" ]]; then
-    echo "run_core_tests.sh: listed core source is missing: $source" >&2
-    echo "Update CORE_SOURCES in Scripts/run_core_tests.sh." >&2
+    echo "run_core_tests.sh: listed source is missing: $source" >&2
+    echo "Update PROVIDER_SOURCES in Scripts/run_core_tests.sh." >&2
     exit 1
   fi
   SOURCES+=("$ROOT/$source")

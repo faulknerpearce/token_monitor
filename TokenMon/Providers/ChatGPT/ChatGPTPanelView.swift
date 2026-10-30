@@ -1,0 +1,81 @@
+import SwiftUI
+
+/// ChatGPT usage panel (5-hour and weekly Codex windows).
+struct ChatGPTPanelView: View {
+    let poller: ChatGPTUsagePoller
+    let auth: ChatGPTAuthSession
+    let openSignIn: () -> Void
+
+    var body: some View {
+        if auth.needsSignIn && poller.snapshot == nil {
+            signedOut
+        } else if let snapshot = poller.snapshot {
+            VStack(alignment: .leading, spacing: 10) {
+                ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT") {
+                    Text(snapshot.displayPlanName)
+                        .panelMetaLabel()
+                }
+
+                PanelCard {
+                    PanelSectionHeader(title: snapshot.usagePool.sectionTitle)
+                    SlimUsageTrack(
+                        label: snapshot.primary?.label(fallback: "5-Hour Window") ?? "5-Hour Window",
+                        percent: snapshot.primary?.usedPercent ?? 0,
+                        color: MonitorProvider.chatgpt.accentColor,
+                        caption: snapshot.limitReached
+                            ? "Limit reached"
+                            : snapshot.primary?.resetsAt.map { Format.resetCaption($0) }
+                    )
+                    SlimUsageTrack(
+                        label: snapshot.secondary?.label(fallback: "Weekly") ?? "Weekly",
+                        percent: snapshot.secondary?.usedPercent ?? 0,
+                        color: MonitorProvider.chatgpt.accentColor,
+                        caption: snapshot.secondary?.resetsAt.map { Format.resetCaption($0) }
+                    )
+                    if !snapshot.allowed {
+                        Text("Codex access is currently blocked for this account.")
+                            .font(PanelTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let err = poller.lastError {
+                    StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
+                        .padding(.top, 8)
+                }
+                // Only a rejected session needs a new sign-in; network and
+                // server errors clear on a later refresh.
+                if auth.needsSignIn {
+                    ProviderSignInButton(provider: .chatgpt, title: "Sign In Again…", action: openSignIn)
+                        .padding(.top, 8)
+                }
+
+                ProviderSignOutButton(provider: .chatgpt) {
+                    auth.signOut()
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT")
+                Text(poller.isRefreshing ? "Refreshing…" : (poller.lastError ?? "No usage data yet."))
+                    .font(PanelTypography.body)
+                    .foregroundStyle(.secondary)
+                if auth.needsSignIn {
+                    ProviderSignInButton(provider: .chatgpt, action: openSignIn)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var signedOut: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ProviderHeaderRow(provider: .chatgpt, title: "ChatGPT")
+            Text("Sign in to chatgpt.com to load your 5-hour and weekly Codex usage.")
+                .font(PanelTypography.body)
+                .foregroundStyle(.secondary)
+            ProviderSignInButton(provider: .chatgpt, action: openSignIn)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

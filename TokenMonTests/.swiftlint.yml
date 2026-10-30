@@ -1,0 +1,11 @@
+# Test suites keep one XCTestCase per unit, so the largest suites run longer
+# than app files. Thresholds sit just above the largest suite
+# (OpenCodeStatsTests, ~800 lines).
+type_body_length:
+  warning: 820
+  error: 900
+
+file_length:
+  warning: 820
+  error: 900
+  ignore_comment_only_lines: true

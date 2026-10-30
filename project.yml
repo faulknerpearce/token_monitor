@@ -50,6 +50,8 @@ targets:
     platform: macOS
     sources:
       - path: TokenMonTests
+        excludes:
+          - ".swiftlint.yml"
     dependencies:
       - target: TokenMon
     settings:
