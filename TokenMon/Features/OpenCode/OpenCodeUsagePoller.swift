@@ -61,6 +61,10 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
             .store(in: &cancellables)
     }
 
+    var headlineUsedPercent: Double? { snapshot?.primaryUsedPercent }
+    var headlineResetsAt: Date? { nil }
+    var alertAccount: String? { auth.accountEmail }
+
     func start() {
         pollingLoop.start()
     }
@@ -197,7 +201,7 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func pollInterval() -> TimeInterval? {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsOpenCodePolling)
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsPolling(.opencode))
     }
 
     /// Monday-week bars `weekOffset` steps before the week of the last refresh.

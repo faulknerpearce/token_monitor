@@ -88,6 +88,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             .store(in: &cancellables)
     }
 
+    var headlineUsedPercent: Double? { snapshot?.headlineUsedPercent }
+    var headlineResetsAt: Date? { snapshot?.resetsAt }
+    var alertAccount: String? { auth.accountEmail }
+
     func start() {
         pollingLoop.start()
     }
@@ -181,7 +185,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func pollInterval() -> TimeInterval? {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsClaudePolling)
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsPolling(.claude))
     }
 
     /// Tracks the latest observed weekly `resets_at` to anchor the chart when a

@@ -34,43 +34,27 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Grok segmented bar in the menu bar.
-    @Published var showGrokBarInMenuBar: Bool {
+    /// Providers whose usage graph shows in the menu bar (see
+    /// `MonitorProvider.supportsMenuBarGraph`). Grok's segment shows whenever
+    /// Grok is enabled; this set adds its bar.
+    @Published var menuBarGraphProviders: Set<MonitorProvider> {
         didSet {
-            guard showGrokBarInMenuBar != oldValue else { return }
-            defaults.set(showGrokBarInMenuBar, forKey: Keys.showGrokBar)
+            guard menuBarGraphProviders != oldValue else { return }
+            defaults.set(menuBarGraphProviders.map(\.rawValue).sorted(), forKey: Keys.menuBarGraphs)
         }
     }
 
-    /// OpenCode usage % + bar in the menu bar.
-    @Published var showOpenCodeBarInMenuBar: Bool {
-        didSet {
-            guard showOpenCodeBarInMenuBar != oldValue else { return }
-            defaults.set(showOpenCodeBarInMenuBar, forKey: Keys.showOpenCodeBar)
-        }
+    /// Whether `provider`'s graph shows in the menu bar.
+    func showsMenuBarGraph(_ provider: MonitorProvider) -> Bool {
+        menuBarGraphProviders.contains(provider)
     }
 
-    /// Cursor usage % + bar in the menu bar.
-    @Published var showCursorBarInMenuBar: Bool {
-        didSet {
-            guard showCursorBarInMenuBar != oldValue else { return }
-            defaults.set(showCursorBarInMenuBar, forKey: Keys.showCursorBar)
-        }
-    }
-
-    /// Claude usage % + bar in the menu bar.
-    @Published var showClaudeBarInMenuBar: Bool {
-        didSet {
-            guard showClaudeBarInMenuBar != oldValue else { return }
-            defaults.set(showClaudeBarInMenuBar, forKey: Keys.showClaudeBar)
-        }
-    }
-
-    /// Grokbot usage % + bar in the menu bar.
-    @Published var showGrokbotBarInMenuBar: Bool {
-        didSet {
-            guard showGrokbotBarInMenuBar != oldValue else { return }
-            defaults.set(showGrokbotBarInMenuBar, forKey: Keys.showGrokbotBar)
+    /// Shows or hides `provider`'s menu-bar graph.
+    func setMenuBarGraph(_ provider: MonitorProvider, shown: Bool) {
+        if shown {
+            menuBarGraphProviders.insert(provider)
+        } else {
+            menuBarGraphProviders.remove(provider)
         }
     }
 
@@ -216,56 +200,12 @@ final class AppSettings: ObservableObject {
         enabledProviderIDs.contains(provider)
     }
 
-    /// Whether `provider` needs polling now (see the `needs*Polling` flags).
+    /// Whether `provider` needs polling now: it is enabled and its panel tab
+    /// (or Overview) is selected, its menu-bar graph is on, or the usage alert
+    /// is on (the alert is evaluated on each poll).
     func needsPolling(_ provider: MonitorProvider) -> Bool {
-        switch provider {
-        case .overview: return false
-        case .grok: return needsGrokPolling
-        case .opencode: return needsOpenCodePolling
-        case .cursor: return needsCursorPolling
-        case .claude: return needsClaudePolling
-        case .chatgpt: return needsChatGPTPolling
-        case .openrouter: return needsOpenRouterPolling
-        case .grokbot: return needsGrokbotPolling
-        }
-    }
-
-    /// Whether Grok needs polling (panel tab, menu-bar graph, or the usage alert,
-    /// which is evaluated on each poll).
-    var needsGrokPolling: Bool {
-        isProviderEnabled(.grok) && (selectedProvider.polls(.grok) || showGrokBarInMenuBar || thresholdEnabled)
-    }
-
-    /// Whether OpenCode needs polling (panel tab, menu-bar graph, or the usage alert).
-    var needsOpenCodePolling: Bool {
-        isProviderEnabled(.opencode) && (selectedProvider.polls(.opencode) || showOpenCodeBarInMenuBar || thresholdEnabled)
-    }
-
-    /// Whether Cursor needs polling (panel tab, menu-bar graph, or the usage alert).
-    var needsCursorPolling: Bool {
-        isProviderEnabled(.cursor) && (selectedProvider.polls(.cursor) || showCursorBarInMenuBar || thresholdEnabled)
-    }
-
-    /// Whether Claude needs polling (panel tab, menu-bar graph, or the usage alert).
-    var needsClaudePolling: Bool {
-        isProviderEnabled(.claude) && (selectedProvider.polls(.claude) || showClaudeBarInMenuBar || thresholdEnabled)
-    }
-
-    /// Whether ChatGPT/Codex needs polling (panel tab or the usage alert).
-    var needsChatGPTPolling: Bool {
-        isProviderEnabled(.chatgpt) && (selectedProvider.polls(.chatgpt) || thresholdEnabled)
-    }
-
-    /// Whether OpenRouter needs polling (panel tab or the usage alert).
-    var needsOpenRouterPolling: Bool {
-        isProviderEnabled(.openrouter) && (selectedProvider.polls(.openrouter) || thresholdEnabled)
-    }
-
-    /// Whether Grokbot needs polling (panel tab, menu-bar graph, or the usage alert). Gated on
-    /// Grokbot being enabled so only an enabled Grokbot uses the shared Cursor
-    /// session.
-    var needsGrokbotPolling: Bool {
-        isProviderEnabled(.grokbot) && (selectedProvider.polls(.grokbot) || showGrokbotBarInMenuBar || thresholdEnabled)
+        guard provider != .overview, isProviderEnabled(provider) else { return false }
+        return selectedProvider.polls(provider) || showsMenuBarGraph(provider) || thresholdEnabled
     }
 
     /// Guards against recursive `didSet` when registration fails and the value is reverted.
@@ -275,11 +215,7 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         self.loginItem = loginItem
         showCategoriesInMenuBar = defaults.object(forKey: Keys.showCategories) as? Bool ?? true
-        showGrokBarInMenuBar = defaults.object(forKey: Keys.showGrokBar) as? Bool ?? true
-        showOpenCodeBarInMenuBar = defaults.object(forKey: Keys.showOpenCodeBar) as? Bool ?? false
-        showCursorBarInMenuBar = defaults.object(forKey: Keys.showCursorBar) as? Bool ?? false
-        showClaudeBarInMenuBar = defaults.object(forKey: Keys.showClaudeBar) as? Bool ?? false
-        showGrokbotBarInMenuBar = defaults.object(forKey: Keys.showGrokbotBar) as? Bool ?? false
+        menuBarGraphProviders = Self.loadMenuBarGraphs(from: defaults)
         showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
         checksForUpdates = defaults.object(forKey: Keys.checksForUpdates) as? Bool ?? true
         // Clamps on load, since `didSet` runs only after init.
@@ -318,6 +254,25 @@ final class AppSettings: ObservableObject {
         }
         launchAtLogin = Self.isRegistered(loginItem.status)
         launchAtLoginNeedsApproval = loginItem.status == .requiresApproval
+    }
+
+    /// The saved menu-bar graph set. Settings saved as one flag per provider
+    /// are read once, saved as a set, and their flags removed.
+    private static func loadMenuBarGraphs(from defaults: UserDefaults) -> Set<MonitorProvider> {
+        let supported = Set(MonitorProvider.menuBarGraphProviders)
+        if let saved = defaults.stringArray(forKey: Keys.menuBarGraphs) {
+            return Set(saved.compactMap(MonitorProvider.init(rawValue:))).intersection(supported)
+        }
+        var graphs: Set<MonitorProvider> = []
+        for (provider, key) in Keys.perProviderGraphFlags {
+            let defaultOn = provider == .grok
+            if defaults.object(forKey: key) as? Bool ?? defaultOn {
+                graphs.insert(provider)
+            }
+            defaults.removeObject(forKey: key)
+        }
+        defaults.set(graphs.map(\.rawValue).sorted(), forKey: Keys.menuBarGraphs)
+        return graphs
     }
 
     private static func isRegistered(_ status: SMAppService.Status) -> Bool {
@@ -368,11 +323,16 @@ final class AppSettings: ObservableObject {
 
     private enum Keys {
         static let showCategories = "showCategoriesInMenuBar"
-        static let showGrokBar = "showGrokBarInMenuBar"
-        static let showOpenCodeBar = "showOpenCodeBarInMenuBar"
-        static let showCursorBar = "showCursorBarInMenuBar"
-        static let showClaudeBar = "showClaudeBarInMenuBar"
-        static let showGrokbotBar = "showGrokbotBarInMenuBar"
+        static let menuBarGraphs = "menuBarGraphProviders"
+        /// One saved flag per provider, read by `loadMenuBarGraphs` when no
+        /// set is saved yet.
+        static let perProviderGraphFlags: [(MonitorProvider, String)] = [
+            (.grok, "showGrokBarInMenuBar"),
+            (.opencode, "showOpenCodeBarInMenuBar"),
+            (.cursor, "showCursorBarInMenuBar"),
+            (.claude, "showClaudeBarInMenuBar"),
+            (.grokbot, "showGrokbotBarInMenuBar")
+        ]
         static let showSelectedProvider = "showSelectedProviderInMenuBar"
         static let checksForUpdates = "checksForUpdates"
         static let activePoll = "activePollSeconds"

@@ -12,4 +12,14 @@ final class AppModelPollingTests: XCTestCase {
         model.setMenuOpen(false)
         XCTAssertTrue(model.providers.all.allSatisfy { !$0.poller.menuIsOpen })
     }
+
+    /// Grokbot signs in with Cursor's session, so a Cursor sign-in refreshes
+    /// both; every other provider has its own session.
+    func testSessionSharingFollowsTheRegistry() {
+        let model = AppModel()
+        XCTAssertEqual(model.providers.pollers(sharingSessionWith: .cursor).count, 2)
+        XCTAssertEqual(model.providers.pollers(sharingSessionWith: .grokbot).count, 2)
+        XCTAssertEqual(model.providers.pollers(sharingSessionWith: .claude).count, 1)
+        XCTAssertEqual(model.providers.sessions.count, MonitorProvider.usageProviders.count - 1)
+    }
 }

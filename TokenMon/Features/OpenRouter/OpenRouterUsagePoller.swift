@@ -40,6 +40,10 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
             .store(in: &cancellables)
     }
 
+    var headlineUsedPercent: Double? { snapshot?.usedPercent }
+    var headlineResetsAt: Date? { nil }
+    var alertAccount: String? { nil }
+
     func start() {
         pollingLoop.start()
     }
@@ -97,6 +101,6 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func pollInterval() -> TimeInterval? {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsOpenRouterPolling)
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsPolling(.openrouter))
     }
 }

@@ -167,7 +167,6 @@ final class AppModel: ObservableObject {
             auth: grokAuth,
             history: grokHistory,
             settings: settings,
-            notifier: notifier,
             grokHourly: grokHourly
         )
         openCodePoller = OpenCodeUsagePoller(settings: settings, auth: openCodeAuth)
@@ -183,15 +182,16 @@ final class AppModel: ObservableObject {
             daily: grokbotDaily
         )
         updateChecker = UpdateChecker(settings: settings)
-        providers = ProviderRegistry(
-            grok: grokPoller,
-            openCode: openCodePoller,
-            cursor: cursorPoller,
-            claude: claudePoller,
-            chatGPT: chatGPTPoller,
-            openRouter: openRouterPoller,
-            grokbot: grokbotPoller
-        )
+        providers = ProviderRegistry([
+            .init(provider: .grok, poller: grokPoller, auth: grokAuth),
+            .init(provider: .opencode, poller: openCodePoller, auth: openCodeAuth),
+            .init(provider: .cursor, poller: cursorPoller, auth: cursorAuth),
+            .init(provider: .claude, poller: claudePoller, auth: claudeAuth),
+            .init(provider: .chatgpt, poller: chatGPTPoller, auth: chatGPTAuth),
+            .init(provider: .openrouter, poller: openRouterPoller, auth: openRouterAuth),
+            // Grokbot bills through the Cursor account and shares its session.
+            .init(provider: .grokbot, poller: grokbotPoller, auth: cursorAuth)
+        ])
         // One coalesced change per burst, delivered after the values are set.
         childChanges
             .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
@@ -212,12 +212,9 @@ final class AppModel: ObservableObject {
         for (_, providerPoller) in providers.all {
             forwardChanges(from: providerPoller)
         }
-        forwardChanges(from: grokAuth)
-        forwardChanges(from: openCodeAuth)
-        forwardChanges(from: cursorAuth)
-        forwardChanges(from: claudeAuth)
-        forwardChanges(from: chatGPTAuth)
-        forwardChanges(from: openRouterAuth)
+        for session in providers.sessions {
+            forwardChanges(from: session)
+        }
         forwardChanges(from: updateChecker)
         settings.$checksForUpdates
             .dropFirst()
@@ -252,13 +249,10 @@ final class AppModel: ObservableObject {
     }
 
     /// Loads a provider's data right after its sign-in window succeeds, even
-    /// when its tab is not selected. Grokbot shares the Cursor session.
+    /// when its tab is not selected, together with every provider that shares
+    /// the session (Grokbot shares Cursor's).
     func signInCompleted(_ provider: MonitorProvider) {
-        let pollers: [any ProviderUsagePoller] = switch provider {
-        case .cursor: [cursorPoller, grokbotPoller]
-        default: providers.all.filter { $0.provider == provider }.map(\.poller)
-        }
-        for providerPoller in pollers {
+        for providerPoller in providers.pollers(sharingSessionWith: provider) {
             Task { await providerPoller.refreshNow() }
         }
         AppDelegate.hideDockIfNoWindows()
@@ -278,84 +272,41 @@ final class AppModel: ObservableObject {
             .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.forEachPollingLoop { $0.wake() } }
             .store(in: &cancellables)
-        let graphToggles: [(Published<Bool>.Publisher, any ProviderUsagePoller)] = [
-            (settings.$showGrokBarInMenuBar, grokPoller),
-            (settings.$showOpenCodeBarInMenuBar, openCodePoller),
-            (settings.$showCursorBarInMenuBar, cursorPoller),
-            (settings.$showClaudeBarInMenuBar, claudePoller),
-            (settings.$showGrokbotBarInMenuBar, grokbotPoller)
-        ]
-        for (toggle, providerPoller) in graphToggles {
-            toggle
-                .dropFirst()
-                .removeDuplicates()
-                .filter { $0 }
-                .sink { _ in Task { await providerPoller.refreshNow() } }
-                .store(in: &cancellables)
-        }
+        // A graph switched on refreshes its provider at once.
+        settings.$menuBarGraphProviders
+            .scan((previous: Set<MonitorProvider>(), added: Set<MonitorProvider>())) { state, current in
+                (current, current.subtracting(state.previous))
+            }
+            .dropFirst()
+            .sink { [weak self] state in
+                guard let self else { return }
+                for (provider, providerPoller) in providers.all where state.added.contains(provider) {
+                    Task { await providerPoller.refreshNow() }
+                }
+            }
+            .store(in: &cancellables)
     }
 
-    /// Evaluates the usage alert on every published snapshot of the providers
-    /// other than Grok, whose poller evaluates it with its history write.
+    /// Evaluates the usage alert after each change of a provider poller,
+    /// from its headline figures.
     private func observeUsageAlerts() {
-        func watch<Snapshot>(
-            _ snapshots: Published<Snapshot?>.Publisher,
-            _ provider: MonitorProvider,
-            account: @escaping () -> String?,
-            reading: @escaping (Snapshot) -> (usedPercent: Double?, resetsAt: Date?)
-        ) {
-            snapshots
-                .compactMap { $0 }
-                .sink { [weak self] snapshot in
-                    guard let self else { return }
-                    let (usedPercent, resetsAt) = reading(snapshot)
-                    guard let usedPercent else { return }
+        for (provider, providerPoller) in providers.all {
+            providerPoller.objectWillChange
+                .receive(on: RunLoop.main)
+                .sink { [weak self, weak providerPoller] _ in
+                    guard let self, let providerPoller,
+                          let usedPercent = providerPoller.headlineUsedPercent
+                    else { return }
                     notifier.evaluate(
                         provider: provider,
                         usedPercent: usedPercent,
                         settings: settings,
-                        account: account(),
-                        resetsAt: resetsAt
+                        account: providerPoller.alertAccount,
+                        resetsAt: providerPoller.headlineResetsAt
                     )
                 }
                 .store(in: &cancellables)
         }
-        watch(
-            claudePoller.$snapshot,
-            .claude,
-            account: { [claudeAuth] in claudeAuth.accountEmail },
-            reading: { ($0.headlineUsedPercent, $0.resetsAt) }
-        )
-        watch(
-            chatGPTPoller.$snapshot,
-            .chatgpt,
-            account: { [chatGPTAuth] in chatGPTAuth.accountEmail },
-            reading: { ($0.headlineUsedPercent, $0.resetsAt) }
-        )
-        watch(
-            cursorPoller.$snapshot,
-            .cursor,
-            account: { [cursorAuth] in cursorAuth.accountEmail },
-            reading: { ($0.usedPercent, $0.resetsAt) }
-        )
-        watch(
-            grokbotPoller.$snapshot,
-            .grokbot,
-            account: { [cursorAuth] in cursorAuth.accountEmail },
-            reading: { ($0.usedPercent, $0.resetsAt) }
-        )
-        watch(
-            openCodePoller.$snapshot,
-            .opencode,
-            account: { [openCodeAuth] in openCodeAuth.accountEmail },
-            reading: { ($0.primaryUsedPercent, nil) }
-        )
-        watch(
-            openRouterPoller.$snapshot,
-            .openrouter,
-            account: { nil },
-            reading: { ($0.usedPercent, nil) }
-        )
     }
 
     /// Flushes coalesced history writes on quit so the last samples are saved.

@@ -16,25 +16,51 @@ final class MenuBarStatusRendererTests: XCTestCase {
 
     private func renderStatus(appearance: NSAppearance.Name) throws -> MenuBarStatusRenderer.RenderedStatus {
         MenuBarStatusRenderer.render(
-            selectedProvider: .grok,
-            showSelectedProvider: false,
-            snapshot: WeeklyUsageSnapshot(usedPercent: 40),
-            openCodeSnapshot: nil,
-            cursorSnapshot: nil,
-            claudeSnapshot: nil,
-            chatGPTSnapshot: nil,
-            openRouterSnapshot: nil,
-            grokbotSnapshot: nil,
-            isGrokSignedIn: true,
-            showGrokBar: true,
-            showGrokCategories: false,
-            showOpenCodeBar: false,
-            showCursorBar: false,
-            showClaudeBar: false,
-            showGrokbotBar: false,
-            providerOrder: MonitorProvider.usageProviders,
-            visibleProductIDs: [],
+            input(provider: .grok, showSelectedProvider: false, snapshot: WeeklyUsageSnapshot(usedPercent: 40),
+                  isGrokSignedIn: true, menuBarGraphs: [.grok], showGrokCategories: false, visibleProductIDs: []),
             appearance: try XCTUnwrap(NSAppearance(named: appearance))
+        )
+    }
+
+    /// Renderer input from per-provider snapshots, as the menu-bar controller
+    /// builds it from the pollers' headline figures.
+    private func input(
+        provider: MonitorProvider,
+        showSelectedProvider: Bool,
+        snapshot: WeeklyUsageSnapshot? = nil,
+        openCode: OpenCodeSnapshot? = nil,
+        cursor: CursorSnapshot? = nil,
+        claude: ClaudeSnapshot? = nil,
+        chatGPT: ChatGPTSnapshot? = nil,
+        openRouter: OpenRouterSnapshot? = nil,
+        grokbot: GrokbotSnapshot? = nil,
+        isGrokSignedIn: Bool = false,
+        menuBarGraphs: Set<MonitorProvider>,
+        showGrokCategories: Bool = true,
+        providerOrder: [MonitorProvider] = MonitorProvider.usageProviders,
+        visibleProductIDs: Set<String> = Set(ProductCatalog.knownIDs),
+        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
+    ) -> MenuBarStatusRenderer.Input {
+        let percents: [MonitorProvider: Double?] = [
+            .grok: snapshot?.usedPercent,
+            .opencode: openCode?.primaryUsedPercent,
+            .cursor: cursor?.usedPercent,
+            .claude: claude?.headlineUsedPercent,
+            .chatgpt: chatGPT?.headlineUsedPercent,
+            .openrouter: openRouter?.usedPercent,
+            .grokbot: grokbot?.usedPercent
+        ]
+        return MenuBarStatusRenderer.Input(
+            selectedProvider: provider,
+            showSelectedProvider: showSelectedProvider,
+            usedPercent: percents.compactMapValues { $0 },
+            grokSnapshot: snapshot,
+            isGrokSignedIn: isGrokSignedIn,
+            menuBarGraphs: menuBarGraphs,
+            showGrokCategories: showGrokCategories,
+            providerOrder: providerOrder,
+            visibleProductIDs: visibleProductIDs,
+            enabledProviders: enabledProviders
         )
     }
 
@@ -62,26 +88,20 @@ final class MenuBarStatusRendererTests: XCTestCase {
         isGrokSignedIn: Bool = false,
         providerOrder: [MonitorProvider] = MonitorProvider.usageProviders
     ) -> NSImage {
-        MenuBarStatusRenderer.render(
-            selectedProvider: provider,
+        MenuBarStatusRenderer.render(input(
+            provider: provider,
             showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
-            openCodeSnapshot: openCode,
-            cursorSnapshot: cursor,
-            claudeSnapshot: claude,
-            chatGPTSnapshot: chatGPT,
-            openRouterSnapshot: openRouter,
-            grokbotSnapshot: grokbot,
+            openCode: openCode,
+            cursor: cursor,
+            claude: claude,
+            chatGPT: chatGPT,
+            openRouter: openRouter,
+            grokbot: grokbot,
             isGrokSignedIn: isGrokSignedIn,
-            showGrokBar: true,
-            showGrokCategories: true,
-            showOpenCodeBar: true,
-            showCursorBar: true,
-            showClaudeBar: true,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder,
-            visibleProductIDs: Set(ProductCatalog.knownIDs)
-        ).image
+            menuBarGraphs: showGrokbotBar ? [.grok, .opencode, .cursor, .claude, .grokbot] : [.grok, .opencode, .cursor, .claude],
+            providerOrder: providerOrder
+        )).image
     }
 
     func testSelectedProviderLabelHasFixedWidthAcrossProviders() {
@@ -276,26 +296,13 @@ final class MenuBarStatusRendererTests: XCTestCase {
         showGrokbotBar: Bool = false,
         enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
     ) -> MenuBarStatusRenderer.RenderedStatus {
-        MenuBarStatusRenderer.render(
-            selectedProvider: provider,
+        MenuBarStatusRenderer.render(input(
+            provider: provider,
             showSelectedProvider: showSelectedProvider,
-            snapshot: nil,
-            openCodeSnapshot: nil,
-            cursorSnapshot: nil,
-            claudeSnapshot: claude,
-            chatGPTSnapshot: nil,
-            openRouterSnapshot: nil,
-            grokbotSnapshot: grokbot,
-            isGrokSignedIn: false,
-            showGrokBar: true,
-            showGrokCategories: true,
-            showOpenCodeBar: true,
-            showCursorBar: true,
-            showClaudeBar: true,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: MonitorProvider.usageProviders,
-            visibleProductIDs: Set(ProductCatalog.knownIDs),
+            claude: claude,
+            grokbot: grokbot,
+            menuBarGraphs: showGrokbotBar ? [.grok, .opencode, .cursor, .claude, .grokbot] : [.grok, .opencode, .cursor, .claude],
             enabledProviders: enabledProviders
-        )
+        ))
     }
 }

@@ -139,7 +139,6 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in
                 auth.signOut()
@@ -159,7 +158,6 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in throw ProviderError.unauthorized(.grok) }
         )
@@ -175,7 +173,6 @@ final class PollerSessionGuardTests: XCTestCase {
             auth: auth,
             history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
             fetchUsage: { _, _ in
                 auth.signOut()

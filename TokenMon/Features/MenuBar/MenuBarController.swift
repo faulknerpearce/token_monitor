@@ -9,10 +9,10 @@ import SwiftUI
 /// under the status item, so the dropdown is arrow-less and the top edge stays
 /// put while the bottom grows with the provider content.
 ///
-/// The status image re-renders only when an input it draws changes (settings,
-/// a provider snapshot, Grok sign-in state, the menu-bar appearance), at most
-/// once per `AppModel.changeCoalescing`, and the button image is reassigned
-/// only when the rendered image differs.
+/// The status image re-renders when settings, a provider poller, Grok's
+/// sign-in state, or the menu-bar appearance changes, at most once per
+/// `AppModel.changeCoalescing`; the renderer's key cache makes an unchanged
+/// input cheap, and the button image is reassigned only when it differs.
 @MainActor
 final class MenuBarController: NSObject {
     private let model: AppModel
@@ -95,16 +95,8 @@ final class MenuBarController: NSObject {
     private func observeStatusInputs() {
         let inputs: [AnyPublisher<Void, Never>] = [
             model.settings.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            model.grokPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.openCodePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.cursorPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.claudePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.chatGPTPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.openRouterPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.grokbotPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.grokAuth.$isSignedIn.map { _ in () }.eraseToAnyPublisher(),
-            model.grokAuth.$needsSignIn.map { _ in () }.eraseToAnyPublisher()
-        ]
+            model.grokAuth.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+        ] + model.providers.all.map { $0.poller.objectWillChange.map { _ in () }.eraseToAnyPublisher() }
         Publishers.MergeMany(inputs)
             .throttle(for: AppModel.changeCoalescing, scheduler: RunLoop.main, latest: true)
             .sink { [weak self] in self?.refreshStatusItem() }
@@ -134,25 +126,20 @@ final class MenuBarController: NSObject {
     private func refreshStatusItem() {
         let settings = model.settings
         let rendered = MenuBarStatusRenderer.render(
-            selectedProvider: settings.selectedProvider,
-            showSelectedProvider: settings.showSelectedProviderInMenuBar,
-            snapshot: model.grokPoller.snapshot,
-            openCodeSnapshot: model.openCodePoller.snapshot,
-            cursorSnapshot: model.cursorPoller.snapshot,
-            claudeSnapshot: model.claudePoller.snapshot,
-            chatGPTSnapshot: model.chatGPTPoller.snapshot,
-            openRouterSnapshot: model.openRouterPoller.snapshot,
-            grokbotSnapshot: model.grokbotPoller.snapshot,
-            isGrokSignedIn: model.grokAuth.isSignedIn && !model.grokAuth.needsSignIn,
-            showGrokBar: settings.showGrokBarInMenuBar,
-            showGrokCategories: settings.showCategoriesInMenuBar,
-            showOpenCodeBar: settings.showOpenCodeBarInMenuBar,
-            showCursorBar: settings.showCursorBarInMenuBar,
-            showClaudeBar: settings.showClaudeBarInMenuBar,
-            showGrokbotBar: settings.showGrokbotBarInMenuBar,
-            providerOrder: settings.orderedUsageProviders,
-            visibleProductIDs: settings.visibleProductIDs,
-            enabledProviders: settings.enabledProviderIDs,
+            MenuBarStatusRenderer.Input(
+                selectedProvider: settings.selectedProvider,
+                showSelectedProvider: settings.showSelectedProviderInMenuBar,
+                usedPercent: Dictionary(uniqueKeysWithValues: model.providers.all.compactMap { entry in
+                    entry.poller.headlineUsedPercent.map { (entry.provider, $0) }
+                }),
+                grokSnapshot: model.grokPoller.snapshot,
+                isGrokSignedIn: model.grokAuth.isSignedIn && !model.grokAuth.needsSignIn,
+                menuBarGraphs: settings.menuBarGraphProviders,
+                showGrokCategories: settings.showCategoriesInMenuBar,
+                providerOrder: settings.orderedUsageProviders,
+                visibleProductIDs: settings.visibleProductIDs,
+                enabledProviders: settings.enabledProviderIDs
+            ),
             appearance: statusItem.button?.effectiveAppearance
         )
         regions = rendered.regions

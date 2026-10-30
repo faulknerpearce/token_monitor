@@ -45,15 +45,15 @@ final class AppSettingsTests: XCTestCase {
     func testValuesPersistAcrossInstances() throws {
         let first = makeSettings()
         first.activePollSeconds = 45
-        first.showCursorBarInMenuBar = true
-        first.showClaudeBarInMenuBar = true
-        first.showGrokbotBarInMenuBar = true
+        first.setMenuBarGraph(.cursor, shown: true)
+        first.setMenuBarGraph(.claude, shown: true)
+        first.setMenuBarGraph(.grokbot, shown: true)
 
         let second = makeSettings()
         XCTAssertEqual(second.activePollSeconds, 45)
-        XCTAssertTrue(second.showCursorBarInMenuBar)
-        XCTAssertTrue(second.showClaudeBarInMenuBar)
-        XCTAssertTrue(second.showGrokbotBarInMenuBar)
+        XCTAssertTrue(second.showsMenuBarGraph(.cursor))
+        XCTAssertTrue(second.showsMenuBarGraph(.claude))
+        XCTAssertTrue(second.showsMenuBarGraph(.grokbot))
     }
 
     /// Panel sections start open; a closed section stays closed on the next
@@ -99,16 +99,16 @@ final class AppSettingsTests: XCTestCase {
     func testNeedsGrokPollingFollowsBarAndProvider() {
         let settings = makeSettings()
         settings.selectedProvider = .cursor
-        settings.showGrokBarInMenuBar = false
+        settings.setMenuBarGraph(.grok, shown: false)
         settings.thresholdEnabled = false
-        XCTAssertFalse(settings.needsGrokPolling)
+        XCTAssertFalse(settings.needsPolling(.grok))
 
-        settings.showGrokBarInMenuBar = true
-        XCTAssertTrue(settings.needsGrokPolling)
+        settings.setMenuBarGraph(.grok, shown: true)
+        XCTAssertTrue(settings.needsPolling(.grok))
 
-        settings.showGrokBarInMenuBar = false
+        settings.setMenuBarGraph(.grok, shown: false)
         settings.selectedProvider = .grok
-        XCTAssertTrue(settings.needsGrokPolling)
+        XCTAssertTrue(settings.needsPolling(.grok))
     }
 
     /// The usage alert is evaluated on each provider's polls, so it keeps every
@@ -117,11 +117,11 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         settings.enabledProviderIDs = Set(MonitorProvider.allCases.filter { $0 != .overview })
         settings.selectedProvider = .grok
-        settings.showGrokBarInMenuBar = false
-        settings.showOpenCodeBarInMenuBar = false
-        settings.showCursorBarInMenuBar = false
-        settings.showClaudeBarInMenuBar = false
-        settings.showGrokbotBarInMenuBar = false
+        settings.setMenuBarGraph(.grok, shown: false)
+        settings.setMenuBarGraph(.opencode, shown: false)
+        settings.setMenuBarGraph(.cursor, shown: false)
+        settings.setMenuBarGraph(.claude, shown: false)
+        settings.setMenuBarGraph(.grokbot, shown: false)
         settings.thresholdEnabled = true
         for provider in MonitorProvider.allCases where provider != .overview {
             XCTAssertTrue(settings.needsPolling(provider), "\(provider)")
@@ -133,54 +133,54 @@ final class AppSettingsTests: XCTestCase {
     func testNeedsOpenCodeAndCursorPollingOnOverview() {
         let settings = makeSettings()
         settings.selectedProvider = .overview
-        XCTAssertTrue(settings.needsOpenCodePolling)
-        XCTAssertTrue(settings.needsCursorPolling)
-        XCTAssertTrue(settings.needsGrokPolling)
+        XCTAssertTrue(settings.needsPolling(.opencode))
+        XCTAssertTrue(settings.needsPolling(.cursor))
+        XCTAssertTrue(settings.needsPolling(.grok))
     }
 
     func testNeedsPollingOffWhenBarsHiddenAndOtherTabSelected() {
         let settings = makeSettings()
         settings.thresholdEnabled = false
         settings.selectedProvider = .grok
-        settings.showCursorBarInMenuBar = false
-        settings.showOpenCodeBarInMenuBar = false
-        settings.showGrokbotBarInMenuBar = false
-        XCTAssertFalse(settings.needsCursorPolling)
-        XCTAssertFalse(settings.needsOpenCodePolling)
-        XCTAssertFalse(settings.needsGrokbotPolling)
+        settings.setMenuBarGraph(.cursor, shown: false)
+        settings.setMenuBarGraph(.opencode, shown: false)
+        settings.setMenuBarGraph(.grokbot, shown: false)
+        XCTAssertFalse(settings.needsPolling(.cursor))
+        XCTAssertFalse(settings.needsPolling(.opencode))
+        XCTAssertFalse(settings.needsPolling(.grokbot))
     }
 
     func testNeedsGrokbotPollingFollowsBarAndProvider() {
         let settings = makeSettings()
         settings.thresholdEnabled = false
         settings.selectedProvider = .cursor
-        settings.showGrokbotBarInMenuBar = false
-        XCTAssertFalse(settings.needsGrokbotPolling)
+        settings.setMenuBarGraph(.grokbot, shown: false)
+        XCTAssertFalse(settings.needsPolling(.grokbot))
 
-        settings.showGrokbotBarInMenuBar = true
-        XCTAssertTrue(settings.needsGrokbotPolling)
+        settings.setMenuBarGraph(.grokbot, shown: true)
+        XCTAssertTrue(settings.needsPolling(.grokbot))
 
-        settings.showGrokbotBarInMenuBar = false
+        settings.setMenuBarGraph(.grokbot, shown: false)
         settings.selectedProvider = .grokbot
-        XCTAssertTrue(settings.needsGrokbotPolling)
+        XCTAssertTrue(settings.needsPolling(.grokbot))
 
         settings.selectedProvider = .overview
-        XCTAssertTrue(settings.needsGrokbotPolling)
+        XCTAssertTrue(settings.needsPolling(.grokbot))
     }
 
     func testNeedsClaudePollingFollowsBarAndProvider() {
         let settings = makeSettings()
         settings.thresholdEnabled = false
         settings.selectedProvider = .cursor
-        settings.showClaudeBarInMenuBar = false
-        XCTAssertFalse(settings.needsClaudePolling)
+        settings.setMenuBarGraph(.claude, shown: false)
+        XCTAssertFalse(settings.needsPolling(.claude))
 
-        settings.showClaudeBarInMenuBar = true
-        XCTAssertTrue(settings.needsClaudePolling)
+        settings.setMenuBarGraph(.claude, shown: true)
+        XCTAssertTrue(settings.needsPolling(.claude))
 
-        settings.showClaudeBarInMenuBar = false
+        settings.setMenuBarGraph(.claude, shown: false)
         settings.selectedProvider = .claude
-        XCTAssertTrue(settings.needsClaudePolling)
+        XCTAssertTrue(settings.needsPolling(.claude))
     }
 
     // MARK: - Provider visibility
@@ -191,10 +191,10 @@ final class AppSettingsTests: XCTestCase {
         let settings = makeSettings()
         settings.selectedProvider = .overview
         settings.enabledProviderIDs = [.cursor]
-        XCTAssertFalse(settings.needsGrokbotPolling)
-        XCTAssertFalse(settings.needsGrokPolling)
-        XCTAssertFalse(settings.needsClaudePolling)
-        XCTAssertTrue(settings.needsCursorPolling)
+        XCTAssertFalse(settings.needsPolling(.grokbot))
+        XCTAssertFalse(settings.needsPolling(.grok))
+        XCTAssertFalse(settings.needsPolling(.claude))
+        XCTAssertTrue(settings.needsPolling(.cursor))
     }
 
     /// A disabled Grokbot does not poll the shared Cursor session, even
@@ -202,9 +202,9 @@ final class AppSettingsTests: XCTestCase {
     func testDisabledGrokbotDoesNotPollEvenWithBarEnabled() {
         let settings = makeSettings()
         settings.enabledProviderIDs = [.grok, .cursor]
-        settings.showGrokbotBarInMenuBar = true
+        settings.setMenuBarGraph(.grokbot, shown: true)
         settings.selectedProvider = .grokbot
-        XCTAssertFalse(settings.needsGrokbotPolling)
+        XCTAssertFalse(settings.needsPolling(.grokbot))
     }
 
     func testEnabledProvidersDefaultToAllUsageProviders() {
@@ -335,12 +335,13 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(defaults.stringArray(forKey: "providerOrder"), expected.map(\.rawValue))
     }
 
-    func testNeedsPollingMatchesTheProviderFlags() {
+    func testNeedsPollingFollowsTabAndDefaultGraphs() {
         let settings = makeSettings()
         settings.thresholdEnabled = false
         settings.selectedProvider = .chatgpt
-        XCTAssertEqual(settings.needsPolling(.grok), settings.needsGrokPolling)
-        XCTAssertEqual(settings.needsPolling(.cursor), settings.needsCursorPolling)
+        // Grok's graph is on by default; Cursor's is off.
+        XCTAssertTrue(settings.needsPolling(.grok))
+        XCTAssertFalse(settings.needsPolling(.cursor))
         XCTAssertTrue(settings.needsPolling(.chatgpt))
         XCTAssertFalse(settings.needsPolling(.openrouter))
         XCTAssertFalse(settings.needsPolling(.overview))
@@ -372,6 +373,22 @@ final class AppSettingsTests: XCTestCase {
         loginItem.failUnregister = true
         settings.launchAtLogin = false
         XCTAssertTrue(settings.launchAtLogin, "a failed unregister reverts to the real status")
+    }
+
+    /// Graph settings saved as one flag per provider become the set, and the
+    /// flags are removed.
+    func testPerProviderGraphFlagsBecomeTheGraphSet() {
+        defaults.set(false, forKey: "showGrokBarInMenuBar")
+        defaults.set(true, forKey: "showClaudeBarInMenuBar")
+        defaults.set(true, forKey: "showGrokbotBarInMenuBar")
+        let settings = makeSettings()
+        XCTAssertEqual(settings.menuBarGraphProviders, [.claude, .grokbot])
+        XCTAssertNil(defaults.object(forKey: "showClaudeBarInMenuBar"))
+        XCTAssertEqual(makeSettings().menuBarGraphProviders, [.claude, .grokbot])
+    }
+
+    func testGraphSetDefaultsToGrokOnly() {
+        XCTAssertEqual(makeSettings().menuBarGraphProviders, [.grok])
     }
 }
 

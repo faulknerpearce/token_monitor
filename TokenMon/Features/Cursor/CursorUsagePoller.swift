@@ -79,6 +79,10 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             .store(in: &cancellables)
     }
 
+    var headlineUsedPercent: Double? { snapshot?.usedPercent }
+    var headlineResetsAt: Date? { snapshot?.resetsAt }
+    var alertAccount: String? { auth.accountEmail }
+
     func start() {
         pollingLoop.start()
     }
@@ -189,7 +193,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func pollInterval() -> TimeInterval? {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsCursorPolling)
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsPolling(.cursor))
     }
 
     /// `previous` when it covers the same calendar day as `fallback`, else `fallback`.

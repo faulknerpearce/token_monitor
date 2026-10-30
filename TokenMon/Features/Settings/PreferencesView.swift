@@ -155,18 +155,17 @@ private struct ProvidersSettingsTab: View {
                 Toggle("Show selected provider only", isOn: $settings.showSelectedProviderInMenuBar)
                     .settingsSwitch()
                 if !settings.showSelectedProviderInMenuBar {
-                    Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
+                    ForEach(MonitorProvider.menuBarGraphProviders) { provider in
+                        Toggle("\(provider.displayName) bar graph", isOn: Binding(
+                            get: { settings.showsMenuBarGraph(provider) },
+                            set: { settings.setMenuBarGraph(provider, shown: $0) }
+                        ))
                         .settingsSwitch()
-                    Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Grokbot bar graph", isOn: $settings.showGrokbotBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
-                        .settingsSwitch()
-                    Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
-                        .settingsSwitch()
+                        if provider == .grok {
+                            Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
+                                .settingsSwitch()
+                        }
+                    }
                 }
             } header: {
                 Text("Menu Bar")

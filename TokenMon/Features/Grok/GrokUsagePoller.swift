@@ -19,7 +19,6 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     private let auth: GrokAuthSession
     private let history: GrokHistoryStore
     private let settings: AppSettings
-    private let notifier: ThresholdNotifier
     private let grokHourly: HourlyDeltaActivityStore
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchUsage: (String?, String?) async throws -> WeeklyUsageSnapshot
@@ -35,14 +34,12 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
         auth: GrokAuthSession,
         history: GrokHistoryStore,
         settings: AppSettings,
-        notifier: ThresholdNotifier,
         grokHourly: HourlyDeltaActivityStore,
         fetchUsage: ((String?, String?) async throws -> WeeklyUsageSnapshot)? = nil
     ) {
         self.auth = auth
         self.history = history
         self.settings = settings
-        self.notifier = notifier
         self.grokHourly = grokHourly
         self.fetchUsage = fetchUsage ?? { cookieHeader, accountEmail in
             try await GrokUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
@@ -68,6 +65,10 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
             }
             .store(in: &cancellables)
     }
+
+    var headlineUsedPercent: Double? { snapshot?.usedPercent }
+    var headlineResetsAt: Date? { snapshot?.resetsAt }
+    var alertAccount: String? { auth.accountEmail }
 
     func start() {
         pollingLoop.start()
@@ -143,12 +144,6 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
                 lastRefreshedAt = Date()
                 history.append(snap)
                 grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
-                notifier.evaluate(
-                    usedPercent: snap.usedPercent,
-                    settings: settings,
-                    account: auth.accountEmail,
-                    resetsAt: snap.resetsAt
-                )
                 logger.info("Grok refresh: \(snap.usedPercent, format: .fixed(precision: 1))% used")
                 return .success
             },
@@ -157,6 +152,6 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     }
 
     private func pollInterval() -> TimeInterval? {
-        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsGrokPolling)
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings, needed: settings.needsPolling(.grok))
     }
 }

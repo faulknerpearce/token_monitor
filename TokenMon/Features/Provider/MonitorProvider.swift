@@ -18,6 +18,15 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter, .grokbot]
     }
 
+    /// Providers that can show a usage graph in the menu bar, in the order
+    /// Settings lists them.
+    static let menuBarGraphProviders: [MonitorProvider] = [.grok, .grokbot, .claude, .cursor, .opencode]
+
+    /// Whether this provider can show a usage graph in the menu bar.
+    var supportsMenuBarGraph: Bool {
+        Self.menuBarGraphProviders.contains(self)
+    }
+
     /// Drops Overview and unknowns, de-duplicates, then appends any usage
     /// providers missing from the saved list, so new providers appear while
     /// the user's order is kept.

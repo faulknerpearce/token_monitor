@@ -4,7 +4,7 @@ import SwiftUI
 /// Renders the menu bar status as a single bitmap for the `NSStatusItem` button.
 ///
 /// Composites the enabled provider segments whose menu-bar graph is switched
-/// on, in `providerOrder`: Grok / Cursor / OpenCode / Claude / Grokbot.
+/// on, in `providerOrder` (see `MonitorProvider.menuBarGraphProviders`).
 ///
 /// Rendered images are cached by a key covering every input, including the
 /// menu-bar appearance, so a light/dark switch renders afresh. The mutable
@@ -53,86 +53,42 @@ enum MenuBarStatusRenderer {
         _cache.removeAllObjects()
     }
 
-    // Renders the status item plus the provider hit regions for the same layout,
-    // so a status-item click maps back to the provider whose bar it landed on.
-    // swiftlint:disable:next function_parameter_count
-    static func render(
-        selectedProvider: MonitorProvider,
-        showSelectedProvider: Bool,
-        snapshot: WeeklyUsageSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        cursorSnapshot: CursorSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        chatGPTSnapshot: ChatGPTSnapshot?,
-        openRouterSnapshot: OpenRouterSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        isGrokSignedIn: Bool,
-        showGrokBar: Bool,
-        showGrokCategories: Bool,
-        showOpenCodeBar: Bool,
-        showCursorBar: Bool,
-        showClaudeBar: Bool,
-        showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>,
-        enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders),
-        appearance: NSAppearance? = nil
-    ) -> RenderedStatus {
+    /// Everything the status image draws.
+    struct Input {
+        var selectedProvider: MonitorProvider
+        var showSelectedProvider: Bool
+        /// Headline used percent of each provider that has data.
+        var usedPercent: [MonitorProvider: Double]
+        /// Grok's snapshot, for its product breakdown.
+        var grokSnapshot: WeeklyUsageSnapshot?
+        var isGrokSignedIn: Bool
+        var menuBarGraphs: Set<MonitorProvider>
+        var showGrokCategories: Bool
+        var providerOrder: [MonitorProvider]
+        var visibleProductIDs: Set<String>
+        var enabledProviders: Set<MonitorProvider> = Set(MonitorProvider.usageProviders)
+    }
+
+    /// Renders the status item plus the provider hit regions for the same
+    /// layout, so a status-item click maps back to the provider whose bar it
+    /// landed on.
+    static func render(_ input: Input, appearance: NSAppearance? = nil) -> RenderedStatus {
         renderAppearance = appearance ?? menuBarAppearance()
         defer { renderAppearance = nil }
 
         let grokProducts: [ProductUsage] = {
-            guard let snapshot else { return [] }
-            return menuBarProducts(from: snapshot, visibleProductIDs: visibleProductIDs)
+            guard let snapshot = input.grokSnapshot else { return [] }
+            return menuBarProducts(from: snapshot, visibleProductIDs: input.visibleProductIDs)
         }()
 
-        let cacheKey = _cacheKey(
-            grokProducts: grokProducts,
-            selectedProvider: selectedProvider,
-            showSelectedProvider: showSelectedProvider,
-            snapshot: snapshot,
-            openCodeSnapshot: openCodeSnapshot,
-            cursorSnapshot: cursorSnapshot,
-            claudeSnapshot: claudeSnapshot,
-            chatGPTSnapshot: chatGPTSnapshot,
-            openRouterSnapshot: openRouterSnapshot,
-            grokbotSnapshot: grokbotSnapshot,
-            isGrokSignedIn: isGrokSignedIn,
-            showGrokBar: showGrokBar,
-            showGrokCategories: showGrokCategories,
-            showOpenCodeBar: showOpenCodeBar,
-            showCursorBar: showCursorBar,
-            showClaudeBar: showClaudeBar,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder,
-            visibleProductIDs: visibleProductIDs,
-            enabledProviders: enabledProviders
-        )
+        let cacheKey = _cacheKey(input, grokProducts: grokProducts)
         if let cached = _cache.object(forKey: cacheKey as NSString) {
             return RenderedStatus(image: cached.image, regions: cached.regions, key: cacheKey)
         }
 
-        let status = _render(
-            grokProducts: grokProducts,
-            selectedProvider: selectedProvider,
-            showSelectedProvider: showSelectedProvider,
-            snapshot: snapshot,
-            openCodeSnapshot: openCodeSnapshot,
-            cursorSnapshot: cursorSnapshot,
-            claudeSnapshot: claudeSnapshot,
-            chatGPTSnapshot: chatGPTSnapshot,
-            openRouterSnapshot: openRouterSnapshot,
-            grokbotSnapshot: grokbotSnapshot,
-            isGrokSignedIn: isGrokSignedIn,
-            showGrokBar: showGrokBar,
-            showGrokCategories: showGrokCategories,
-            showOpenCodeBar: showOpenCodeBar,
-            showCursorBar: showCursorBar,
-            showClaudeBar: showClaudeBar,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder,
-            enabledProviders: enabledProviders
-        )
+        let status = input.showSelectedProvider
+            ? renderSelectedProvider(input)
+            : _render(input, grokProducts: grokProducts)
         _cache.setObject(
             CachedStatus(image: status.image, regions: status.regions),
             forKey: cacheKey as NSString
@@ -140,49 +96,21 @@ enum MenuBarStatusRenderer {
         return RenderedStatus(image: status.image, regions: status.regions, key: cacheKey)
     }
 
-    // swiftlint:disable:next function_parameter_count
-    private static func _cacheKey(
-        grokProducts: [ProductUsage],
-        selectedProvider: MonitorProvider,
-        showSelectedProvider: Bool,
-        snapshot: WeeklyUsageSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        cursorSnapshot: CursorSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        chatGPTSnapshot: ChatGPTSnapshot?,
-        openRouterSnapshot: OpenRouterSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        isGrokSignedIn: Bool,
-        showGrokBar: Bool,
-        showGrokCategories: Bool,
-        showOpenCodeBar: Bool,
-        showCursorBar: Bool,
-        showClaudeBar: Bool,
-        showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider],
-        visibleProductIDs: Set<String>,
-        enabledProviders: Set<MonitorProvider>
-    ) -> String {
-        let chrome = menuBarAppearanceName
-        let grok = snapshot.map { Int($0.usedPercent.rounded()) } ?? -1
-        let openCode = openCodeSnapshot.map { Int($0.primaryUsedPercent.rounded()) } ?? -1
-        let cursor = cursorSnapshot.map { Int($0.usedPercent.rounded()) } ?? -1
-        let claude = claudeSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
-        let chatGPT = chatGPTSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
-        let openRouter = openRouterSnapshot?.usedPercent.map { Int($0.rounded()) } ?? -1
-        let grokbot = grokbotSnapshot.map { Int($0.usedPercent.rounded()) } ?? -1
-
+    /// Key covering every drawn input; percentages are rounded as drawn.
+    private static func _cacheKey(_ input: Input, grokProducts: [ProductUsage]) -> String {
+        let percents = MonitorProvider.usageProviders
+            .map { input.usedPercent[$0].map { String(Int($0.rounded())) } ?? "-1" }
+            .joined(separator: "-")
         let productKey = grokProducts
             .map { "\($0.id):\(Int($0.percentOfPool.rounded()))" }
             .joined(separator: ",")
-        let productIDs = visibleProductIDs.sorted().joined(separator: ",")
         let parts = [
-            "mb-\(showSelectedProvider ? 1 : 0)-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)"
-                + "-\(claude)-\(chatGPT)-\(openRouter)-\(grokbot)",
-            "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)-\(showGrokbotBar)",
-            "\(providerOrder.map(\.rawValue).joined(separator: ","))",
-            "\(enabledProviders.map(\.rawValue).sorted().joined(separator: ","))",
-            "\(productKey)-\(productIDs)-\(chrome)"
+            "mb-\(input.showSelectedProvider ? 1 : 0)-\(input.selectedProvider)-\(percents)",
+            "\(input.isGrokSignedIn)-\(input.showGrokCategories)",
+            input.menuBarGraphs.map(\.rawValue).sorted().joined(separator: ","),
+            input.providerOrder.map(\.rawValue).joined(separator: ","),
+            input.enabledProviders.map(\.rawValue).sorted().joined(separator: ","),
+            "\(productKey)-\(input.visibleProductIDs.sorted().joined(separator: ","))-\(menuBarAppearanceName)"
         ]
         return parts.joined(separator: "-")
     }
@@ -213,16 +141,7 @@ enum MenuBarStatusRenderer {
 
     private static func compositePieces(
         usedAttrs: [NSAttributedString.Key: Any],
-        cursorSnapshot: CursorSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        showCursorBar: Bool,
-        showOpenCodeBar: Bool,
-        showClaudeBar: Bool,
-        showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider],
-        enabledProviders: Set<MonitorProvider>
+        input: Input
     ) -> [CompositePiece] {
         func solid(
             used: Double?,
@@ -242,87 +161,31 @@ enum MenuBarStatusRenderer {
         }
 
         var pieces: [CompositePiece] = []
-        for provider in MonitorProvider.normalizedOrder(providerOrder) {
+        for provider in MonitorProvider.normalizedOrder(input.providerOrder) {
             // Disabled providers are skipped: their polling is gated, so their
             // segment would show a frozen "—/last %" snapshot.
-            guard enabledProviders.contains(provider) else { continue }
-            switch provider {
-            case .grok:
+            guard input.enabledProviders.contains(provider) else { continue }
+            if provider == .grok {
                 pieces.append(.grok)
-            case .cursor:
-                guard showCursorBar else { continue }
-                pieces.append(.solid(provider: .cursor, segment: solid(
-                    used: cursorSnapshot?.usedPercent,
-                    color: MonitorProvider.cursor.accent.nsColor,
-                    icon: ProviderLogo.cursor
-                )))
-            case .opencode:
-                guard showOpenCodeBar else { continue }
-                // The OpenCode mark is full-bleed in its 300x300 frame while the
-                // other marks are padded, so draw it in a slightly smaller box to
-                // match their glyph height and keep the icon-to-text gap even.
-                pieces.append(.solid(provider: .opencode, segment: solid(
-                    used: openCodeSnapshot?.primaryUsedPercent,
-                    color: MonitorProvider.opencode.accent.nsColor,
-                    icon: ProviderLogo.openCode,
-                    iconBox: 13
-                )))
-            case .claude:
-                guard showClaudeBar else { continue }
-                pieces.append(.solid(provider: .claude, segment: solid(
-                    used: claudeSnapshot?.headlineUsedPercent,
-                    color: MonitorProvider.claude.accent.nsColor,
-                    icon: ProviderLogo.claude
-                )))
-            case .grokbot:
-                guard showGrokbotBar else { continue }
-                pieces.append(.solid(provider: .grokbot, segment: solid(
-                    used: grokbotSnapshot?.usedPercent,
-                    color: MonitorProvider.grokbot.accent.nsColor,
-                    icon: ProviderLogo.grokbot
-                )))
-            case .overview, .chatgpt, .openrouter:
                 continue
             }
+            guard provider.supportsMenuBarGraph, input.menuBarGraphs.contains(provider) else { continue }
+            // The OpenCode mark is full-bleed in its 300x300 frame while the
+            // other marks are padded, so draw it in a slightly smaller box to
+            // match their glyph height and keep the icon-to-text gap even.
+            pieces.append(.solid(provider: provider, segment: solid(
+                used: input.usedPercent[provider],
+                color: provider.accent.nsColor,
+                icon: ProviderLogo.image(for: provider),
+                iconBox: provider == .opencode ? 13 : 16
+            )))
         }
         return pieces
     }
 
-    // swiftlint:disable:next function_parameter_count
-    private static func _render(
-        grokProducts: [ProductUsage],
-        selectedProvider: MonitorProvider,
-        showSelectedProvider: Bool,
-        snapshot: WeeklyUsageSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        cursorSnapshot: CursorSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        chatGPTSnapshot: ChatGPTSnapshot?,
-        openRouterSnapshot: OpenRouterSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        isGrokSignedIn: Bool,
-        showGrokBar: Bool,
-        showGrokCategories: Bool,
-        showOpenCodeBar: Bool,
-        showCursorBar: Bool,
-        showClaudeBar: Bool,
-        showGrokbotBar: Bool,
-        providerOrder: [MonitorProvider],
-        enabledProviders: Set<MonitorProvider>
-    ) -> RenderedStatus {
-        if showSelectedProvider {
-            return renderSelectedProvider(
-                selectedProvider,
-                snapshot: snapshot,
-                openCodeSnapshot: openCodeSnapshot,
-                cursorSnapshot: cursorSnapshot,
-                claudeSnapshot: claudeSnapshot,
-                chatGPTSnapshot: chatGPTSnapshot,
-                openRouterSnapshot: openRouterSnapshot,
-                grokbotSnapshot: grokbotSnapshot,
-                isGrokSignedIn: isGrokSignedIn
-            )
-        }
+    private static func _render(_ input: Input, grokProducts: [ProductUsage]) -> RenderedStatus {
+        let snapshot = input.grokSnapshot
+        let showGrokCategories = input.showGrokCategories
         let height: CGFloat = 22
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
         let textColor = chromeColor
@@ -348,7 +211,7 @@ enum MenuBarStatusRenderer {
         let percentSlotWidth = ceil("100%".size(withAttributes: usedAttrs).width)
         let grokTextSlot = ceil(max("Grok".size(withAttributes: usedAttrs).width, percentSlotWidth))
 
-        let grokSigned = isGrokSignedIn && snapshot != nil
+        let grokSigned = input.isGrokSignedIn && snapshot != nil
         let grokUsedText: String
         let grokUsedSize: NSSize
         let categoryLabels: [(label: String, size: NSSize)]
@@ -370,6 +233,7 @@ enum MenuBarStatusRenderer {
         var grokBlockWidth = iconSize + gap + grokTextSlot
         // The bar slot is reserved even before the first snapshot / after
         // sign-out so the status item width stays constant.
+        let showGrokBar = input.menuBarGraphs.contains(.grok)
         if showGrokBar { grokBlockWidth += gap + barWidth }
         if grokSigned, showGrokCategories {
             for item in categoryLabels {
@@ -377,19 +241,7 @@ enum MenuBarStatusRenderer {
             }
         }
 
-        let pieces = compositePieces(
-            usedAttrs: usedAttrs,
-            cursorSnapshot: cursorSnapshot,
-            openCodeSnapshot: openCodeSnapshot,
-            claudeSnapshot: claudeSnapshot,
-            grokbotSnapshot: grokbotSnapshot,
-            showCursorBar: showCursorBar,
-            showOpenCodeBar: showOpenCodeBar,
-            showClaudeBar: showClaudeBar,
-            showGrokbotBar: showGrokbotBar,
-            providerOrder: providerOrder,
-            enabledProviders: enabledProviders
-        )
+        let pieces = compositePieces(usedAttrs: usedAttrs, input: input)
 
         var width: CGFloat = 0
         for (index, piece) in pieces.enumerated() {
@@ -522,17 +374,8 @@ enum MenuBarStatusRenderer {
     /// constant and the dropdown keeps one x position when switching providers.
     /// Overview shows the TokenMon mark over an empty track. Grok category labels
     /// are composite-only because their variable widths would break the fixed anchor.
-    private static func renderSelectedProvider(
-        _ provider: MonitorProvider,
-        snapshot: WeeklyUsageSnapshot?,
-        openCodeSnapshot: OpenCodeSnapshot?,
-        cursorSnapshot: CursorSnapshot?,
-        claudeSnapshot: ClaudeSnapshot?,
-        chatGPTSnapshot: ChatGPTSnapshot?,
-        openRouterSnapshot: OpenRouterSnapshot?,
-        grokbotSnapshot: GrokbotSnapshot?,
-        isGrokSignedIn: Bool
-    ) -> RenderedStatus {
+    private static func renderSelectedProvider(_ input: Input) -> RenderedStatus {
+        let provider = input.selectedProvider
         let height: CGFloat = 22
         let iconSize: CGFloat = 16
         let gap: CGFloat = 7
@@ -541,25 +384,7 @@ enum MenuBarStatusRenderer {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: chromeColor]
 
-        let usedPercent: Double?
-        switch provider {
-        case .overview:
-            usedPercent = nil
-        case .grok:
-            usedPercent = isGrokSignedIn ? snapshot?.usedPercent : nil
-        case .opencode:
-            usedPercent = openCodeSnapshot?.primaryUsedPercent
-        case .cursor:
-            usedPercent = cursorSnapshot?.usedPercent
-        case .claude:
-            usedPercent = claudeSnapshot?.headlineUsedPercent
-        case .chatgpt:
-            usedPercent = chatGPTSnapshot?.headlineUsedPercent
-        case .openrouter:
-            usedPercent = openRouterSnapshot?.usedPercent
-        case .grokbot:
-            usedPercent = grokbotSnapshot?.usedPercent
-        }
+        let usedPercent = provider == .grok && !input.isGrokSignedIn ? nil : input.usedPercent[provider]
 
         // Monospaced digits make every "NN%" string the same width; the slot
         // reserves that width so "—" (no data) renders at identical geometry.

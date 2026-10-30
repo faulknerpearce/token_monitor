@@ -32,7 +32,6 @@ final class GrokPollerGatingTests: XCTestCase {
             auth: auth,
             history: GrokHistoryStore(inMemory: true),
             settings: settings,
-            notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: HourlyDeltaActivityStore(
                 store: FileBackedStringStore(directory: dir, filenamePrefix: "hourly_"),
                 storageKey: "grok"
@@ -58,13 +57,13 @@ final class GrokPollerGatingTests: XCTestCase {
     func testLoopParksWhileGrokIsNotNeeded() {
         let settings = AppSettings(defaults: defaults)
         settings.selectedProvider = .cursor
-        settings.showGrokBarInMenuBar = false
+        settings.setMenuBarGraph(.grok, shown: false)
         settings.thresholdEnabled = false
         let (poller, _) = makePoller(settings: settings) { _, _ in
             WeeklyUsageSnapshot(usedPercent: 10, remainingPercent: 90)
         }
         XCTAssertNil(poller.pollingLoop.delayUntilDue())
-        settings.showGrokBarInMenuBar = true
+        settings.setMenuBarGraph(.grok, shown: true)
         XCTAssertEqual(poller.pollingLoop.delayUntilDue(), 0)
     }
 
@@ -98,7 +97,7 @@ final class GrokPollerGatingTests: XCTestCase {
     func testManualRefreshFetchesWhenEnabledButNotShown() async {
         let settings = AppSettings(defaults: defaults)
         settings.selectedProvider = .cursor
-        settings.showGrokBarInMenuBar = false
+        settings.setMenuBarGraph(.grok, shown: false)
         var fetches = 0
         let (poller, _) = makePoller(settings: settings) { _, _ in
             fetches += 1
