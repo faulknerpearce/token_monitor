@@ -34,6 +34,23 @@ struct OverviewDaySeries: Codable, Hashable, Sendable {
         )
     }
 
+    /// Adds OpenCode Go and Zen hours from `hourly` when it covers the day
+    /// starting at `dayStart`.
+    mutating func addOpenCode(
+        _ hourly: OpenCodeDayHourlyUsage,
+        monthlyLimitUSD: Double,
+        dayStart: Date,
+        calendar: Calendar
+    ) {
+        guard calendar.isDate(hourly.dayStart, inSameDayAs: dayStart), hourly.hours.count == 24 else { return }
+        let weights = hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimitUSD)
+        let tokens = hourly.overviewProviderHourTokenCounts()
+        self.weights[.openCodeGo] = weights.openCodeGo
+        self.weights[.openCodeZen] = weights.openCodeZen
+        self.tokens[.openCodeGo] = tokens.openCodeGo
+        self.tokens[.openCodeZen] = tokens.openCodeZen
+    }
+
     private static func hourwiseMax<T: Comparable & AdditiveArithmetic>(_ lhs: [T], _ rhs: [T]) -> [T] {
         (0..<max(lhs.count, rhs.count)).map { hour in
             max(hour < lhs.count ? lhs[hour] : .zero, hour < rhs.count ? rhs[hour] : .zero)
@@ -141,7 +158,8 @@ final class OverviewHourlyHistoryStore: ObservableObject {
 
 extension AppModel {
     /// Today's Overview chart inputs from the providers that are enabled and
-    /// signed in, in the units ``OverviewDaySeries`` describes.
+    /// signed in (OpenCode needs only to be enabled), in the units
+    /// ``OverviewDaySeries`` describes.
     func overviewSeries(on date: Date, calendar: Calendar = .current) -> OverviewDaySeries {
         let dayStart = calendar.startOfDay(for: date)
         var series = OverviewDaySeries()
@@ -167,19 +185,13 @@ extension AppModel {
             if hourly.quotaHourWeights.count == 24 { series.weights[.cursor] = hourly.quotaHourWeights }
             if hourly.hourTokenWeights.count == 24 { series.tokens[.cursor] = hourly.hourTokenWeights }
         }
-        if enabled.contains(.opencode), openCodeAuth.isSignedIn, !openCodeAuth.needsSignIn,
-           let hourly = openCodePoller.dayHourlyUsage,
-           calendar.isDate(hourly.dayStart, inSameDayAs: dayStart),
-           hourly.hours.count == 24 {
+        // OpenCode's hours come from the local database, which needs no
+        // console session, so they count whether or not OpenCode is signed in.
+        if enabled.contains(.opencode), let hourly = openCodePoller.dayHourlyUsage {
             let monthlyLimit = openCodePoller.snapshot?.windows
                 .first { $0.kind == .monthly }?.limitUSD
                 ?? OpenCodeWindowKind.monthly.defaultLimitUSD
-            let weights = hourly.overviewProviderQuotaHourWeights(monthlyLimitUSD: monthlyLimit)
-            let tokens = hourly.overviewProviderHourTokenCounts()
-            series.weights[.openCodeGo] = weights.openCodeGo
-            series.weights[.openCodeZen] = weights.openCodeZen
-            series.tokens[.openCodeGo] = tokens.openCodeGo
-            series.tokens[.openCodeZen] = tokens.openCodeZen
+            series.addOpenCode(hourly, monthlyLimitUSD: monthlyLimit, dayStart: dayStart, calendar: calendar)
         }
         return series
     }

@@ -41,6 +41,48 @@ final class OverviewHourlyHistoryTests: XCTestCase {
         return series
     }
 
+    // MARK: - OpenCode contribution
+
+    private func openCodeHourly(dayStart: Date) -> OpenCodeDayHourlyUsage {
+        let hours = (0..<24).map { hour in
+            OpenCodeHourUsage(
+                hour: hour,
+                segments: hour == 9 ? [
+                    OpenCodeHourSegment(
+                        providerID: "opencode-go",
+                        modelID: "m",
+                        costUSD: 1,
+                        quotaCostUSD: 1,
+                        inputTokens: 100,
+                        messageCount: 1
+                    )
+                ] : []
+            )
+        }
+        return OpenCodeDayHourlyUsage(dayStart: dayStart, hours: hours, legend: [])
+    }
+
+    /// OpenCode's local hours are added for the matching day; the gate is the
+    /// provider being enabled, not a console session.
+    func testOpenCodeHoursAreAddedForTheSameDay() throws {
+        let dayStart = calendar.startOfDay(for: try date(5))
+        var series = OverviewDaySeries()
+        series.addOpenCode(openCodeHourly(dayStart: dayStart), monthlyLimitUSD: 60, dayStart: dayStart, calendar: calendar)
+        let goWeights = try XCTUnwrap(series.weights[.openCodeGo])
+        XCTAssertGreaterThan(goWeights[9], 0)
+        XCTAssertEqual(series.tokens[.openCodeGo]?[9], 100)
+        XCTAssertTrue(series.hasActivity)
+    }
+
+    func testOpenCodeHoursFromAnotherDayAreIgnored() throws {
+        let dayStart = calendar.startOfDay(for: try date(5))
+        let otherDay = calendar.startOfDay(for: try date(4))
+        var series = OverviewDaySeries()
+        series.addOpenCode(openCodeHourly(dayStart: otherDay), monthlyLimitUSD: 60, dayStart: dayStart, calendar: calendar)
+        XCTAssertNil(series.weights[.openCodeGo])
+        XCTAssertFalse(series.hasActivity)
+    }
+
     // MARK: - History store
 
     func testRecordKeepsTheLargerValueForEachHour() throws {
