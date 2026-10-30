@@ -154,6 +154,51 @@ final class ClaudeCodeLocalStatsTests: XCTestCase {
         XCTAssertEqual(days["2026-10-10"]?["claude-opus-4-1"]?.responseCount, 2)
     }
 
+    /// A repeat scan picks up appended lines, leaves a partly written line for
+    /// later, and drops the entries of a file that was removed or rewritten.
+    func testRepeatScansFollowAppendsRewritesAndRemovals() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let projects = root.appendingPathComponent("projects", isDirectory: true)
+        try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = projects.appendingPathComponent("session.jsonl")
+        let other = projects.appendingPathComponent("other.jsonl")
+        let cache = ClaudeCodeFileCache()
+        func responses() throws -> Int? {
+            let days = try XCTUnwrap(ClaudeCodeLocalStats.scanDailyTokens(
+                directories: [projects],
+                calendar: utcCalendar,
+                cache: cache
+            ))
+            return days["2026-10-10"]?["claude-opus-4-1"]?.responseCount
+        }
+
+        let first = line(id: "a", request: "r1", at: "2026-10-10T12:00:00Z")
+        let second = line(id: "b", request: "r2", at: "2026-10-10T12:05:00Z")
+        try Data((first + "\n").utf8).write(to: session)
+        try Data((line(id: "c", request: "r3", at: "2026-10-10T12:06:00Z") + "\n").utf8).write(to: other)
+        XCTAssertEqual(try responses(), 2)
+
+        // A partly written line is not read yet.
+        let handle = try FileHandle(forWritingTo: session)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(second.prefix(20).utf8))
+        XCTAssertEqual(try responses(), 2)
+
+        // Once the line is finished, only the appended bytes are read.
+        try handle.write(contentsOf: Data((second.dropFirst(20) + "\n").utf8))
+        try handle.close()
+        XCTAssertEqual(try responses(), 3)
+
+        // A rewritten (shorter) file is parsed again and its old entries dropped.
+        try Data((first + "\n").utf8).write(to: session)
+        XCTAssertEqual(try responses(), 2)
+
+        try FileManager.default.removeItem(at: other)
+        XCTAssertEqual(try responses(), 1)
+    }
+
     func testScanIsNilWithoutClaudeCode() {
         let missing = URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString)/projects")
         XCTAssertNil(ClaudeCodeLocalStats.scanDailyTokens(directories: [missing], cache: ClaudeCodeFileCache()))

@@ -95,8 +95,8 @@ enum ClaudeCodeLocalStats {
     /// Token counts per local day and model across every transcript, or `nil`
     /// when no Claude Code `projects` directory exists on this Mac.
     ///
-    /// Unchanged files come from `cache`, so a repeat scan re-parses only the
-    /// transcripts that grew.
+    /// `cache` keeps every transcript's parsed entries and the running totals,
+    /// so a repeat scan parses only the bytes appended since the last one.
     static func scanDailyTokens(
         directories: [URL] = projectsDirectories(),
         calendar: Calendar = .autoupdatingCurrent,
@@ -108,38 +108,10 @@ enum ClaudeCodeLocalStats {
             return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
         }
         guard !existing.isEmpty else { return nil }
-        let entries = existing.flatMap { loadEntries(in: $0, cache: cache) }
-        return dailyTokens(entries: entries, calendar: calendar)
-    }
-
-    /// Entries from every `.jsonl` under `directory`.
-    static func loadEntries(
-        in directory: URL,
-        cache: ClaudeCodeFileCache = fileCache
-    ) -> [Entry] {
-        let keys: [URLResourceKey] = [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey]
-        guard let walker = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-
-        var result: [Entry] = []
-        var seenPaths = Set<String>()
-        for case let url as URL in walker where url.pathExtension == "jsonl" {
-            guard let values = try? url.resourceValues(forKeys: Set(keys)),
-                  values.isRegularFile == true,
-                  let modified = values.contentModificationDate
-            else { continue }
-            seenPaths.insert(url.path)
-            let size = values.fileSize ?? 0
-            result += cache.entries(path: url.path, modified: modified, size: size) {
-                guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return [] }
-                return parse(jsonl: data)
-            }
+        for directory in existing {
+            cache.update(directory: directory)
         }
-        cache.prune(keeping: seenPaths, under: directory.path)
-        return result
+        return cache.dailyTokens(calendar: calendar)
     }
 
     private static let usageMarker = Array("\"usage\"".utf8)
@@ -152,6 +124,18 @@ enum ClaudeCodeLocalStats {
     static func parse(jsonl data: Data) -> [Entry] {
         let decoder = JSONDecoder()
         return usageLineRanges(in: data).compactMap { parseLine(data[$0], decoder: decoder) }
+    }
+
+    /// Parses the complete lines of `data`: every newline-terminated line,
+    /// plus a final unterminated line when it is whole JSON.
+    ///
+    /// - Returns: The entries, and the number of bytes those lines span; a
+    ///   final line still being written is left for a later read.
+    static func parseCompleteLines(_ data: Data) -> (entries: [Entry], consumed: Int) {
+        let tailStart = data.lastIndex(of: 0x0A).map { data.index(after: $0) } ?? data.startIndex
+        let tail = data[tailStart...]
+        let end = tail.isEmpty || (try? JSONSerialization.jsonObject(with: tail)) == nil ? tailStart : data.endIndex
+        return (parse(jsonl: data[data.startIndex..<end]), end - data.startIndex)
     }
 
     /// Index ranges, in `data`'s indices, of the lines that contain `"usage"`.
@@ -218,24 +202,52 @@ enum ClaudeCodeLocalStats {
     /// Token counts per ``DayKey`` and model, counting each response once.
     /// A response belongs to the local day its timestamp falls on in `calendar`.
     static func dailyTokens(entries: [Entry], calendar: Calendar) -> ClaudeDailyTokens {
-        var days: ClaudeDailyTokens = [:]
-        var seen = Set<String>()
-        seen.reserveCapacity(entries.count)
+        var tally = ClaudeDailyTokenTally(calendar: calendar)
         for entry in entries {
-            if let key = entry.dedupeKey, !seen.insert(key).inserted { continue }
-            let day = DayKey.key(for: entry.date, calendar: calendar)
-            let counts = ClaudeModelTokens(
-                inputTokens: entry.inputTokens,
-                outputTokens: entry.outputTokens,
-                cacheReadTokens: entry.cacheReadTokens,
-                cacheWrite5mTokens: entry.cacheWrite5mTokens,
-                cacheWrite1hTokens: entry.cacheWrite1hTokens,
-                responseCount: 1
-            )
-            let current = days[day]?[entry.model] ?? ClaudeModelTokens()
-            days[day, default: [:]][entry.model] = current + counts
+            tally.add(entry)
         }
-        return days
+        return tally.days
+    }
+}
+
+/// Running per-day, per-model Claude Code totals that count each response
+/// once (see ``ClaudeCodeLocalStats/Entry/dedupeKey``).
+struct ClaudeDailyTokenTally {
+    let calendar: Calendar
+    private(set) var days: ClaudeDailyTokens = [:]
+    private var seen = Set<String>()
+    /// The day of the last entry added; transcripts are in time order, so
+    /// most entries fall on the same day as the one before.
+    private var currentDay: (start: Date, end: Date, key: String)?
+
+    init(calendar: Calendar) {
+        self.calendar = calendar
+    }
+
+    mutating func add(_ entry: ClaudeCodeLocalStats.Entry) {
+        if let key = entry.dedupeKey, !seen.insert(key).inserted { return }
+        let counts = ClaudeModelTokens(
+            inputTokens: entry.inputTokens,
+            outputTokens: entry.outputTokens,
+            cacheReadTokens: entry.cacheReadTokens,
+            cacheWrite5mTokens: entry.cacheWrite5mTokens,
+            cacheWrite1hTokens: entry.cacheWrite1hTokens,
+            responseCount: 1
+        )
+        let day = dayKey(for: entry.date)
+        let current = days[day]?[entry.model] ?? ClaudeModelTokens()
+        days[day, default: [:]][entry.model] = current + counts
+    }
+
+    private mutating func dayKey(for date: Date) -> String {
+        if let currentDay, date >= currentDay.start, date < currentDay.end {
+            return currentDay.key
+        }
+        let key = DayKey.key(for: date, calendar: calendar)
+        if let interval = calendar.dateInterval(of: .day, for: date) {
+            currentDay = (interval.start, interval.end, key)
+        }
+        return key
     }
 }
 
@@ -279,44 +291,146 @@ private struct TranscriptCacheCreation: Decodable {
     }
 }
 
-/// Parsed transcript files keyed by path, reused while a file's modification
-/// date and size are unchanged (transcripts are append-only, so a growing
-/// file is simply re-parsed).
+/// Parsed transcript files keyed by path, plus the running totals over them.
+///
+/// Transcripts are append-only, so a file that grew is read from where the
+/// last read stopped; a file that shrank or was replaced, or whose last read
+/// did not stop after a newline, is parsed again in full. Totals take only
+/// the new entries, and are rebuilt from every file's entries when entries
+/// were dropped (a file removed or parsed again).
 final class ClaudeCodeFileCache: @unchecked Sendable {
     private struct Item {
+        /// The scanned folder the file was found under.
+        var root: String
         var modified: Date
         var size: Int
+        var fileID: UInt64?
+        /// Bytes parsed so far: every complete line.
+        var parsedBytes: Int
         var entries: [ClaudeCodeLocalStats.Entry]
     }
 
     private let lock = NSLock()
     private var items: [String: Item] = [:]
+    private var tally: ClaudeDailyTokenTally?
+    /// Entries added since `tally` was last brought up to date.
+    private var pending: [ClaudeCodeLocalStats.Entry] = []
+    private var needsRebuild = false
 
-    func entries(
-        path: String,
-        modified: Date,
-        size: Int,
-        load: () -> [ClaudeCodeLocalStats.Entry]
-    ) -> [ClaudeCodeLocalStats.Entry] {
-        lock.lock()
-        if let item = items[path], item.modified == modified, item.size == size {
-            lock.unlock()
-            return item.entries
+    /// Brings the cached entries up to date with every `.jsonl` file under
+    /// `directory`, and drops files there that no longer exist.
+    func update(directory: URL) {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey, .fileIdentifierKey]
+        guard let walker = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        var seenPaths = Set<String>()
+        for case let url as URL in walker where url.pathExtension == "jsonl" {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                  values.isRegularFile == true,
+                  let modified = values.contentModificationDate
+            else { continue }
+            seenPaths.insert(url.path)
+            refresh(
+                url: url,
+                root: directory.path,
+                modified: modified,
+                size: values.fileSize ?? 0,
+                fileID: values.fileIdentifier
+            )
         }
-        lock.unlock()
-        let loaded = load()
-        lock.lock()
-        items[path] = Item(modified: modified, size: size, entries: loaded)
-        lock.unlock()
-        return loaded
+        prune(keeping: seenPaths, under: directory.path)
     }
 
-    /// Drops cached files inside the `root` folder that the last walk did not
-    /// find (deleted since).
-    func prune(keeping paths: Set<String>, under root: String) {
-        let folder = root.hasSuffix("/") ? root : root + "/"
+    /// Totals per day and model over every cached file.
+    func dailyTokens(calendar: Calendar) -> ClaudeDailyTokens {
         lock.lock()
         defer { lock.unlock() }
-        items = items.filter { !$0.key.hasPrefix(folder) || paths.contains($0.key) }
+        if needsRebuild || tally?.calendar != calendar {
+            var rebuilt = ClaudeDailyTokenTally(calendar: calendar)
+            for path in items.keys.sorted() {
+                for entry in items[path]?.entries ?? [] {
+                    rebuilt.add(entry)
+                }
+            }
+            tally = rebuilt
+            needsRebuild = false
+        } else if var current = tally {
+            for entry in pending {
+                current.add(entry)
+            }
+            tally = current
+        }
+        pending = []
+        return tally?.days ?? [:]
+    }
+
+    private func refresh(url: URL, root: String, modified: Date, size: Int, fileID: UInt64?) {
+        lock.lock()
+        let cached = items[url.path]
+        lock.unlock()
+        if let cached, cached.modified == modified, cached.size == size, cached.fileID == fileID {
+            return
+        }
+        if let cached, cached.fileID == fileID, cached.parsedBytes > 0, size >= cached.parsedBytes,
+           let appended = Self.readAppended(url: url, from: cached.parsedBytes) {
+            let (entries, consumed) = ClaudeCodeLocalStats.parseCompleteLines(appended)
+            lock.lock()
+            items[url.path] = Item(
+                root: root,
+                modified: modified,
+                size: size,
+                fileID: fileID,
+                parsedBytes: cached.parsedBytes + consumed,
+                entries: cached.entries + entries
+            )
+            pending += entries
+            lock.unlock()
+            return
+        }
+        let data = (try? Data(contentsOf: url, options: .mappedIfSafe)) ?? Data()
+        let (entries, consumed) = ClaudeCodeLocalStats.parseCompleteLines(data)
+        lock.lock()
+        items[url.path] = Item(
+            root: root,
+            modified: modified,
+            size: size,
+            fileID: fileID,
+            parsedBytes: consumed,
+            entries: entries
+        )
+        if cached == nil {
+            pending += entries
+        } else {
+            needsRebuild = true
+        }
+        lock.unlock()
+    }
+
+    /// The bytes after `offset`, or nil when the byte before `offset` is not
+    /// the newline the last read ended on (the file was rewritten).
+    private static func readAppended(url: URL, from offset: Int) -> Data? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard (try? handle.seek(toOffset: UInt64(offset - 1))) != nil,
+              let data = try? handle.readToEnd() ?? Data(),
+              data.first == 0x0A
+        else { return nil }
+        return data.dropFirst()
+    }
+
+    /// Drops cached files found under the `root` folder that the last walk
+    /// did not find (deleted since).
+    private func prune(keeping paths: Set<String>, under root: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let kept = items.filter { $0.value.root != root || paths.contains($0.key) }
+        if kept.count != items.count {
+            items = kept
+            needsRebuild = true
+        }
     }
 }
