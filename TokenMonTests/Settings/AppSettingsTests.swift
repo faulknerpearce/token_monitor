@@ -130,6 +130,20 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(settings.needsPolling(.chatgpt))
     }
 
+    /// A provider left out of the alert stops polling for it, and the choice
+    /// is saved.
+    func testAlertProvidersLimitAlertPolling() {
+        let settings = makeSettings()
+        settings.selectedProvider = .grok
+        settings.thresholdEnabled = true
+        XCTAssertTrue(settings.needsPolling(.chatgpt))
+        settings.alertProviders.remove(.chatgpt)
+        XCTAssertFalse(settings.needsPolling(.chatgpt))
+        XCTAssertFalse(settings.alertWatches(.chatgpt))
+        XCTAssertTrue(settings.alertWatches(.claude))
+        XCTAssertFalse(makeSettings().alertProviders.contains(.chatgpt))
+    }
+
     func testNeedsOpenCodeAndCursorPollingOnOverview() {
         let settings = makeSettings()
         settings.selectedProvider = .overview

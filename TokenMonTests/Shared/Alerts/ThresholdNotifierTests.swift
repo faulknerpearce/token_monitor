@@ -211,4 +211,21 @@ final class ThresholdNotifierTests: XCTestCase {
         notifier.evaluate(usedPercent: 86, settings: settings, account: nil, resetsAt: reset.addingTimeInterval(7 * 86_400))
         XCTAssertEqual(recorder.calls, [85, 86])
     }
+
+    /// A provider left out of the alert is never notified.
+    @MainActor
+    func testEvaluateSkipsProvidersTheAlertDoesNotWatch() throws {
+        let suite = "ThresholdNotifierTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = makeSettings(defaults, threshold: 80)
+        settings.alertProviders = [.claude]
+        let recorder = Recorder()
+        let notifier = ThresholdNotifier(defaults: defaults) { alert in recorder.calls.append(alert.usedPercent) }
+
+        notifier.evaluate(provider: .cursor, usedPercent: 90, settings: settings, account: nil)
+        XCTAssertTrue(recorder.calls.isEmpty)
+        notifier.evaluate(provider: .claude, usedPercent: 91, settings: settings, account: nil)
+        XCTAssertEqual(recorder.calls, [91])
+    }
 }

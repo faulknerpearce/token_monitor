@@ -87,7 +87,7 @@ private struct GeneralSettingsTab: View {
                 refreshStatus
             }
 
-            Section("Alerts") {
+            Section {
                 Toggle("Notify when usage exceeds threshold", isOn: $settings.thresholdEnabled)
                     .settingsSwitch()
                 if settings.thresholdEnabled {
@@ -98,6 +98,25 @@ private struct GeneralSettingsTab: View {
                     } maximumValueLabel: {
                         Text("\(Int(AppSettings.thresholdRange.upperBound))%")
                     }
+                    ForEach(settings.visibleUsageProviders) { provider in
+                        Toggle(provider.displayName, isOn: Binding(
+                            get: { settings.alertProviders.contains(provider) },
+                            set: { on in
+                                if on {
+                                    settings.alertProviders.insert(provider)
+                                } else {
+                                    settings.alertProviders.remove(provider)
+                                }
+                            }
+                        ))
+                        .settingsSwitch()
+                    }
+                }
+            } header: {
+                Text("Alerts")
+            } footer: {
+                if settings.thresholdEnabled {
+                    Text("Providers the alert watches keep refreshing in the background.")
                 }
             }
 

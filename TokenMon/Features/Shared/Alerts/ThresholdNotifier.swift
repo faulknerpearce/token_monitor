@@ -52,7 +52,7 @@ final class ThresholdNotifier: ObservableObject {
         account: String?,
         resetsAt: Date? = nil
     ) {
-        guard settings.thresholdEnabled else { return }
+        guard settings.alertWatches(provider) else { return }
         let threshold = settings.thresholdPercent
         // Persisted and scoped to provider and account, so an alert the user
         // already saw stays suppressed across relaunches and account switches

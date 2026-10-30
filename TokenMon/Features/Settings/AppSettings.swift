@@ -97,6 +97,20 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(thresholdEnabled, forKey: Keys.thresholdEnabled) }
     }
 
+    /// Providers the usage alert watches while it is on. Only these keep
+    /// polling for the alert when they are not otherwise needed.
+    @Published var alertProviders: Set<MonitorProvider> {
+        didSet {
+            guard alertProviders != oldValue else { return }
+            defaults.set(alertProviders.map(\.rawValue).sorted(), forKey: Keys.alertProviders)
+        }
+    }
+
+    /// Whether the usage alert is on for `provider`.
+    func alertWatches(_ provider: MonitorProvider) -> Bool {
+        thresholdEnabled && alertProviders.contains(provider)
+    }
+
     @Published var thresholdPercent: Double {
         didSet {
             let clamped = Self.clampThreshold(thresholdPercent)
@@ -202,10 +216,10 @@ final class AppSettings: ObservableObject {
 
     /// Whether `provider` needs polling now: it is enabled and its panel tab
     /// (or Overview) is selected, its menu-bar graph is on, or the usage alert
-    /// is on (the alert is evaluated on each poll).
+    /// watches it (the alert is evaluated on each poll).
     func needsPolling(_ provider: MonitorProvider) -> Bool {
         guard provider != .overview, isProviderEnabled(provider) else { return false }
-        return selectedProvider.polls(provider) || showsMenuBarGraph(provider) || thresholdEnabled
+        return selectedProvider.polls(provider) || showsMenuBarGraph(provider) || alertWatches(provider)
     }
 
     /// Guards against recursive `didSet` when registration fails and the value is reverted.
@@ -222,6 +236,9 @@ final class AppSettings: ObservableObject {
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
         thresholdEnabled = defaults.object(forKey: Keys.thresholdEnabled) as? Bool ?? false
+        alertProviders = defaults.stringArray(forKey: Keys.alertProviders)
+            .map { Set($0.compactMap(MonitorProvider.init(rawValue:))).intersection(MonitorProvider.usageProviders) }
+            ?? Set(MonitorProvider.usageProviders)
         thresholdPercent = Self.clampThreshold(defaults.object(forKey: Keys.thresholdPercent) as? Double ?? 80)
         selectedProvider = MonitorProvider(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "") ?? .grok
         collapsedPanelSections = Set(
@@ -339,6 +356,7 @@ final class AppSettings: ObservableObject {
         static let idlePoll = "idlePollSeconds"
         static let thresholdEnabled = "thresholdEnabled"
         static let thresholdPercent = "thresholdPercent"
+        static let alertProviders = "alertProviders"
         static let selectedProvider = "selectedProvider"
         static let enabledProviders = "enabledProviderIDs"
         static let providerOrder = "providerOrder"
