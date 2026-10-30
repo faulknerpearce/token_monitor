@@ -23,7 +23,7 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     private let grokHourly: HourlyDeltaActivityStore
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchUsage: (String?, String?) async throws -> WeeklyUsageSnapshot
-    private let logger = Logger(category: "Poller")
+    private let logger = Logger(category: "Grok")
 
     private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
@@ -126,51 +126,34 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
             return .skipped
         }
 
-        let generation = auth.sessionGeneration
         let cookieHeader = auth.loadCookieHeader()
         let accountEmail = auth.accountEmail
-
-        do {
-            var snap = try await fetchUsage(cookieHeader, accountEmail)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            if snap.accountEmail == nil {
-                snap.accountEmail = auth.accountEmail
-            }
-            snapshot = snap
-            lastError = nil
-            lastRefreshedAt = Date()
-            auth.recordAuthSuccess()
-            history.append(snap)
-            grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
-            notifier.evaluate(
-                usedPercent: snap.usedPercent,
-                settings: settings,
-                account: auth.accountEmail,
-                resetsAt: snap.resetsAt
-            )
-            logger.info("Usage refreshed: \(snap.usedPercent, format: .fixed(precision: 1))% used")
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let error as ProviderError {
-            // A request that began under a previous credential state leaves the
-            // current session intact.
-            guard auth.isCurrent(generation) else { return .skipped }
-            switch error.usageError {
-            case .unauthorized, .notSignedIn:
-                auth.recordAuthFailure(reason: error.localizedDescription)
-            default:
-                break
-            }
-            lastError = error.localizedDescription
-            logger.error("Refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            lastError = error.localizedDescription
-            logger.error("Refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        }
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "Grok",
+            fetch: { try await fetchUsage(cookieHeader, accountEmail) },
+            publish: { fetched in
+                var snap = fetched
+                if snap.accountEmail == nil {
+                    snap.accountEmail = auth.accountEmail
+                }
+                snapshot = snap
+                lastError = nil
+                lastRefreshedAt = Date()
+                history.append(snap)
+                grokHourly.record(usedPercent: snap.usedPercent, at: snap.fetchedAt)
+                notifier.evaluate(
+                    usedPercent: snap.usedPercent,
+                    settings: settings,
+                    account: auth.accountEmail,
+                    resetsAt: snap.resetsAt
+                )
+                logger.info("Grok refresh: \(snap.usedPercent, format: .fixed(precision: 1))% used")
+                return .success
+            },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func pollInterval() -> TimeInterval? {

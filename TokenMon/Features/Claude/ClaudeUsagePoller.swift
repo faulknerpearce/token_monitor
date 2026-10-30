@@ -133,68 +133,51 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
             return .skipped
         }
 
-        let generation = auth.sessionGeneration
-        do {
-            let (response, fetchedAt) = try await fetchUsage(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            snapshot = ClaudeSnapshot(
-                fetchedAt: fetchedAt,
-                fiveHour: response.fiveHour,
-                sevenDay: response.sevenDay,
-                accountEmail: auth.accountEmail
-            )
-            lastError = nil
-            lastRefreshedAt = Date()
-            auth.needsSignIn = false
-            auth.recordAuthSuccess()
-            // The 5-hour window counts every model, unlike a model-scoped
-            // weekly limit, so it drives the hourly activity series.
-            if let percent = response.fiveHour?.usedPercent {
-                hourly.record(usedPercent: percent, at: fetchedAt)
-                logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")
-            }
-            if let weeklyPercent = response.sevenDay?.usedPercent {
-                noteWeeklyResetAdvance(response.sevenDay?.resetsAt)
-                // Claude sends only `resets_at`, so a rollover or early reset is
-                // recognized from a moved reset instant plus a used-% drop; the
-                // store keeps earlier days as history.
-                daily.record(
-                    windowUsedPercent: weeklyPercent,
-                    at: fetchedAt,
-                    window: QuotaWindow(start: nil, resetsAt: response.sevenDay?.resetsAt)
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "Claude",
+            fetch: { try await fetchUsage(cookieHeader) },
+            publish: { fetched in
+                let (response, fetchedAt) = fetched
+                snapshot = ClaudeSnapshot(
+                    fetchedAt: fetchedAt,
+                    fiveHour: response.fiveHour,
+                    sevenDay: response.sevenDay,
+                    accountEmail: auth.accountEmail
                 )
-            }
-            budgetReferenceNow = fetchedAt
-            dailyBudgetDays = Self.buildDailyBudgetDays(
-                spentByDay: daily.spentByDay,
-                resetsAt: weeklyResetsAt(now: fetchedAt),
-                windowStart: daily.windowStart,
-                interruptedWindowStart: daily.interruptedWindowStart,
-                now: fetchedAt
-            )
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let error as ProviderError {
-            // Only a request made under the current credential state tears down
-            // the session; a stale one is skipped.
-            guard auth.isCurrent(generation) else { return .skipped }
-            let usageError = error.usageError
-            switch usageError {
-            case .unauthorized, .notSignedIn:
-                auth.recordAuthFailure(reason: error.localizedDescription)
-            default:
-                break
-            }
-            lastError = error.localizedDescription
-            logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            lastError = error.localizedDescription
-            logger.error("Claude refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        }
+                lastError = nil
+                lastRefreshedAt = Date()
+                auth.needsSignIn = false
+                // The 5-hour window counts every model, unlike a model-scoped
+                // weekly limit, so it drives the hourly activity series.
+                if let percent = response.fiveHour?.usedPercent {
+                    hourly.record(usedPercent: percent, at: fetchedAt)
+                    logger.info("Claude refresh: 5h \(percent, format: .fixed(precision: 1))% used")
+                }
+                if let weeklyPercent = response.sevenDay?.usedPercent {
+                    noteWeeklyResetAdvance(response.sevenDay?.resetsAt)
+                    // Claude sends only `resets_at`, so a rollover or early reset is
+                    // recognized from a moved reset instant plus a used-% drop; the
+                    // store keeps earlier days as history.
+                    daily.record(
+                        windowUsedPercent: weeklyPercent,
+                        at: fetchedAt,
+                        window: QuotaWindow(start: nil, resetsAt: response.sevenDay?.resetsAt)
+                    )
+                }
+                budgetReferenceNow = fetchedAt
+                dailyBudgetDays = Self.buildDailyBudgetDays(
+                    spentByDay: daily.spentByDay,
+                    resetsAt: weeklyResetsAt(now: fetchedAt),
+                    windowStart: daily.windowStart,
+                    interruptedWindowStart: daily.interruptedWindowStart,
+                    now: fetchedAt
+                )
+                return .success
+            },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func pollInterval() -> TimeInterval? {

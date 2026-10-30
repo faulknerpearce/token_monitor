@@ -75,42 +75,25 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
         // A rejected key stops the poller until the user saves a new one.
         guard auth.isSignedIn, !auth.needsSignIn else { return .skipped }
 
-        let generation = auth.sessionGeneration
-        do {
-            let snap = try await fetchSnapshot(apiKey)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            snapshot = snap
-            lastError = nil
-            lastRefreshedAt = Date()
-            auth.needsSignIn = false
-            auth.recordAuthSuccess()
-            if let percent = snap.usedPercent {
-                logger.info("OpenRouter refresh: \(Int(percent.rounded()))% of credits used (\(Format.usd(snap.remainingUSD ?? 0), privacy: .public) left)")
-            } else {
-                logger.info("OpenRouter refresh: \(Format.usd(snap.usedUSD), privacy: .public) spent (no credit limit)")
-            }
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let error as ProviderError {
-            // Only a request made under the current credential state tears down
-            // the session; a stale one is skipped.
-            guard auth.isCurrent(generation) else { return .skipped }
-            switch error.usageError {
-            case .unauthorized, .notSignedIn:
-                auth.recordAuthFailure(reason: error.localizedDescription)
-            default:
-                break
-            }
-            lastError = error.localizedDescription
-            logger.error("OpenRouter refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            lastError = error.localizedDescription
-            logger.error("OpenRouter refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        }
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "OpenRouter",
+            fetch: { try await fetchSnapshot(apiKey) },
+            publish: { snap in
+                snapshot = snap
+                lastError = nil
+                lastRefreshedAt = Date()
+                auth.needsSignIn = false
+                if let percent = snap.usedPercent {
+                    logger.info("OpenRouter refresh: \(Int(percent.rounded()))% of credits used (\(Format.usd(snap.remainingUSD ?? 0), privacy: .public) left)")
+                } else {
+                    logger.info("OpenRouter refresh: \(Format.usd(snap.usedUSD), privacy: .public) spent (no credit limit)")
+                }
+                return .success
+            },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func pollInterval() -> TimeInterval? {

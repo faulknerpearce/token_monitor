@@ -105,68 +105,49 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
             return .skipped
         }
 
-        let generation = auth.sessionGeneration
-        do {
-            let fresh = try await fetchSnapshot(cookieHeader, auth.accountEmail)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            snapshot = fresh
-            lastError = nil
-            lastRefreshedAt = Date()
-            auth.recordAuthSuccess()
-            logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "Grokbot",
+            fetch: { try await fetchSnapshot(cookieHeader, auth.accountEmail) },
+            publish: { fresh in
+                snapshot = fresh
+                lastError = nil
+                lastRefreshedAt = Date()
+                logger.info("Grokbot refresh: \(fresh.usedPercent, format: .fixed(precision: 1))% of weekly pool used")
 
-            if let resetsAt = fresh.resetsAt {
-                weeklyResetsAt = resetsAt
-            }
-            // The daily store recognizes a normal rollover or a provider-initiated
-            // early reset from the payload's own start / reset instants and keeps
-            // the earlier days as history. Hourly deltas restart their baseline
-            // either way; an early reset keeps the hours already recorded today.
-            let transition = daily.record(
-                windowUsedPercent: fresh.usedPercent,
-                at: fresh.fetchedAt,
-                window: QuotaWindow(start: fresh.periodStart, resetsAt: fresh.resetsAt),
-                periodDays: fresh.daysInPeriod()
-            )
-            switch transition {
-            case .none: break
-            case .rollover: hourly.beginNewWindow()
-            case .earlyReset: hourly.beginNewWindow(keepingHours: true)
-            }
-            hourly.record(usedPercent: fresh.usedPercent, at: fresh.fetchedAt)
-            budgetReferenceNow = fresh.fetchedAt
-            dailyBudgetDays = Self.buildDailyBudgetDays(
-                spentByDay: daily.spentByDay,
-                resetsAt: fresh.resetsAt ?? weeklyResetsAt,
-                daysInPeriod: fresh.daysInPeriod(),
-                windowStart: daily.windowStart,
-                interruptedWindowStart: daily.interruptedWindowStart,
-                now: fresh.fetchedAt
-            )
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let error as ProviderError {
-            // A request that began under a previous credential state leaves the
-            // current session intact.
-            guard auth.isCurrent(generation) else { return .skipped }
-            switch error.usageError {
-            case .unauthorized, .notSignedIn:
-                // Counts toward the shared Cursor session's rejection streak;
-                // a Bot-only 403 maps to `.custom` and takes a separate branch.
-                auth.recordAuthFailure(reason: error.localizedDescription)
-            default:
-                break
-            }
-            lastError = error.localizedDescription
-            logger.error("Grokbot refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            lastError = error.localizedDescription
-            logger.error("Grokbot refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        }
+                if let resetsAt = fresh.resetsAt {
+                    weeklyResetsAt = resetsAt
+                }
+                // The daily store recognizes a normal rollover or a provider-initiated
+                // early reset from the payload's own start / reset instants and keeps
+                // the earlier days as history. Hourly deltas restart their baseline
+                // either way; an early reset keeps the hours already recorded today.
+                let transition = daily.record(
+                    windowUsedPercent: fresh.usedPercent,
+                    at: fresh.fetchedAt,
+                    window: QuotaWindow(start: fresh.periodStart, resetsAt: fresh.resetsAt),
+                    periodDays: fresh.daysInPeriod()
+                )
+                switch transition {
+                case .none: break
+                case .rollover: hourly.beginNewWindow()
+                case .earlyReset: hourly.beginNewWindow(keepingHours: true)
+                }
+                hourly.record(usedPercent: fresh.usedPercent, at: fresh.fetchedAt)
+                budgetReferenceNow = fresh.fetchedAt
+                dailyBudgetDays = Self.buildDailyBudgetDays(
+                    spentByDay: daily.spentByDay,
+                    resetsAt: fresh.resetsAt ?? weeklyResetsAt,
+                    daysInPeriod: fresh.daysInPeriod(),
+                    windowStart: daily.windowStart,
+                    interruptedWindowStart: daily.interruptedWindowStart,
+                    now: fresh.fetchedAt
+                )
+                return .success
+            },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func pollInterval() -> TimeInterval? {

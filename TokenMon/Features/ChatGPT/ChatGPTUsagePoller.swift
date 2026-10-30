@@ -84,32 +84,18 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         }
 
         let generation = auth.sessionGeneration
-        do {
-            let fetch = try await fetchUsage(cookieHeader, generation)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            publish(fetch)
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let error as ProviderError {
-            // Only a request made under the current credential state tears down
-            // the session; a stale one is skipped.
-            guard auth.isCurrent(generation) else { return .skipped }
-            switch error.usageError {
-            case .unauthorized, .notSignedIn:
-                tokenCache.clear()
-                auth.recordAuthFailure(reason: error.localizedDescription)
-                reportFailure(error)
-                return PollOutcome(error: error)
-            default:
-                reportFailure(error)
-                return PollOutcome(error: error)
-            }
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            reportFailure(error)
-            return PollOutcome(error: error)
-        }
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "ChatGPT",
+            fetch: { try await fetchUsage(cookieHeader, generation) },
+            publish: { fetch in
+                publish(fetch)
+                return .success
+            },
+            onRejected: { tokenCache.clear() },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func publish(_ fetch: ChatGPTUsageClient.Fetch) {
@@ -127,14 +113,8 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
         lastError = nil
         lastRefreshedAt = Date()
         auth.needsSignIn = false
-        auth.recordAuthSuccess()
         let headline = response.primary?.usedPercent ?? response.secondary?.usedPercent ?? 0
         logger.info("ChatGPT refresh: \(Int(headline.rounded()))% used")
-    }
-
-    private func reportFailure(_ error: Error) {
-        lastError = error.localizedDescription
-        logger.error("ChatGPT refresh failed: \(error.localizedDescription, privacy: .public)")
     }
 
     private func pollInterval() -> TimeInterval? {

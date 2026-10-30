@@ -74,6 +74,7 @@
 		52D59881A9BEF9BC0A461312 /* GrokbotUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3130D7477D8F9FB9A6A108 /* GrokbotUsagePollerTests.swift */; };
 		5303514EA7C8E65C522F60E6 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900E667C6972741C36D32F47 /* AppVersion.swift */; };
 		532A92DFAE33DFC082FE9057 /* WebKitCookieCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DAECD5889DD8A815AD1B976 /* WebKitCookieCapture.swift */; };
+		5696128A56DFC26D2B66D20E /* ProviderRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91F475404F422CC0FEB0D1DB /* ProviderRefreshTests.swift */; };
 		585967360F6914E6B9887B14 /* BackoffTimerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0C584A993F3AD08DDBB2D6 /* BackoffTimerTests.swift */; };
 		5B6079380C146E5A94CBE94E /* GrokModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427A4EFF553817195BD07655 /* GrokModels.swift */; };
 		5E6675043A9CDD8400400AEE /* MenuBarStatusRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E0CB1C6A364F5D4CD66107 /* MenuBarStatusRenderer.swift */; };
@@ -123,6 +124,7 @@
 		A039610B451F8F952A3EA3BA /* GrokbotUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = F718D05745BB5DDE828E46B0 /* GrokbotUsagePoller.swift */; };
 		A37437D20CF0C4022A6497C7 /* GrokPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */; };
 		A4F19D7AA8D3D515284857DB /* GrokAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB6355B7577FDA01928AFB91 /* GrokAuthSession.swift */; };
+		A6144966760F0E159FDBF6C9 /* ProviderRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8092DADB206CAD86541C21E4 /* ProviderRefresh.swift */; };
 		A78D18D375808560E6822C69 /* ColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2458C8F60DD06F82F69405D /* ColorPalette.swift */; };
 		A79FAB0F0260626C6DBE9C05 /* PollingLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A6762B1F58F4937A8C37DE /* PollingLoop.swift */; };
 		A8E4C4616A7B91FCDBB99FE2 /* GrokUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E19034B85E1CB7377C6B5F /* GrokUsagePoller.swift */; };
@@ -307,6 +309,7 @@
 		7C70E92DD2655CFB67E6C1A3 /* AppInstallerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstallerTests.swift; sourceTree = "<group>"; };
 		7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokPanelView.swift; sourceTree = "<group>"; };
 		7E04123306AF45F2E0DD879C /* MenuBarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanel.swift; sourceTree = "<group>"; };
+		8092DADB206CAD86541C21E4 /* ProviderRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRefresh.swift; sourceTree = "<group>"; };
 		80B59323B7E6F20597728876 /* JSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTests.swift; sourceTree = "<group>"; };
 		80B6518CD74C444246447FA4 /* ModelCompanyLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCompanyLogo.swift; sourceTree = "<group>"; };
 		81BD4E4DBD141D69BA6E000A /* ClaudeCodeUsageLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeUsageLedger.swift; sourceTree = "<group>"; };
@@ -319,6 +322,7 @@
 		8A5C6B1CABD31B8A6B55C5D7 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		900E667C6972741C36D32F47 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersion.swift; sourceTree = "<group>"; };
 		91EAEF940146874182D3544F /* OpenCodeSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSignInView.swift; sourceTree = "<group>"; };
+		91F475404F422CC0FEB0D1DB /* ProviderRefreshTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRefreshTests.swift; sourceTree = "<group>"; };
 		94E32471DAEAD4288348E6DD /* CollapsibleSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollapsibleSectionHeader.swift; sourceTree = "<group>"; };
 		9720EBF79E217B63CE39BE16 /* ReleaseFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseFeed.swift; sourceTree = "<group>"; };
 		981576F74AD9B88FF630EE50 /* Domain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain.swift; sourceTree = "<group>"; };
@@ -735,6 +739,7 @@
 				9F0C584A993F3AD08DDBB2D6 /* BackoffTimerTests.swift */,
 				B298F33B61E5C60B97CDF8B3 /* PollerSessionGuardTests.swift */,
 				EB48E0FD2C5E907771E5E6CE /* PollingLoopTests.swift */,
+				91F475404F422CC0FEB0D1DB /* ProviderRefreshTests.swift */,
 				3CCA7EDEB40AB696DB5CCC90 /* SystemWakeGateTests.swift */,
 			);
 			path = Polling;
@@ -983,6 +988,7 @@
 			children = (
 				3857063D469B00E3714491FC /* BackoffTimer.swift */,
 				C1A6762B1F58F4937A8C37DE /* PollingLoop.swift */,
+				8092DADB206CAD86541C21E4 /* ProviderRefresh.swift */,
 				CFD845C1214BB0AF9803EAFF /* ProviderUsagePoller.swift */,
 				407A4697EA29C036A893ECA6 /* SystemWakeGate.swift */,
 			);
@@ -1136,6 +1142,7 @@
 				1D2618502096D4A101B728E0 /* ProviderAuthSessionTests.swift in Sources */,
 				07B76EB27186C938A3137C51 /* ProviderCookieAllowlistTests.swift in Sources */,
 				AFA3A789322D30608EB77397 /* ProviderHourlyUsageTests.swift in Sources */,
+				5696128A56DFC26D2B66D20E /* ProviderRefreshTests.swift in Sources */,
 				EFD587CA5768E2AC8B7AC8E4 /* ProviderSwitcherLayoutTests.swift in Sources */,
 				039A40DE079117CD5ADBFE5D /* ReleaseFeedTests.swift in Sources */,
 				61342F40A4C093060FFEFEAE /* SegmentedUsageBarTests.swift in Sources */,
@@ -1248,6 +1255,7 @@
 				E0CA0FD5BD8EAE3CB0D32F4E /* ProviderHTTP.swift in Sources */,
 				CA6B7B3C386361E3CB4E8288 /* ProviderHourlyUsage.swift in Sources */,
 				1B0037A17BFF85E89026011A /* ProviderLogo.swift in Sources */,
+				A6144966760F0E159FDBF6C9 /* ProviderRefresh.swift in Sources */,
 				46F1C528574C5DA03FCCE64D /* ProviderRegistry.swift in Sources */,
 				B4B4675BE0F498A7AF029DA1 /* ProviderSignInButton.swift in Sources */,
 				3A6C1AAFD92DA03C9D8774F4 /* ProviderSignInSheet.swift in Sources */,

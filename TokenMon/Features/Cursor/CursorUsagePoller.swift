@@ -122,88 +122,70 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
             return .skipped
         }
 
-        let generation = auth.sessionGeneration
-        do {
-            var (snap, hourly, estimatedWeightByDay) = try await fetchSnapshot(cookieHeader)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            // A different account fires `accountReset`, which clears the previous
-            // account's figures before this poll publishes.
-            if let email = snap.accountEmail, email != auth.accountEmail {
-                auth.saveAccountEmail(email)
-            }
-            // No event aggregates this poll (events fetch failed): keep the
-            // previous event-derived figures for the same billing cycle.
-            if snap.costStats == nil, let previous = snapshot,
-               previous.billingCycleStart == snap.billingCycleStart {
-                snap.costStats = previous.costStats
-                hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
-                estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
-            }
-            snapshot = snap
-            dayHourlyUsage = hourly
-            auth.recordAuthSuccess()
-            // The daily bars prefer the real day-over-day growth of the reported
-            // pool %, falling back to a list-price estimate for unobserved
-            // days (see `buildDailyBudgetDays`).
-            if let cycleEnd = snap.billingCycleEnd {
-                billingCycleEnd = cycleEnd
-            }
-            // The store spots a billing-cycle rollover or a provider-initiated early
-            // reset from the cycle start/end and keeps earlier days as history.
-            let cycleEnd = snap.billingCycleEnd ?? billingCycleEnd
-            daily.record(
-                windowUsedPercent: snap.usedPercent,
-                at: snap.fetchedAt,
-                window: QuotaWindow(start: snap.billingCycleStart, resetsAt: cycleEnd),
-                periodDays: Self.cycleLengthDays(start: snap.billingCycleStart, end: cycleEnd)
-            )
-            budgetContext = BudgetContext(
-                estimatedWeightByDay: estimatedWeightByDay,
-                usedPercent: snap.usedPercent,
-                billingCycleStart: snap.billingCycleStart,
-                billingCycleEnd: cycleEnd,
-                referenceNow: snap.fetchedAt
-            )
-            dailyBudgetDays = Self.buildDailyBudgetDays(
-                observedByDay: daily.spentByDay,
-                interruptedWindowStart: daily.interruptedWindowStart,
-                estimatedWeightByDay: estimatedWeightByDay,
-                usedPercent: snap.usedPercent,
-                billingCycleStart: snap.billingCycleStart,
-                billingCycleEnd: cycleEnd,
-                now: snap.fetchedAt
-            )
-            lastError = nil
-            lastRefreshedAt = Date()
-            dataSourceLabel = "Cursor dashboard"
-            auth.needsSignIn = false
-            logger.info(
-                "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
-            )
-            return .success
-        } catch is CancellationError {
-            return .skipped
-        } catch let cursorError as ProviderError {
-            // Only a request made under the current credential state tears down
-            // the session; a stale one (sign-out → sign in as another account
-            // while this fetch was in flight) is skipped.
-            guard auth.isCurrent(generation) else { return .skipped }
-            let usageError = cursorError.usageError
-            switch usageError {
-            case .unauthorized, .notSignedIn:
-                auth.recordAuthFailure(reason: cursorError.localizedDescription)
-            default:
-                break
-            }
-            lastError = cursorError.localizedDescription
-            logger.error("Cursor refresh failed: \(cursorError.localizedDescription, privacy: .public)")
-            return PollOutcome(error: cursorError)
-        } catch {
-            guard auth.isCurrent(generation) else { return .skipped }
-            lastError = error.localizedDescription
-            logger.error("Cursor refresh failed: \(error.localizedDescription, privacy: .public)")
-            return PollOutcome(error: error)
-        }
+        return await ProviderRefresh.run(
+            auth: auth,
+            logger: logger,
+            label: "Cursor",
+            fetch: { try await fetchSnapshot(cookieHeader) },
+            publish: { fetched in
+                var (snap, hourly, estimatedWeightByDay) = fetched
+                // A different account fires `accountReset`, which clears the previous
+                // account's figures before this poll publishes.
+                if let email = snap.accountEmail, email != auth.accountEmail {
+                    auth.saveAccountEmail(email)
+                }
+                // No event aggregates this poll (events fetch failed): keep the
+                // previous event-derived figures for the same billing cycle.
+                if snap.costStats == nil, let previous = snapshot,
+                   previous.billingCycleStart == snap.billingCycleStart {
+                    snap.costStats = previous.costStats
+                    hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
+                    estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
+                }
+                snapshot = snap
+                dayHourlyUsage = hourly
+                // The daily bars prefer the real day-over-day growth of the reported
+                // pool %, falling back to a list-price estimate for unobserved
+                // days (see `buildDailyBudgetDays`).
+                if let cycleEnd = snap.billingCycleEnd {
+                    billingCycleEnd = cycleEnd
+                }
+                // The store spots a billing-cycle rollover or a provider-initiated early
+                // reset from the cycle start/end and keeps earlier days as history.
+                let cycleEnd = snap.billingCycleEnd ?? billingCycleEnd
+                daily.record(
+                    windowUsedPercent: snap.usedPercent,
+                    at: snap.fetchedAt,
+                    window: QuotaWindow(start: snap.billingCycleStart, resetsAt: cycleEnd),
+                    periodDays: Self.cycleLengthDays(start: snap.billingCycleStart, end: cycleEnd)
+                )
+                budgetContext = BudgetContext(
+                    estimatedWeightByDay: estimatedWeightByDay,
+                    usedPercent: snap.usedPercent,
+                    billingCycleStart: snap.billingCycleStart,
+                    billingCycleEnd: cycleEnd,
+                    referenceNow: snap.fetchedAt
+                )
+                dailyBudgetDays = Self.buildDailyBudgetDays(
+                    observedByDay: daily.spentByDay,
+                    interruptedWindowStart: daily.interruptedWindowStart,
+                    estimatedWeightByDay: estimatedWeightByDay,
+                    usedPercent: snap.usedPercent,
+                    billingCycleStart: snap.billingCycleStart,
+                    billingCycleEnd: cycleEnd,
+                    now: snap.fetchedAt
+                )
+                lastError = nil
+                lastRefreshedAt = Date()
+                dataSourceLabel = "Cursor dashboard"
+                auth.needsSignIn = false
+                logger.info(
+                    "Cursor refresh: total \(snap.usedPercent, format: .fixed(precision: 1))% used (\(Int((100 - snap.usedPercent).rounded()))% left)"
+                )
+                return .success
+            },
+            reportError: { lastError = $0 }
+        )
     }
 
     private func pollInterval() -> TimeInterval? {
