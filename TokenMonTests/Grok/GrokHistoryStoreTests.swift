@@ -1,10 +1,11 @@
+import SwiftData
 @testable import TokenMon
 import XCTest
 
 /// `GrokHistoryStore` (in-memory SwiftData): same-day `recent` upsert, skip
 /// window, 200-entry cap, and `clear`.
 @MainActor
-final class HistoryStoreTests: XCTestCase {
+final class GrokHistoryStoreTests: XCTestCase {
     private var store: GrokHistoryStore!
 
     override func setUp() async throws {
@@ -143,5 +144,66 @@ final class HistoryStoreTests: XCTestCase {
         let changed = snapshot(usedPercent: 31, minutesAgo: 0)
         store.append(changed)
         XCTAssertEqual(store.recent.first?.usedPercent ?? -1, 31, accuracy: 0.001)
+    }
+
+    // MARK: - Saved file
+
+    private func tempDirectory() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    func testHistoryIsSavedAndReloaded() throws {
+        let dir = try tempDirectory()
+        let file = FileBackedStringStore(directory: dir, filenamePrefix: "grok_")
+        let first = GrokHistoryStore(store: file, legacyStoreURL: nil)
+        first.append(snapshot(usedPercent: 42))
+        first.flush()
+
+        let reloaded = GrokHistoryStore(store: file, legacyStoreURL: nil)
+        XCTAssertEqual(reloaded.allSnapshots().map(\.usedPercent), [42])
+        XCTAssertEqual(reloaded.recent.count, 1)
+        XCTAssertFalse(reloaded.storeFailed)
+    }
+
+    /// An unreadable file is reported and never written over.
+    func testUnreadableHistoryIsKept() throws {
+        let dir = try tempDirectory()
+        let file = FileBackedStringStore(directory: dir, filenamePrefix: "grok_")
+        file.set("not json", forKey: "history")
+        let store = GrokHistoryStore(store: file, legacyStoreURL: nil)
+        XCTAssertTrue(store.storeFailed)
+        store.append(snapshot(usedPercent: 10))
+        store.flush()
+        XCTAssertEqual(file.value(forKey: "history"), "not json")
+        XCTAssertEqual(store.recent.count, 1, "the session still keeps history in memory")
+    }
+
+    /// Rows saved by earlier versions in SwiftData are carried into the file
+    /// once; the SwiftData store is left in place.
+    func testSwiftDataHistoryIsImportedOnce() throws {
+        let dir = try tempDirectory()
+        let legacyURL = dir.appendingPathComponent("history.store")
+        let container = try ModelContainer(
+            for: UsageSnapshotRecord.self,
+            configurations: ModelConfiguration(url: legacyURL)
+        )
+        let context = ModelContext(container)
+        let day = Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date()
+        context.insert(UsageSnapshotRecord(from: WeeklyUsageSnapshot(fetchedAt: day, usedPercent: 17, accountEmail: "a@example.com")))
+        try context.save()
+
+        let file = FileBackedStringStore(directory: dir, filenamePrefix: "grok_")
+        let imported = GrokHistoryStore(store: file, legacyStoreURL: legacyURL)
+        XCTAssertEqual(imported.allSnapshots().map(\.usedPercent), [17])
+        XCTAssertNotNil(file.value(forKey: "history"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyURL.path))
+
+        // The file now exists, so a later launch reads it and imports nothing.
+        imported.clear()
+        let later = GrokHistoryStore(store: file, legacyStoreURL: legacyURL)
+        XCTAssertTrue(later.allSnapshots().isEmpty)
     }
 }

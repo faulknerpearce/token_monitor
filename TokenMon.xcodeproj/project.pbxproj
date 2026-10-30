@@ -187,6 +187,7 @@
 		F168BFFEBC910644288539E2 /* OpenRouterAuthSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E0A6C9D9FC29FAD3F35CC2 /* OpenRouterAuthSessionTests.swift */; };
 		F2CF6110673988888DE51EE0 /* ReleaseFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9720EBF79E217B63CE39BE16 /* ReleaseFeed.swift */; };
 		F343F1F69EF51F172B713978 /* DailyBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44726362E79D6B6307501588 /* DailyBudgetTests.swift */; };
+		F38A57DCFA4E934718B5ED47 /* GrokHistoryImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DFFCB25A085C14EB31E417 /* GrokHistoryImport.swift */; };
 		F7841180350D5961BD22D7F3 /* ThresholdNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3130E945FF5DB7B6C8238AA5 /* ThresholdNotifier.swift */; };
 		F7D57567E667D8F732A0F0FC /* CursorModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8706C7FD38CEF5A9CD1CD05F /* CursorModels.swift */; };
 		F9C2F0789C729F88EE3511E5 /* ClaudeUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5ACBC34ED6149E7FE47FED6 /* ClaudeUsageClient.swift */; };
@@ -225,6 +226,7 @@
 		0DEFE8C9AC68FEC972D5F170 /* OpenRouterUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsageClientTests.swift; sourceTree = "<group>"; };
 		0E32CD2D6C87C59A2BDCAFAB /* OpenCodeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeModels.swift; sourceTree = "<group>"; };
 		11D86C827575F553D9E55340 /* StaticURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaticURL.swift; sourceTree = "<group>"; };
+		11DFFCB25A085C14EB31E417 /* GrokHistoryImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokHistoryImport.swift; sourceTree = "<group>"; };
 		124E4BC93C5F9CBA13CD321F /* OpenCodeLocalScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalScanTests.swift; sourceTree = "<group>"; };
 		13176756C7DFE0B226BE124E /* ClaudeCodeLocalStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeLocalStatsTests.swift; sourceTree = "<group>"; };
 		13329ABE851F55C3E79CD56A /* OpenCodeMonthBudgetWeekTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeMonthBudgetWeekTests.swift; sourceTree = "<group>"; };
@@ -481,6 +483,7 @@
 				CB6355B7577FDA01928AFB91 /* GrokAuthSession.swift */,
 				F50404BD61BDEE603027106E /* GrokDailyUsageBuilder.swift */,
 				BAE8487696C3FE2B3264153A /* GrokExportService.swift */,
+				11DFFCB25A085C14EB31E417 /* GrokHistoryImport.swift */,
 				87FDFB700353B0DCA2206AF2 /* GrokHistoryStore.swift */,
 				427A4EFF553817195BD07655 /* GrokModels.swift */,
 				7D26259E38D3BC6F2716F14C /* GrokPanelView.swift */,
@@ -1216,6 +1219,7 @@
 				A4F19D7AA8D3D515284857DB /* GrokAuthSession.swift in Sources */,
 				F9D5A69AB394EDF4876CEE90 /* GrokDailyUsageBuilder.swift in Sources */,
 				C3D83BFE9DC6F5414027410B /* GrokExportService.swift in Sources */,
+				F38A57DCFA4E934718B5ED47 /* GrokHistoryImport.swift in Sources */,
 				0AC51C9AF72F7F07AE2995E2 /* GrokHistoryStore.swift in Sources */,
 				5B6079380C146E5A94CBE94E /* GrokModels.swift in Sources */,
 				A37437D20CF0C4022A6497C7 /* GrokPanelView.swift in Sources */,
