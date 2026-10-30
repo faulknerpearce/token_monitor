@@ -165,41 +165,87 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertLessThanOrEqual(reset.timeIntervalSinceNow, 7 * 86_400)
     }
 
-    /// The snapshot carries the Claude Code usage loaded for the fetch time,
+    /// Each refresh publishes the Claude Code usage loaded from local logs,
     /// and a poller with an injected fetch reads no local logs by default.
-    func testRefreshAttachesClaudeCodeUsage() async throws {
+    func testRefreshLoadsClaudeCodeUsage() async throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let fetchedAt = Date()
         let response = ClaudeUsageResponse(fiveHour: ClaudeUsageWindow(usedPercent: 1, resetsAt: nil), sevenDay: nil)
-        let summary = ClaudeCodeUsageSummary(
-            month: ClaudeUsageTotals(tokens: 10, costUSD: 1),
-            allTime: ClaudeUsageTotals(tokens: 20, costUSD: 2),
-            monthModels: []
-        )
-        var requestedAt: Date?
+        let summary = Self.codeSummary
         let poller = try makePoller(
             daily: store,
             dir: dir,
-            loadCodeUsage: { now in
-                requestedAt = now
-                return summary
-            },
-            fetch: { _ in (response, fetchedAt) }
+            loadCodeUsage: { _ in summary },
+            fetch: { _ in (response, Date()) }
         )
         await poller.refreshNow()
-        XCTAssertEqual(poller.snapshot?.codeUsage, summary)
-        XCTAssertEqual(requestedAt, fetchedAt)
+        XCTAssertNotNil(poller.snapshot)
+        XCTAssertEqual(poller.codeUsage, summary)
 
-        let hermetic = try makePoller(daily: store, dir: dir) { _ in (response, fetchedAt) }
+        let hermetic = try makePoller(daily: store, dir: dir) { _ in (response, Date()) }
         await hermetic.refreshNow()
         XCTAssertNotNil(hermetic.snapshot)
-        XCTAssertNil(hermetic.snapshot?.codeUsage)
+        XCTAssertNil(hermetic.codeUsage)
     }
+
+    /// Claude Code usage comes from this Mac's logs, so it loads without a
+    /// claude.ai session and when the claude.ai fetch fails.
+    func testClaudeCodeUsageLoadsWithoutSessionAndOnFetchFailure() async throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let summary = Self.codeSummary
+        let failing = try makePoller(
+            daily: store,
+            dir: dir,
+            loadCodeUsage: { _ in summary },
+            fetch: { _ in throw URLError(.notConnectedToInternet) }
+        )
+        await failing.refreshNow()
+        XCTAssertNil(failing.snapshot)
+        XCTAssertEqual(failing.codeUsage, summary)
+
+        let (signedOutStore, signedOutDir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: signedOutDir) }
+        let signedOut = try makePoller(
+            daily: signedOutStore,
+            dir: signedOutDir,
+            signedIn: false,
+            loadCodeUsage: { _ in summary },
+            fetch: { _ in XCTFail("no fetch without a session"); throw CancellationError() }
+        )
+        await signedOut.refreshNow()
+        XCTAssertNil(signedOut.snapshot)
+        XCTAssertEqual(signedOut.codeUsage, summary)
+    }
+
+    /// Sign-out drops the claude.ai snapshot but keeps the local Claude Code usage.
+    func testSignOutKeepsClaudeCodeUsage() async throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let response = ClaudeUsageResponse(fiveHour: ClaudeUsageWindow(usedPercent: 1, resetsAt: nil), sevenDay: nil)
+        let summary = Self.codeSummary
+        let poller = try makePoller(
+            daily: store,
+            dir: dir,
+            loadCodeUsage: { _ in summary },
+            fetch: { _ in (response, Date()) }
+        )
+        await poller.refreshNow()
+        poller.clearSnapshot()
+        XCTAssertNil(poller.snapshot)
+        XCTAssertEqual(poller.codeUsage, summary)
+    }
+
+    private static let codeSummary = ClaudeCodeUsageSummary(
+        month: ClaudeUsageTotals(tokens: 10, costUSD: 1),
+        allTime: ClaudeUsageTotals(tokens: 20, costUSD: 2),
+        monthModels: []
+    )
 
     private func makePoller(
         daily: DailyQuotaDeltaStore,
         dir: URL,
+        signedIn: Bool = true,
         loadCodeUsage: ((Date) async -> ClaudeCodeUsageSummary?)? = nil,
         fetch: @escaping (String) async throws -> (ClaudeUsageResponse, Date)
     ) throws -> ClaudeUsagePoller {
@@ -209,7 +255,9 @@ final class ClaudeUsagePollerTests: XCTestCase {
         let settings = AppSettings(defaults: defaults)
         settings.selectedProvider = .claude
         let auth = ClaudeAuthSession(directory: dir)
-        auth.save(cookieHeader: "sessionKey=test; lastActiveOrg=org")
+        if signedIn {
+            auth.save(cookieHeader: "sessionKey=test; lastActiveOrg=org")
+        }
         let hourly = HourlyDeltaActivityStore(
             store: FileBackedStringStore(directory: dir, filenamePrefix: "hourly_"),
             storageKey: "claude_hourly"

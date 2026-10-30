@@ -39,9 +39,7 @@ struct ClaudePanelView: View {
                     daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
                 )
 
-                if let usage = snapshot.codeUsage {
-                    ClaudeCodeUsageSection(usage: usage, modelsExpanded: $modelsExpanded)
-                }
+                codeUsageSection
 
                 if let err = poller.lastError {
                     StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
@@ -68,8 +66,18 @@ struct ClaudePanelView: View {
                 if auth.needsSignIn {
                     ProviderSignInButton(provider: .claude, action: openSignIn)
                 }
+                codeUsageSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Claude Code usage read from this Mac's logs; shown whether or not
+    /// claude.ai is signed in.
+    @ViewBuilder
+    private var codeUsageSection: some View {
+        if let usage = poller.codeUsage {
+            ClaudeCodeUsageSection(usage: usage, modelsExpanded: $modelsExpanded)
         }
     }
 
@@ -80,6 +88,7 @@ struct ClaudePanelView: View {
                 .font(PanelTypography.body)
                 .foregroundStyle(.secondary)
             ProviderSignInButton(provider: .claude, action: openSignIn)
+            codeUsageSection
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

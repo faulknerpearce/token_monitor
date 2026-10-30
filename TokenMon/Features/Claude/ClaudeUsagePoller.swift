@@ -12,6 +12,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Daily bars for the current weekly window, anchored to the pool's actual
     /// `resets_at`: % of the weekly pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
+    /// Claude Code usage on this Mac, valued at API rates; `nil` when Claude
+    /// Code has no logs on this Mac. Read from local logs on every poll, so it
+    /// needs no claude.ai session and is kept across sign-out.
+    @Published private(set) var codeUsage: ClaudeCodeUsageSummary?
     @Published var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
@@ -107,6 +111,10 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         isRefreshing = true
         defer { isRefreshing = false }
 
+        let loadedCodeUsage = await loadCodeUsage(Date())
+        guard !Task.isCancelled else { return .skipped }
+        codeUsage = loadedCodeUsage
+
         guard let cookieHeader = auth.cookieHeader(), !cookieHeader.isEmpty else {
             auth.needsSignIn = true
             if snapshot == nil {
@@ -119,14 +127,11 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         do {
             let (response, fetchedAt) = try await fetchUsage(cookieHeader)
             guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
-            let codeUsage = await loadCodeUsage(fetchedAt)
-            guard !Task.isCancelled, auth.isCurrent(generation) else { return .skipped }
             snapshot = ClaudeSnapshot(
                 fetchedAt: fetchedAt,
                 fiveHour: response.fiveHour,
                 sevenDay: response.sevenDay,
-                accountEmail: auth.accountEmail,
-                codeUsage: codeUsage
+                accountEmail: auth.accountEmail
             )
             lastError = nil
             lastRefreshedAt = Date()
