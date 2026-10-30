@@ -95,25 +95,112 @@ struct CursorEventAggregates: Sendable {
     }
 }
 
-/// In-memory cache of the last event aggregates, keyed by session so each
-/// account sees only its own figures.
+/// One Cursor usage event, read once from the events JSON.
+struct CursorUsageEvent: Hashable, Sendable {
+    var date: Date
+    var chargedCents: Double
+    var requestsCosts: Double
+    var inputTokens: Int64
+    var outputTokens: Int64
+    /// Input + output + cache-write + cache-read tokens.
+    var totalTokens: Int64
+
+    /// Activity weight: `requestsCosts`, else the token total, else charged
+    /// cents, else `1`.
+    var weight: Double {
+        if requestsCosts > 0 { return requestsCosts }
+        if totalTokens > 0 { return Double(totalTokens) }
+        if chargedCents > 0 { return chargedCents }
+        return 1
+    }
+
+    /// Reads one `usageEventsDisplay` entry; nil without a usable timestamp,
+    /// and nil for Cursor Bot (`grok-bot-*`) usage, which has its own
+    /// allowance (tracked by the Grokbot provider) outside the Cursor plan pool.
+    init?(json event: [String: Any]) {
+        guard !((event["model"] as? String) ?? "").hasPrefix("grok-bot"),
+              let date = CursorUsageClient.eventTimestamp(event)
+        else { return nil }
+        self.init(
+            date: date,
+            chargedCents: CursorUsageClient.chargedCents(event),
+            requestsCosts: max(0, JSON.number(event["requestsCosts"]) ?? 0),
+            inputTokens: CursorUsageClient.inputTokenCount(event),
+            outputTokens: CursorUsageClient.outputTokenCount(event),
+            totalTokens: CursorUsageClient.tokenCount(event)
+        )
+    }
+
+    init(
+        date: Date,
+        chargedCents: Double = 0,
+        requestsCosts: Double = 0,
+        inputTokens: Int64 = 0,
+        outputTokens: Int64 = 0,
+        totalTokens: Int64 = 0
+    ) {
+        self.date = date
+        self.chargedCents = chargedCents
+        self.requestsCosts = requestsCosts
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.totalTokens = totalTokens
+    }
+}
+
+/// The parsed events of one event window, kept so a later fetch pages only
+/// the events since `fetchedThrough`.
+struct CursorEventLedger: Sendable {
+    var windowStart: Date
+    var events: [CursorUsageEvent]
+    /// End of the last fetched range.
+    var fetchedThrough: Date
+    /// When every event of the window was last paged.
+    var fullFetchAt: Date
+
+    /// True when a fetch at `now` can page only the events since
+    /// `fetchedThrough`: same window, and the last full page-through is younger
+    /// than `CursorUsageClient.eventsFullRefreshInterval`.
+    func canExtend(windowStart: Date, now: Date) -> Bool {
+        self.windowStart == windowStart
+            && now >= fetchedThrough
+            && now.timeIntervalSince(fullFetchAt) < CursorUsageClient.eventsFullRefreshInterval
+    }
+}
+
+/// In-memory cache of the last event aggregates and the events behind them,
+/// keyed by session so each account sees only its own figures.
 final class CursorEventCache: @unchecked Sendable {
+    private struct Entry {
+        var key: String
+        var aggregates: CursorEventAggregates
+        var ledger: CursorEventLedger?
+    }
+
     private let lock = NSLock()
-    private var entry: (key: String, value: CursorEventAggregates)?
+    private var entry: Entry?
 
     /// Cached aggregates for `key`, or nil.
     func value(forKey key: String) -> CursorEventAggregates? {
         lock.lock()
         defer { lock.unlock() }
         guard let entry, entry.key == key else { return nil }
-        return entry.value
+        return entry.aggregates
     }
 
-    /// Replaces the cached aggregates.
-    func store(_ value: CursorEventAggregates, forKey key: String) {
+    /// Cached events for `key`, or nil.
+    func ledger(forKey key: String) -> CursorEventLedger? {
         lock.lock()
         defer { lock.unlock() }
-        entry = (key, value)
+        guard let entry, entry.key == key else { return nil }
+        return entry.ledger
+    }
+
+    /// Replaces the cached aggregates and events.
+    func store(_ aggregates: CursorEventAggregates, ledger: CursorEventLedger? = nil, forKey key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entry = Entry(key: key, aggregates: aggregates, ledger: ledger)
     }
 
     func clear() {

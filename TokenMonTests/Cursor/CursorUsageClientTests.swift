@@ -133,13 +133,13 @@ final class CursorUsageClientTests: XCTestCase {
             ]
         ]
 
-        let stats = CursorUsageClient.aggregateCostStats(events: events, cycleStart: cycleStart)
+        let stats = CursorUsageClient.aggregateCostStats(events: typed(events), cycleStart: cycleStart)
         XCTAssertEqual(stats.meteredCycleUSD, 62.02, accuracy: 0.01)
         XCTAssertEqual(stats.cycleTokens, 3_500_000)
         XCTAssertEqual(stats.cycleInputTokens, 3_000_000)
         XCTAssertEqual(stats.cycleOutputTokens, 500_000)
         let lateStart = dayStart.addingTimeInterval(-86400)
-        XCTAssertEqual(CursorUsageClient.aggregateCostStats(events: events, cycleStart: lateStart).meteredCycleUSD, 12.02, accuracy: 0.01)
+        XCTAssertEqual(CursorUsageClient.aggregateCostStats(events: typed(events), cycleStart: lateStart).meteredCycleUSD, 12.02, accuracy: 0.01)
     }
 
     func testHourWeightsBucketByRequestsCosts() {
@@ -172,7 +172,7 @@ final class CursorUsageClientTests: XCTestCase {
             ]
         ]
 
-        let weights = CursorUsageClient.hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
+        let weights = CursorUsageClient.hourWeights(fromEvents: typed(events), dayStart: dayStart, calendar: calendar)
         XCTAssertEqual(weights.count, 24)
         XCTAssertEqual(weights[10], 4.0, accuracy: 0.01)
         XCTAssertEqual(weights[14], 150, accuracy: 0.01)
@@ -194,7 +194,7 @@ final class CursorUsageClientTests: XCTestCase {
         ]
 
         let weights = CursorUsageClient.quotaHourWeights(
-            fromEvents: events,
+            fromEvents: typed(events),
             dayStart: dayStart,
             planLimitUSD: 400,
             calendar: calendar
@@ -224,7 +224,7 @@ final class CursorUsageClientTests: XCTestCase {
         ]
 
         let weights = CursorUsageClient.tokenHourWeights(
-            fromEvents: events,
+            fromEvents: typed(events),
             dayStart: dayStart,
             calendar: calendar
         )
@@ -244,8 +244,9 @@ final class CursorUsageClientTests: XCTestCase {
         }
         """.utf8)
 
-        let (events, total) = try CursorUsageClient.parseUsageEventsPage(data: json)
+        let (events, pageCount, total) = try CursorUsageClient.parseUsageEventsPage(data: json)
         XCTAssertEqual(total, 2)
+        XCTAssertEqual(pageCount, 2)
         XCTAssertEqual(events.count, 2)
     }
 
@@ -316,12 +317,12 @@ final class CursorUsageClientTests: XCTestCase {
         let cycleStart = date(22, hour: 17)
         let cycleEnd = date(23, hour: 17)
         let byDay = CursorUsageClient.dailyEstimateWeightByDay(
-            events: [
+            events: typed([
                 event(date(22, hour: 10), "default", 5000),
                 event(date(22, hour: 20), "default", 300),
                 event(date(22, hour: 21), "grok-bot-default", 999_999),
                 event(date(23, hour: 12), "composer-2.5-fast", 1220)
-            ],
+            ]),
             cycleStart: cycleStart,
             cycleEnd: cycleEnd,
             calendar: calendar
@@ -390,26 +391,45 @@ final class CursorUsageClientTests: XCTestCase {
             event("grok-bot-default", cents: 900, tokens: 9000)
         ]
 
-        let stats = CursorUsageClient.aggregateCostStats(events: events, cycleStart: cycleStart)
+        let stats = CursorUsageClient.aggregateCostStats(events: typed(events), cycleStart: cycleStart)
         XCTAssertEqual(stats.meteredCycleUSD, 1.0, accuracy: 0.001)
         XCTAssertEqual(stats.cycleTokens, 1000)
 
         let hour = calendar.component(.hour, from: now)
-        let activity = CursorUsageClient.hourWeights(fromEvents: events, dayStart: dayStart, calendar: calendar)
+        let activity = CursorUsageClient.hourWeights(fromEvents: typed(events), dayStart: dayStart, calendar: calendar)
         XCTAssertEqual(activity[hour], 1000, accuracy: 0.001)
         let tokens = CursorUsageClient.tokenHourWeights(
-            fromEvents: events,
+            fromEvents: typed(events),
             dayStart: dayStart,
             calendar: calendar
         )
         XCTAssertEqual(tokens[hour], 1000)
 
         let quota = CursorUsageClient.quotaHourWeights(
-            fromEvents: events,
+            fromEvents: typed(events),
             dayStart: dayStart,
             planLimitUSD: 400,
             calendar: calendar
         )
         XCTAssertLessThan(quota[hour], 2.0)
+    }
+
+    /// A Bot event or one without a timestamp still counts toward the page
+    /// size, so paging continues, but is not kept.
+    func testParseUsageEventsPageCountsSkippedEvents() throws {
+        let json = Data("""
+        {"usageEventsDisplay": [
+          {"timestamp": "1775418973898", "model": "default"},
+          {"timestamp": "1775418973899", "model": "grok-bot-default"},
+          {"model": "default"}
+        ]}
+        """.utf8)
+        let (events, pageCount, _) = try CursorUsageClient.parseUsageEventsPage(data: json)
+        XCTAssertEqual(pageCount, 3)
+        XCTAssertEqual(events.count, 1)
+    }
+
+    private func typed(_ events: [[String: Any]]) -> [CursorUsageEvent] {
+        events.compactMap(CursorUsageEvent.init(json:))
     }
 }

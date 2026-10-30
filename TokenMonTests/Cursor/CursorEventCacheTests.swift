@@ -41,7 +41,7 @@ final class CursorEventCacheTests: XCTestCase {
     func testEventsArePagedOnceWithinRefreshInterval() async throws {
         let counter = CallCounter()
         let cache = CursorEventCache()
-        let client = makeClient(cache: cache, counter: counter) { _ in CursorFixtures.eventsPage(cents: 250) }
+        let client = makeClient(cache: cache, counter: counter) { _, startMs in CursorFixtures.eventsPage(cents: 250, from: startMs) }
         let now = CursorFixtures.middayToday()
         let (first, _, _) = try await client.fetchSnapshot(now: now)
         let (second, _, _) = try await client.fetchSnapshot(now: now.addingTimeInterval(60))
@@ -57,20 +57,59 @@ final class CursorEventCacheTests: XCTestCase {
         XCTAssertEqual(refreshed, 2)
     }
 
+    /// After the first full page-through, a refresh pages only from the last
+    /// fetch less the overlap, keeps the earlier events, and replaces those in
+    /// the overlap.
+    func testRefreshPagesOnlyEventsSinceTheLastFetch() async throws {
+        let counter = CallCounter()
+        let cache = CursorEventCache()
+        let ranges = RangeRecorder()
+        let now = CursorFixtures.middayToday()
+        let client = makeClient(cache: cache, counter: counter, ranges: ranges) { _, startMs in CursorFixtures.eventsPage(cents: 250, from: startMs) }
+        let (first, _, _) = try await client.fetchSnapshot(now: now)
+        XCTAssertEqual(first.costStats?.meteredCycleUSD ?? -1, 2.5, accuracy: 0.001)
+
+        let later = now.addingTimeInterval(CursorUsageClient.eventsRefreshInterval + 1)
+        let (second, _, _) = try await client.fetchSnapshot(now: later)
+        let recorded = await ranges.starts
+        XCTAssertEqual(recorded.count, 2)
+        let expectedStart = Int64(now.addingTimeInterval(-CursorUsageClient.eventsOverlap).timeIntervalSince1970 * 1000)
+        XCTAssertEqual(recorded[1], expectedStart)
+        // The fixture event is an hour before `now`, before the re-paged range,
+        // so it comes from the cache.
+        XCTAssertEqual(second.costStats?.meteredCycleUSD ?? -1, 2.5, accuracy: 0.001)
+    }
+
+    /// Once the last full page-through is older than the full-refresh interval,
+    /// the whole window is paged again.
+    func testWholeWindowIsPagedAgainAfterTheFullRefreshInterval() async throws {
+        let counter = CallCounter()
+        let cache = CursorEventCache()
+        let ranges = RangeRecorder()
+        let now = CursorFixtures.middayToday()
+        let client = makeClient(cache: cache, counter: counter, ranges: ranges) { _, startMs in CursorFixtures.eventsPage(cents: 250, from: startMs) }
+        _ = try await client.fetchSnapshot(now: now)
+        let (snap, _, _) = try await client.fetchSnapshot(now: now.addingTimeInterval(CursorUsageClient.eventsFullRefreshInterval + 1))
+        let recorded = await ranges.starts
+        XCTAssertEqual(recorded.count, 2)
+        XCTAssertEqual(recorded[0], recorded[1])
+        XCTAssertEqual(snap.costStats?.meteredCycleUSD ?? -1, 2.5, accuracy: 0.001)
+    }
+
     func testEventsFailureReusesCachedAggregates() async throws {
         let counter = CallCounter()
         let cache = CursorEventCache()
         let now = CursorFixtures.middayToday()
-        let good = makeClient(cache: cache, counter: counter) { _ in CursorFixtures.eventsPage(cents: 400) }
+        let good = makeClient(cache: cache, counter: counter) { _, startMs in CursorFixtures.eventsPage(cents: 400, from: startMs) }
         _ = try await good.fetchSnapshot(now: now)
-        let failing = makeClient(cache: cache, counter: counter) { _ in throw ProviderError.network(.cursor, "offline") }
+        let failing = makeClient(cache: cache, counter: counter) { _, _ in throw ProviderError.network(.cursor, "offline") }
         let (snap, hourly, _) = try await failing.fetchSnapshot(now: now.addingTimeInterval(CursorUsageClient.eventsRefreshInterval + 1))
         XCTAssertEqual(snap.costStats?.meteredCycleUSD ?? -1, 4, accuracy: 0.001)
         XCTAssertFalse(hourly.isEmpty)
     }
 
     func testEventsFailureWithoutCacheLeavesCostStatsNil() async throws {
-        let client = makeClient(cache: CursorEventCache(), counter: CallCounter()) { _ in
+        let client = makeClient(cache: CursorEventCache(), counter: CallCounter()) { _, _ in
             throw ProviderError.network(.cursor, "offline")
         }
         let (snap, hourly, weights) = try await client.fetchSnapshot(now: CursorFixtures.middayToday())
@@ -143,7 +182,8 @@ final class CursorEventCacheTests: XCTestCase {
     private func makeClient(
         cache: CursorEventCache,
         counter: CallCounter,
-        eventsPage: @escaping @Sendable (Int) async throws -> Data
+        ranges: RangeRecorder? = nil,
+        eventsPage: @escaping @Sendable (_ page: Int, _ startMs: Int64) async throws -> Data
     ) -> CursorUsageClient {
         let transport = CursorUsageClient.Transport(
             get: { path in
@@ -153,9 +193,10 @@ final class CursorEventCacheTests: XCTestCase {
                 }
                 return Data(#"{"email":"a@b.c"}"#.utf8)
             },
-            eventsPage: { _, _, page, _ in
+            eventsPage: { startMs, _, page, _ in
                 await counter.noteEventPage()
-                return try await eventsPage(page)
+                await ranges?.note(startMs)
+                return try await eventsPage(page, startMs)
             }
         )
         return CursorUsageClient(transport: transport, cacheKey: "session", eventCache: cache)
@@ -219,13 +260,24 @@ private enum CursorFixtures {
         """.utf8)
     }
 
-    static func eventsPage(cents: Int) -> Data {
+    /// One event an hour before midday today, or none when the requested
+    /// range starts after it.
+    static func eventsPage(cents: Int, from startMs: Int64 = 0) -> Data {
         let stamp = Int64(middayToday().addingTimeInterval(-3600).timeIntervalSince1970 * 1000)
+        guard stamp >= startMs else { return Data(#"{"totalUsageEventsCount": 0, "usageEventsDisplay": []}"#.utf8) }
         return Data("""
         {"totalUsageEventsCount": 1, "usageEventsDisplay": [
           {"timestamp": "\(stamp)", "model": "default", "chargedCents": \(cents),
            "tokenUsage": {"inputTokens": 10, "outputTokens": 5}}
         ]}
         """.utf8)
+    }
+}
+
+private actor RangeRecorder {
+    private(set) var starts: [Int64] = []
+
+    func note(_ startMs: Int64) {
+        starts.append(startMs)
     }
 }
