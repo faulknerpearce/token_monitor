@@ -5,7 +5,6 @@ struct GrokPanelView: View {
     @ObservedObject var auth: GrokAuthSession
     @ObservedObject var poller: GrokUsagePoller
     @ObservedObject var settings: AppSettings
-    @ObservedObject var history: GrokHistoryStore
 
     let openSignIn: () -> Void
 
@@ -61,12 +60,7 @@ struct GrokPanelView: View {
             products,
             visible: settings.visibleProductIDs
         )
-        let week = GrokDailyUsageBuilder.week(
-            history: history.recent.reversed(),
-            current: snapshot,
-            weekOffset: weekOffset,
-            resetsAt: snapshot.resetsAt
-        )
+        let week = poller.week(weekOffset: weekOffset)
         VStack(alignment: .leading, spacing: 10) {
             grokTitle
 

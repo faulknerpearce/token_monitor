@@ -57,7 +57,6 @@ struct MenuBarPanelView: View {
             auth: model.grokAuth,
             poller: model.grokPoller,
             settings: settings,
-            history: model.grokHistory,
             openSignIn: { openWindow(.grokSignIn) }
         )
     }

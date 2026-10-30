@@ -108,4 +108,25 @@ final class GrokPollerGatingTests: XCTestCase {
         XCTAssertEqual(fetches, 1)
         XCTAssertNotNil(poller.snapshot)
     }
+
+    /// The poller builds the current week's bars after a refresh with a reset
+    /// instant, drops them with the snapshot, and builds earlier weeks on request.
+    func testPollerBuildsTheCurrentWeek() async {
+        let settings = AppSettings(defaults: defaults)
+        settings.selectedProvider = .grok
+        let resetsAt = Date().addingTimeInterval(3 * 86_400)
+        let (poller, auth) = makePoller(settings: settings) { _, _ in
+            WeeklyUsageSnapshot(usedPercent: 20, resetsAt: resetsAt)
+        }
+        XCTAssertNil(poller.currentWeek)
+
+        await poller.refreshNow()
+        let week = poller.currentWeek
+        XCTAssertNotNil(week)
+        XCTAssertEqual(poller.week(weekOffset: 0), week)
+        XCTAssertNotNil(poller.week(weekOffset: -1))
+
+        auth.signOut()
+        XCTAssertNil(poller.currentWeek)
+    }
 }

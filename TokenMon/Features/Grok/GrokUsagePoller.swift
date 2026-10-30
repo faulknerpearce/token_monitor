@@ -9,6 +9,9 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
+    /// Daily bars for the current billing-period week; rebuilt when the
+    /// snapshot or the stored history changes, `nil` without a reset instant.
+    @Published private(set) var currentWeek: DailyUsageWeek?
     @Published var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
@@ -45,6 +48,14 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
             try await GrokUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         history.setActiveAccount(auth.accountEmail)
+        // `@Published` emits the new values before they are stored, so the
+        // week is built from the emitted values.
+        history.$recent
+            .combineLatest($snapshot)
+            .sink { [weak self] recent, snapshot in
+                self?.currentWeek = Self.buildWeek(recent: recent, current: snapshot, weekOffset: 0)
+            }
+            .store(in: &cancellables)
         // Signing out drops the snapshot; the account-scoped hourly deltas are
         // kept for the same account and cleared when a different account signs in.
         auth.signedOut
@@ -75,6 +86,27 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Clears the previous account's hourly deltas.
     private func clearAccountHistory() {
         grokHourly.clear()
+    }
+
+    /// Daily bars for the billing-period week `weekOffset` weeks back
+    /// (0 is the current week, which is cached in `currentWeek`).
+    func week(weekOffset: Int) -> DailyUsageWeek? {
+        guard weekOffset != 0 else { return currentWeek }
+        return Self.buildWeek(recent: history.recent, current: snapshot, weekOffset: weekOffset)
+    }
+
+    private static func buildWeek(
+        recent: [WeeklyUsageSnapshot],
+        current: WeeklyUsageSnapshot?,
+        weekOffset: Int
+    ) -> DailyUsageWeek? {
+        guard let current else { return nil }
+        return GrokDailyUsageBuilder.week(
+            history: recent.reversed(),
+            current: current,
+            weekOffset: weekOffset,
+            resetsAt: current.resetsAt
+        )
     }
 
     /// Fetches now when Grok is enabled and restarts the poll wait from here.
