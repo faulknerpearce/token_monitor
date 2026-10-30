@@ -65,6 +65,13 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         self == .overview ? "All" : displayName
     }
 
+    /// The provider whose session this one signs in with: Grokbot uses
+    /// Cursor's; every other provider its own. OpenRouter connects with an API
+    /// key in Settings instead of a sign-in window.
+    var signInProvider: MonitorProvider {
+        self == .grokbot ? .cursor : self
+    }
+
     /// Whether this mode refreshes `provider` (its own tab, or Overview).
     func polls(_ provider: MonitorProvider) -> Bool {
         self == provider || self == .overview

@@ -13,7 +13,7 @@ struct PreferencesView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: GrokHistoryStore
     @ObservedObject var updateChecker: UpdateChecker
-    let openWindow: (AppWindowID) -> Void
+    let openWindow: (AppWindow) -> Void
 
     var body: some View {
         TabView {
@@ -222,7 +222,7 @@ private struct ProvidersSettingsTab: View {
 /// One row per provider account: who is signed in, and sign-in actions.
 private struct AccountsSettingsTab: View {
     let model: AppModel
-    let openWindow: (AppWindowID) -> Void
+    let openWindow: (AppWindow) -> Void
 
     var body: some View {
         Form {
@@ -231,31 +231,31 @@ private struct AccountsSettingsTab: View {
                     provider: .grok,
                     auth: model.grokAuth,
                     signInTitle: "Sign In…",
-                    openSignIn: { openWindow(.grokSignIn) }
+                    openSignIn: { openWindow(.signIn(.grok)) }
                 )
                 ProviderAccountRow(
                     provider: .claude,
                     auth: model.claudeAuth,
                     signInTitle: "Sign In…",
-                    openSignIn: { openWindow(.claudeSignIn) }
+                    openSignIn: { openWindow(.signIn(.claude)) }
                 )
                 ProviderAccountRow(
                     provider: .chatgpt,
                     auth: model.chatGPTAuth,
                     signInTitle: "Sign In…",
-                    openSignIn: { openWindow(.chatGPTSignIn) }
+                    openSignIn: { openWindow(.signIn(.chatgpt)) }
                 )
                 ProviderAccountRow(
                     provider: .cursor,
                     auth: model.cursorAuth,
                     signInTitle: "Sign In…",
-                    openSignIn: { openWindow(.cursorSignIn) }
+                    openSignIn: { openWindow(.signIn(.cursor)) }
                 )
                 ProviderAccountRow(
                     provider: .opencode,
                     auth: model.openCodeAuth,
                     signInTitle: "Sign In…",
-                    openSignIn: { openWindow(.openCodeSignIn) }
+                    openSignIn: { openWindow(.signIn(.opencode)) }
                 )
             } header: {
                 Text("Accounts")

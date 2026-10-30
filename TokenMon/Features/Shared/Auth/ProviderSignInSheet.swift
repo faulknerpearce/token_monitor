@@ -2,6 +2,13 @@ import AppKit
 import SwiftUI
 import WebKit
 
+/// A session that signs in through the shared sign-in sheet.
+@MainActor
+protocol ProviderSignInProviding: ProviderCookieCapturing {
+    /// The provider's sign-in page and how the sheet recognises its steps.
+    var signInConfig: ProviderSignInConfig { get }
+}
+
 /// Auth types that can capture a WebKit session for a provider sign-in sheet.
 @MainActor
 protocol ProviderCookieCapturing: ObservableObject {
@@ -22,6 +29,8 @@ struct ProviderSignInConfig {
     var returnDelayNanoseconds: UInt64
     /// Runs when the return page is detected, before the delayed capture.
     var onReturned: ((URL) -> Void)?
+    /// Runs after a successful cookie capture, before dismissal.
+    var afterCapture: (() async -> Void)?
 
     init(
         title: String,
@@ -30,7 +39,8 @@ struct ProviderSignInConfig {
         isAuthHost: @escaping (String, String) -> Bool,
         isReturnPage: @escaping (URL) -> Bool,
         returnDelayNanoseconds: UInt64 = 800_000_000,
-        onReturned: ((URL) -> Void)? = nil
+        onReturned: ((URL) -> Void)? = nil,
+        afterCapture: (() async -> Void)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -39,6 +49,7 @@ struct ProviderSignInConfig {
         self.isReturnPage = isReturnPage
         self.returnDelayNanoseconds = returnDelayNanoseconds
         self.onReturned = onReturned
+        self.afterCapture = afterCapture
     }
 }
 
@@ -48,8 +59,6 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
     @ObservedObject var auth: Auth
     let config: ProviderSignInConfig
     var onComplete: () -> Void
-    /// Runs after a successful cookie capture, before dismissal.
-    var afterCapture: (() async -> Void)?
 
     @StateObject private var browser = SignInBrowserController()
     @State private var phase: Phase = .signingIn
@@ -231,7 +240,7 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
 
     private func capture() async -> Bool {
         let ok = await auth.captureCookiesFromWebKit()
-        if ok, let afterCapture {
+        if ok, let afterCapture = config.afterCapture {
             await afterCapture()
         }
         return ok

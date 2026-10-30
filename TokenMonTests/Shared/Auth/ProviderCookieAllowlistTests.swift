@@ -125,7 +125,7 @@ final class ProviderCookieAllowlistTests: XCTestCase {
         XCTAssertFalse(GrokAuthSession.isGrokDomain("x.com"))
         XCTAssertFalse(GrokAuthSession.isGrokDomain(".twitter.com"))
         XCTAssertTrue(GrokAuthSession.isGrokDomain(".grok.com"))
-        XCTAssertTrue(GrokSignInView.isAuthHost("x.com"))
+        XCTAssertTrue(GrokAuthSession.isAuthHost("x.com"))
     }
 
     /// A Grok jar without `sso` is not captured, even with auth-looking cookies.

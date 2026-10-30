@@ -25,59 +25,59 @@ struct TokenMonApp: App {
         // scene at launch. `AppDelegate` dismisses that auto-presented window so
         // launching shows only the menu bar item; Settings opens on request from
         // the menu bar's Settings button.
-        Window("TokenMon", id: AppWindowID.preferences.rawValue) {
+        Window("TokenMon", id: AppWindow.preferencesID) {
             PreferencesRoot(model: model)
                 .onDisappear { AppDelegate.hideDockIfNoWindows() }
         }
         .defaultSize(width: 480, height: 640)
 
-        ProviderSignInWindow(title: "Sign in to Grok", id: .grokSignIn) {
-            GrokSignInView(auth: model.grokAuth) { model.signInCompleted(.grok) }
-        }
-        ProviderSignInWindow(title: "Sign in to OpenCode", id: .openCodeSignIn) {
-            OpenCodeSignInView(auth: model.openCodeAuth) { model.signInCompleted(.opencode) }
-        }
-        ProviderSignInWindow(title: "Sign in to Cursor", id: .cursorSignIn) {
-            CursorSignInView(auth: model.cursorAuth) { model.signInCompleted(.cursor) }
-        }
-        ProviderSignInWindow(title: "Sign in to Claude", id: .claudeSignIn) {
-            ClaudeSignInView(auth: model.claudeAuth) { model.signInCompleted(.claude) }
-        }
-        ProviderSignInWindow(title: "Sign in to ChatGPT", id: .chatGPTSignIn) {
-            ChatGPTSignInView(auth: model.chatGPTAuth) { model.signInCompleted(.chatgpt) }
-        }
-    }
-}
-
-/// One provider's sign-in browser window. The dock icon hides again when the
-/// window closes.
-private struct ProviderSignInWindow<Content: View>: Scene {
-    let title: String
-    let id: AppWindowID
-    @ViewBuilder let content: () -> Content
-
-    var body: some Scene {
-        Window(title, id: id.rawValue) {
-            content()
-                .background(
-                    Color.clear
-                        .frame(width: 0, height: 0)
-                        .onDisappear { AppDelegate.hideDockIfNoWindows() }
-                )
+        // One sign-in browser window per provider session; opening it again
+        // for the same provider brings that window forward.
+        WindowGroup(id: AppWindow.signInID, for: MonitorProvider.self) { $provider in
+            if let provider {
+                ProviderSignInRoot(model: model, provider: provider)
+                    .background(
+                        Color.clear
+                            .frame(width: 0, height: 0)
+                            .onDisappear { AppDelegate.hideDockIfNoWindows() }
+                    )
+            }
         }
         .defaultSize(width: 920, height: 700)
         .windowResizability(.contentMinSize)
     }
 }
 
-/// Scene identifiers for settings and each provider sign-in window.
-enum AppWindowID: String {
+/// The sign-in sheet for `provider`'s session, titled from its config.
+private struct ProviderSignInRoot: View {
+    let model: AppModel
+    let provider: MonitorProvider
+
+    var body: some View {
+        switch provider.signInProvider {
+        case .grok: sheet(model.grokAuth)
+        case .opencode: sheet(model.openCodeAuth)
+        case .claude: sheet(model.claudeAuth)
+        case .chatgpt: sheet(model.chatGPTAuth)
+        default: sheet(model.cursorAuth)
+        }
+    }
+
+    private func sheet(_ auth: some ProviderSignInProviding) -> some View {
+        ProviderSignInSheet(auth: auth, config: auth.signInConfig) {
+            model.signInCompleted(provider.signInProvider)
+        }
+        .navigationTitle(auth.signInConfig.title)
+    }
+}
+
+/// The app's windows: Settings and each provider's sign-in browser.
+enum AppWindow: Hashable {
     case preferences
-    case grokSignIn = "signin"
-    case openCodeSignIn = "opencode-signin"
-    case cursorSignIn = "cursor-signin"
-    case claudeSignIn = "claude-signin"
-    case chatGPTSignIn = "chatgpt-signin"
+    case signIn(MonitorProvider)
+
+    static let preferencesID = "preferences"
+    static let signInID = "signin"
 }
 
 /// Shared app services owned for the process lifetime.
@@ -329,10 +329,15 @@ final class AppModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Activates dock presence, then opens the window for `id`.
-    func openWindow(_ id: AppWindowID, openWindow: OpenWindowAction) {
+    /// Activates dock presence, then opens `window`.
+    func openWindow(_ window: AppWindow, openWindow: OpenWindowAction) {
         AppDelegate.revealWindow()
-        openWindow(id: id.rawValue)
+        switch window {
+        case .preferences:
+            openWindow(id: AppWindow.preferencesID)
+        case let .signIn(provider):
+            openWindow(id: AppWindow.signInID, value: provider.signInProvider)
+        }
     }
 }
 

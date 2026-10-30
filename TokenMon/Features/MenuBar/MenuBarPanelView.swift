@@ -9,7 +9,7 @@ import SwiftUI
 struct MenuBarPanelView: View {
     let model: AppModel
     @ObservedObject var settings: AppSettings
-    let openWindow: (AppWindowID) -> Void
+    let openWindow: (AppWindow) -> Void
 
     /// Fixed dropdown width. The panel host sizes only its height, so the
     /// provider tabs keep a fixed horizontal position.
@@ -57,7 +57,7 @@ struct MenuBarPanelView: View {
             auth: model.grokAuth,
             poller: model.grokPoller,
             settings: settings,
-            openSignIn: { openWindow(.grokSignIn) }
+            openSignIn: { openWindow(.signIn(.grok)) }
         )
     }
 
@@ -74,7 +74,7 @@ struct MenuBarPanelView: View {
             poller: model.openCodePoller,
             auth: model.openCodeAuth,
             modelsExpanded: expansion(of: .openCodeModels),
-            openSignIn: { openWindow(.openCodeSignIn) }
+            openSignIn: { openWindow(.signIn(.opencode)) }
         )
     }
 
@@ -82,7 +82,7 @@ struct MenuBarPanelView: View {
         CursorPanelView(
             poller: model.cursorPoller,
             auth: model.cursorAuth,
-            openSignIn: { openWindow(.cursorSignIn) }
+            openSignIn: { openWindow(.signIn(.cursor)) }
         )
     }
 
@@ -91,7 +91,7 @@ struct MenuBarPanelView: View {
             poller: model.claudePoller,
             auth: model.claudeAuth,
             modelsExpanded: expansion(of: .claudeModels),
-            openSignIn: { openWindow(.claudeSignIn) }
+            openSignIn: { openWindow(.signIn(.claude)) }
         )
     }
 
@@ -99,7 +99,7 @@ struct MenuBarPanelView: View {
         ChatGPTPanelView(
             poller: model.chatGPTPoller,
             auth: model.chatGPTAuth,
-            openSignIn: { openWindow(.chatGPTSignIn) }
+            openSignIn: { openWindow(.signIn(.chatgpt)) }
         )
     }
 
@@ -107,7 +107,7 @@ struct MenuBarPanelView: View {
         GrokbotPanelView(
             poller: model.grokbotPoller,
             auth: model.cursorAuth,
-            openSignIn: { openWindow(.cursorSignIn) }
+            openSignIn: { openWindow(.signIn(.cursor)) }
         )
     }
 
@@ -139,11 +139,7 @@ struct MenuBarPanelView: View {
             claudeAuth: model.claudeAuth,
             chatGPTAuth: model.chatGPTAuth,
             openRouterAuth: model.openRouterAuth,
-            openGrokSignIn: { openWindow(.grokSignIn) },
-            openOpenCodeSignIn: { openWindow(.openCodeSignIn) },
-            openCursorSignIn: { openWindow(.cursorSignIn) },
-            openClaudeSignIn: { openWindow(.claudeSignIn) },
-            openChatGPTSignIn: { openWindow(.chatGPTSignIn) },
+            openSignIn: { openWindow(.signIn($0)) },
             selectOpenRouter: { settings.selectedProvider = .openrouter },
             openPreferences: { openWindow(.preferences) }
         )

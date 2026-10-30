@@ -74,22 +74,22 @@ final class SignInBrowserNavigationTests: XCTestCase {
     }
 
     func testChatGPTReturnPageExcludesLoginAndAuth() {
-        XCTAssertTrue(ChatGPTSignInView.isAuthHost(host: "auth.openai.com", path: "/"))
-        XCTAssertTrue(ChatGPTSignInView.isAuthHost(host: "chatgpt.com", path: "/auth/login"))
+        XCTAssertTrue(ChatGPTAuthSession.isAuthHost(host: "auth.openai.com", path: "/"))
+        XCTAssertTrue(ChatGPTAuthSession.isAuthHost(host: "chatgpt.com", path: "/auth/login"))
         XCTAssertTrue(
-            ChatGPTSignInView.isReturnPage(URL(string: "https://chatgpt.com/")!)
+            ChatGPTAuthSession.isReturnPage(URL(string: "https://chatgpt.com/")!)
         )
         XCTAssertTrue(
-            ChatGPTSignInView.isReturnPage(URL(string: "https://chatgpt.com/c/abc")!)
+            ChatGPTAuthSession.isReturnPage(URL(string: "https://chatgpt.com/c/abc")!)
         )
         XCTAssertFalse(
-            ChatGPTSignInView.isReturnPage(URL(string: "https://chatgpt.com/auth/login")!)
+            ChatGPTAuthSession.isReturnPage(URL(string: "https://chatgpt.com/auth/login")!)
         )
         XCTAssertFalse(
-            ChatGPTSignInView.isReturnPage(URL(string: "https://chatgpt.com/login")!)
+            ChatGPTAuthSession.isReturnPage(URL(string: "https://chatgpt.com/login")!)
         )
         XCTAssertFalse(
-            ChatGPTSignInView.isReturnPage(URL(string: "https://auth.openai.com/")!)
+            ChatGPTAuthSession.isReturnPage(URL(string: "https://auth.openai.com/")!)
         )
     }
 
@@ -97,19 +97,19 @@ final class SignInBrowserNavigationTests: XCTestCase {
     /// `clerk.claude.ai/sign-in` does not trigger capture/dismiss.
     func testClaudeReturnPageExcludesClerkAndAuthPaths() {
         var gate = SignInReturnGate(
-            isAuthHost: ClaudeSignInView.isAuthHost,
-            isReturnPage: ClaudeSignInView.isReturnPage
+            isAuthHost: ClaudeAuthSession.isAuthHost,
+            isReturnPage: ClaudeAuthSession.isReturnPage
         )
         let clerk = URL(string: "https://clerk.claude.ai/sign-in")!
         XCTAssertEqual(gate.note(url: clerk), .authHost)
         XCTAssertFalse(gate.matchesReturnPage(clerk))
 
-        XCTAssertTrue(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/new")!))
-        XCTAssertTrue(ClaudeSignInView.isReturnPage(URL(string: "https://www.claude.ai/chat/abc")!))
-        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/login")!))
-        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://claude.ai/signin")!))
-        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://clerk.claude.ai/sign-in")!))
-        XCTAssertFalse(ClaudeSignInView.isReturnPage(URL(string: "https://auth.claude.ai/")!))
+        XCTAssertTrue(ClaudeAuthSession.isReturnPage(URL(string: "https://claude.ai/new")!))
+        XCTAssertTrue(ClaudeAuthSession.isReturnPage(URL(string: "https://www.claude.ai/chat/abc")!))
+        XCTAssertFalse(ClaudeAuthSession.isReturnPage(URL(string: "https://claude.ai/login")!))
+        XCTAssertFalse(ClaudeAuthSession.isReturnPage(URL(string: "https://claude.ai/signin")!))
+        XCTAssertFalse(ClaudeAuthSession.isReturnPage(URL(string: "https://clerk.claude.ai/sign-in")!))
+        XCTAssertFalse(ClaudeAuthSession.isReturnPage(URL(string: "https://auth.claude.ai/")!))
     }
 
     // MARK: - Controller publishing
@@ -283,19 +283,19 @@ final class SignInBrowserNavigationTests: XCTestCase {
     }
 
     func testGrokAuthHostUsesExactOrSuffixMatch() {
-        XCTAssertTrue(GrokSignInView.isAuthHost("accounts.x.ai"))
-        XCTAssertTrue(GrokSignInView.isAuthHost("x.com"))
-        XCTAssertTrue(GrokSignInView.isAuthHost("api.x.com"))
+        XCTAssertTrue(GrokAuthSession.isAuthHost("accounts.x.ai"))
+        XCTAssertTrue(GrokAuthSession.isAuthHost("x.com"))
+        XCTAssertTrue(GrokAuthSession.isAuthHost("api.x.com"))
         // Hosts that only contain an auth host's name are rejected.
-        XCTAssertFalse(GrokSignInView.isAuthHost("netflix.com"))
-        XCTAssertFalse(GrokSignInView.isAuthHost("x.com.evil.example"))
+        XCTAssertFalse(GrokAuthSession.isAuthHost("netflix.com"))
+        XCTAssertFalse(GrokAuthSession.isAuthHost("x.com.evil.example"))
     }
 
     func testGrokReturnPageRejectsLookalikeHost() {
-        XCTAssertTrue(GrokSignInView.isReturnPage(URL(string: "https://grok.com/?_s=usage")!))
-        XCTAssertTrue(GrokSignInView.isReturnPage(URL(string: "https://www.grok.com/")!))
-        XCTAssertFalse(GrokSignInView.isReturnPage(URL(string: "https://grok.com.evil.example/")!))
-        XCTAssertFalse(GrokSignInView.isReturnPage(URL(string: "https://notgrok.com/")!))
+        XCTAssertTrue(GrokAuthSession.isReturnPage(URL(string: "https://grok.com/?_s=usage")!))
+        XCTAssertTrue(GrokAuthSession.isReturnPage(URL(string: "https://www.grok.com/")!))
+        XCTAssertFalse(GrokAuthSession.isReturnPage(URL(string: "https://grok.com.evil.example/")!))
+        XCTAssertFalse(GrokAuthSession.isReturnPage(URL(string: "https://notgrok.com/")!))
     }
 }
 

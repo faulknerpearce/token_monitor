@@ -25,11 +25,8 @@ struct OverviewPanelView: View {
     @ObservedObject var chatGPTAuth: ChatGPTAuthSession
     @ObservedObject var openRouterAuth: OpenRouterAuthSession
 
-    var openGrokSignIn: () -> Void
-    var openOpenCodeSignIn: () -> Void
-    var openCursorSignIn: () -> Void
-    var openClaudeSignIn: () -> Void
-    var openChatGPTSignIn: () -> Void
+    /// Opens the sign-in window for a provider's session.
+    var openSignIn: (MonitorProvider) -> Void
     var selectOpenRouter: () -> Void
     var openPreferences: () -> Void
 
@@ -129,7 +126,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if !grokAuth.isSignedIn || grokAuth.needsSignIn {
-                ProviderSignInButton(provider: .grok, action: openGrokSignIn)
+                ProviderSignInButton(provider: .grok, action: { openSignIn(.grok) })
             }
             if grokAuth.isSignedIn && !grokAuth.needsSignIn {
                 ProviderSignOutButton(provider: .grok) {
@@ -176,7 +173,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if openCodeAuth.needsSignIn && openCodePoller.snapshot == nil {
-                ProviderSignInButton(provider: .opencode, action: openOpenCodeSignIn)
+                ProviderSignInButton(provider: .opencode, action: { openSignIn(.opencode) })
             }
             if !openCodeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .opencode) {
@@ -222,7 +219,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if cursorAuth.needsSignIn && cursorPoller.snapshot == nil {
-                ProviderSignInButton(provider: .cursor, action: openCursorSignIn)
+                ProviderSignInButton(provider: .cursor, action: { openSignIn(.cursor) })
             }
             if !cursorAuth.needsSignIn {
                 ProviderSignOutButton(provider: .cursor) {
@@ -268,7 +265,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if claudeAuth.needsSignIn && claudePoller.snapshot == nil {
-                ProviderSignInButton(provider: .claude, action: openClaudeSignIn)
+                ProviderSignInButton(provider: .claude, action: { openSignIn(.claude) })
             }
             if !claudeAuth.needsSignIn {
                 ProviderSignOutButton(provider: .claude) {
@@ -314,7 +311,7 @@ struct OverviewPanelView: View {
                     .foregroundStyle(.tertiary)
             }
             if chatGPTAuth.needsSignIn && chatGPTPoller.snapshot == nil {
-                ProviderSignInButton(provider: .chatgpt, action: openChatGPTSignIn)
+                ProviderSignInButton(provider: .chatgpt, action: { openSignIn(.chatgpt) })
             }
             if !chatGPTAuth.needsSignIn {
                 ProviderSignOutButton(provider: .chatgpt) {
@@ -364,7 +361,7 @@ struct OverviewPanelView: View {
                 ProviderSignInButton(
                     provider: .grokbot,
                     title: "Sign In to Cursor…",
-                    action: openCursorSignIn
+                    action: { openSignIn(.cursor) }
                 )
             }
         }

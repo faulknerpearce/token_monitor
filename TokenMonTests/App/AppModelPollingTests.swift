@@ -22,4 +22,12 @@ final class AppModelPollingTests: XCTestCase {
         XCTAssertEqual(model.providers.pollers(sharingSessionWith: .claude).count, 1)
         XCTAssertEqual(model.providers.sessions.count, MonitorProvider.usageProviders.count - 1)
     }
+
+    /// Grokbot opens Cursor's sign-in window; every other provider its own.
+    func testSignInWindowFollowsTheSession() {
+        XCTAssertEqual(MonitorProvider.grokbot.signInProvider, .cursor)
+        for provider in MonitorProvider.allCases where provider != .grokbot {
+            XCTAssertEqual(provider.signInProvider, provider)
+        }
+    }
 }

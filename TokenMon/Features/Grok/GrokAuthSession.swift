@@ -10,7 +10,7 @@ private let authCookieHints: Set<String> = [
 
 /// Session for grok.com (`sso` / `sso-rw` cookies).
 ///
-/// Sign-in may pass through x.com / twitter.com (see `GrokSignInView.authHosts`);
+/// Sign-in may pass through x.com / twitter.com (see `GrokAuthSession.authHosts`);
 /// the session captures and stores only the grok.com/xAI cookies.
 @MainActor
 final class GrokAuthSession: ProviderAuthSession {

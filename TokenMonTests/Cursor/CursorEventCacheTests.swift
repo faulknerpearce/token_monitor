@@ -168,13 +168,13 @@ final class CursorEventCacheTests: XCTestCase {
     // MARK: - Sign-in
 
     func testAuthPageMatchesIdentityHostsExactlyOrBySuffix() {
-        XCTAssertTrue(CursorSignInView.isAuthPage(host: "github.com", path: "/session"))
-        XCTAssertTrue(CursorSignInView.isAuthPage(host: "authenticator.cursor.sh", path: "/"))
-        XCTAssertTrue(CursorSignInView.isAuthPage(host: "accounts.google.com", path: "/o/oauth2"))
-        XCTAssertTrue(CursorSignInView.isAuthPage(host: "cursor.com", path: "/login"))
-        XCTAssertFalse(CursorSignInView.isAuthPage(host: "github.com.evil.example", path: "/"))
-        XCTAssertFalse(CursorSignInView.isAuthPage(host: "notgithub.com", path: "/"))
-        XCTAssertFalse(CursorSignInView.isAuthPage(host: "cursor.com", path: "/dashboard"))
+        XCTAssertTrue(CursorAuthSession.isAuthPage(host: "github.com", path: "/session"))
+        XCTAssertTrue(CursorAuthSession.isAuthPage(host: "authenticator.cursor.sh", path: "/"))
+        XCTAssertTrue(CursorAuthSession.isAuthPage(host: "accounts.google.com", path: "/o/oauth2"))
+        XCTAssertTrue(CursorAuthSession.isAuthPage(host: "cursor.com", path: "/login"))
+        XCTAssertFalse(CursorAuthSession.isAuthPage(host: "github.com.evil.example", path: "/"))
+        XCTAssertFalse(CursorAuthSession.isAuthPage(host: "notgithub.com", path: "/"))
+        XCTAssertFalse(CursorAuthSession.isAuthPage(host: "cursor.com", path: "/dashboard"))
     }
 
     // MARK: - Helpers
