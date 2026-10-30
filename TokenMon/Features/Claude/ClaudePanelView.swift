@@ -20,20 +20,20 @@ struct ClaudePanelView: View {
                     SlimUsageTrack(
                         label: "5-Hour Window",
                         percent: snapshot.fiveHour?.usedPercent ?? 0,
-                        color: ProviderColors.claudeColor,
+                        color: MonitorProvider.claude.accentColor,
                         caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
                     )
                     SlimUsageTrack(
                         label: snapshot.weeklyLabel,
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
-                        color: ProviderColors.claudeColor,
+                        color: MonitorProvider.claude.accentColor,
                         caption: poller.weeklyResetsAt().map { Format.resetCaption($0) }
                     )
                 }
 
                 NavigableDailyBudgetCard(
                     style: .weekly,
-                    accent: ProviderColors.claudeColor,
+                    accent: MonitorProvider.claude.accentColor,
                     periodUsedPercent: snapshot.sevenDay?.usedPercent,
                     resetsAt: poller.weeklyResetsAt(),
                     daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }
@@ -173,7 +173,7 @@ struct ClaudeModelRow: View {
                     Capsule()
                         .fill(Color.primary.opacity(0.12))
                     Capsule()
-                        .fill(ProviderColors.claudeColor)
+                        .fill(MonitorProvider.claude.accentColor)
                         .frame(width: max(0, geo.size.width * share))
                 }
             }

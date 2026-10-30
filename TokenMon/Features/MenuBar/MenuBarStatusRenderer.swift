@@ -253,7 +253,7 @@ enum MenuBarStatusRenderer {
                 guard showCursorBar else { continue }
                 pieces.append(.solid(provider: .cursor, segment: solid(
                     used: cursorSnapshot?.usedPercent,
-                    color: ProviderColors.cursorSRGB.nsColor,
+                    color: MonitorProvider.cursor.accent.nsColor,
                     icon: ProviderLogo.cursor
                 )))
             case .opencode:
@@ -263,7 +263,7 @@ enum MenuBarStatusRenderer {
                 // match their glyph height and keep the icon-to-text gap even.
                 pieces.append(.solid(provider: .opencode, segment: solid(
                     used: openCodeSnapshot?.primaryUsedPercent,
-                    color: ProviderAccent.openCode.nsColor,
+                    color: MonitorProvider.opencode.accent.nsColor,
                     icon: ProviderLogo.openCode,
                     iconBox: 13
                 )))
@@ -271,14 +271,14 @@ enum MenuBarStatusRenderer {
                 guard showClaudeBar else { continue }
                 pieces.append(.solid(provider: .claude, segment: solid(
                     used: claudeSnapshot?.headlineUsedPercent,
-                    color: ProviderColors.claudeSRGB.nsColor,
+                    color: MonitorProvider.claude.accent.nsColor,
                     icon: ProviderLogo.claude
                 )))
             case .grokbot:
                 guard showGrokbotBar else { continue }
                 pieces.append(.solid(provider: .grokbot, segment: solid(
                     used: grokbotSnapshot?.usedPercent,
-                    color: ProviderColors.grokbotSRGB.nsColor,
+                    color: MonitorProvider.grokbot.accent.nsColor,
                     icon: ProviderLogo.grokbot
                 )))
             case .overview, .chatgpt, .openrouter:
@@ -621,26 +621,9 @@ enum MenuBarStatusRenderer {
         return image
     }
 
-    /// Brand accent per provider, from the shared `ProviderAccent` palette.
+    /// Brand accent per provider; the menu bar's label colour for Overview.
     private static func providerAccent(_ provider: MonitorProvider) -> NSColor {
-        switch provider {
-        case .overview:
-            return chromeColor
-        case .grok:
-            return ProviderAccent.grok.nsColor
-        case .opencode:
-            return ProviderAccent.openCode.nsColor
-        case .cursor:
-            return ProviderAccent.cursor.nsColor
-        case .claude:
-            return ProviderAccent.claude.nsColor
-        case .chatgpt:
-            return ProviderAccent.chatGPT.nsColor
-        case .openrouter:
-            return ProviderAccent.openRouter.nsColor
-        case .grokbot:
-            return ProviderAccent.grokbot.nsColor
-        }
+        provider == .overview ? chromeColor : provider.accent.nsColor
     }
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {

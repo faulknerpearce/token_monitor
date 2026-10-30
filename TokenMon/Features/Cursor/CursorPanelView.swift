@@ -22,7 +22,7 @@ struct CursorPanelView: View {
                         SlimUsageTrack(
                             label: pool.kind.trackLabel,
                             percent: pool.usedPercent,
-                            color: ProviderColors.cursorColor,
+                            color: MonitorProvider.cursor.accentColor,
                             caption: (pool.resetsAt ?? snapshot.resetsAt).map { Format.resetCaption($0) }
                         )
                     }
@@ -30,7 +30,7 @@ struct CursorPanelView: View {
 
                 NavigableDailyBudgetCard(
                     style: .monthly,
-                    accent: ProviderColors.cursorColor,
+                    accent: MonitorProvider.cursor.accentColor,
                     periodUsedPercent: snapshot.usedPercent,
                     periodStart: snapshot.billingCycleStart,
                     resetsAt: snapshot.billingCycleEnd,

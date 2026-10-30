@@ -57,10 +57,10 @@ struct OverviewHourlyUsageChart: View {
 
         var color: Color {
             switch self {
-            case .grok: return ProviderColors.grokColor
-            case .grokbot: return ProviderColors.grokbotColor
-            case .cursor: return ProviderColors.cursorColor
-            case .claude: return ProviderColors.claudeColor
+            case .grok: return MonitorProvider.grok.accentColor
+            case .grokbot: return MonitorProvider.grokbot.accentColor
+            case .cursor: return MonitorProvider.cursor.accentColor
+            case .claude: return MonitorProvider.claude.accentColor
             case .openCodeGo: return OverviewHourlyUsageChart.openCodeGoColor
             case .openCodeZen: return OverviewHourlyUsageChart.openCodeZenColor
             }

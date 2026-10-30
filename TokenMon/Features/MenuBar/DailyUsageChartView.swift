@@ -94,7 +94,7 @@ struct DailyUsageChartView: View {
                 Color.primary.opacity(0.12)
 
                 if fraction > 0 && !isFuture {
-                    ProviderColors.grokColor
+                    MonitorProvider.grok.accentColor
                         .frame(height: min(trackHeight, fillHeight))
                 }
             }

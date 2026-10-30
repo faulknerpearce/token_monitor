@@ -400,7 +400,7 @@ struct NavigableDailyBudgetCard: View {
     }
     return WeeklyDailyBudgetBarsView(
         days: days,
-        accent: ProviderColors.claudeColor,
+        accent: MonitorProvider.claude.accentColor,
         periodUsedPercent: 40
     )
     .padding()

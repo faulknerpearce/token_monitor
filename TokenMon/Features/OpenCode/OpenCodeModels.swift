@@ -307,7 +307,7 @@ struct OpenCodeSnapshot: Identifiable, Hashable, Sendable {
 /// Shared Go/Zen accents and deterministic model colors.
 enum ModelPalette {
     /// Shared orange accent — OpenCode Go (5-hour limit, models); overview uses orange too.
-    static let orange = ProviderAccent.openCode
+    static let orange = MonitorProvider.opencode.accent
     /// Shared purple accent — OpenCode Zen, Overview Zen bars, weekly/monthly limits.
     static let purple = SRGB(red: 0.58, green: 0.44, blue: 0.86)
 

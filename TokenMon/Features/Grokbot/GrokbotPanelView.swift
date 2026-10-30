@@ -26,7 +26,7 @@ struct GrokbotPanelView: View {
                         SlimUsageTrack(
                             label: "Weekly",
                             percent: snapshot.usedPercent,
-                            color: ProviderColors.grokbotColor,
+                            color: MonitorProvider.grokbot.accentColor,
                             caption: snapshot.resetsAt.map { Format.resetCaption($0) },
                             showsLabel: false
                         )
@@ -40,7 +40,7 @@ struct GrokbotPanelView: View {
                 if snapshot.hasIncludedAllowance {
                     NavigableDailyBudgetCard(
                         style: .weekly,
-                        accent: ProviderColors.grokbotColor,
+                        accent: MonitorProvider.grokbot.accentColor,
                         periodUsedPercent: snapshot.usedPercent,
                         resetsAt: snapshot.resetsAt,
                         daysForWeek: { poller.dailyBudgetDays(weekOffset: $0) }

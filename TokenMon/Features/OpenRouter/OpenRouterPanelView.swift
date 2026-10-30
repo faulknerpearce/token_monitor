@@ -26,7 +26,7 @@ struct OpenRouterPanelView: View {
                         SlimUsageTrack(
                             label: "Credits used",
                             percent: percent,
-                            color: ProviderColors.openRouterColor,
+                            color: MonitorProvider.openrouter.accentColor,
                             caption: "\(Format.usd(snapshot.usedUSD)) of \(Format.usd(snapshot.budgetUSD ?? 0))"
                                 + " · \(Format.usd(snapshot.remainingUSD ?? 0)) left",
                             showsLabel: false
@@ -209,7 +209,7 @@ private struct OpenRouterModelRow: View {
                 let width = max(0, geo.size.width * CGFloat(max(0, min(100, model.percentOfWindow)) / 100))
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
-                    Capsule().fill(ProviderColors.openRouterColor).frame(width: width)
+                    Capsule().fill(MonitorProvider.openrouter.accentColor).frame(width: width)
                 }
             }
             .frame(height: 6)
