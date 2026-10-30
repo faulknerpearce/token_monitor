@@ -12,10 +12,11 @@ excluded:
   - .build
   - DerivedData
 
-# Length thresholds sit just above the codebase maxima, so `--strict`
-# (warning → error) fails on a regression. Largest file/type:
-# OpenCodeStatsTests (~808 file / ~805 type lines); the longest functions are in
-# GrokDailyUsageBuilder (190 lines, complexity 25) and the menu-bar renderer.
+# Length thresholds sit just above the app's maxima, so `--strict`
+# (warning → error) fails on a regression. Largest file/type: the menu-bar
+# renderer (~440 lines); longest function: its composite layout (~135 lines);
+# highest complexity: the OpenCode refresh (20). TokenMonTests/.swiftlint.yml
+# raises the file and type limits for test suites.
 line_length:
   warning: 160
   error: 200
@@ -24,25 +25,25 @@ line_length:
   ignores_urls: true
 
 type_body_length:
-  warning: 820
-  error: 900
+  warning: 460
+  error: 520
 
 file_length:
-  warning: 850
-  error: 950
+  warning: 460
+  error: 520
   ignore_comment_only_lines: true
 
 function_body_length:
-  warning: 200
-  error: 300
+  warning: 140
+  error: 200
 
 function_parameter_count:
   warning: 12
   error: 14
 
 cyclomatic_complexity:
-  warning: 26
-  error: 32
+  warning: 21
+  error: 26
 
 large_tuple:
   warning: 4

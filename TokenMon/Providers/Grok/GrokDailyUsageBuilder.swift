@@ -14,7 +14,7 @@ enum GrokDailyUsageBuilder {
     // swiftlint:disable:next modifier_order superfluous_disable_command
     private nonisolated(unsafe) static var formatterCache: [String: (weekday: DateFormatter, dayOfMonth: DateFormatter)] = [:]
 
-    private static func makeDateFormatters(
+    static func makeDateFormatters(
         calendar: Calendar
     ) -> (weekday: DateFormatter, dayOfMonth: DateFormatter) {
         let key = "\(String(describing: calendar.identifier))|\(calendar.timeZone.identifier)|\(calendar.locale?.identifier ?? "")"
@@ -73,58 +73,8 @@ enum GrokDailyUsageBuilder {
         )
 
         // Local day-over-day history is the source of truth for tracked usage.
-        // Fall back to a server daily series only when local samples cannot paint bars.
-        var samples = history
-        if let current, samples.isEmpty || (samples.last.map { $0.fetchedAt < current.fetchedAt } ?? true) {
-            if let last = samples.last,
-               abs(last.usedPercent - current.usedPercent) < 0.05,
-               abs(last.fetchedAt.timeIntervalSince(current.fetchedAt)) < 60,
-               cal.isDate(last.fetchedAt, inSameDayAs: current.fetchedAt) {
-                // same-day near-duplicate — keep history only
-            } else {
-                samples.append(current)
-            }
-        }
-        samples.sort { $0.fetchedAt < $1.fetchedAt }
-
-        // End-of-day cumulative used% (last sample that day), preferring post-rollover
-        // samples when `resetsAt` advances mid-day.
-        var endOfDay: [Date: WeeklyUsageSnapshot] = [:]
-        for sample in samples {
-            let day = cal.startOfDay(for: sample.fetchedAt)
-            if let existing = endOfDay[day] {
-                let existingResets = existing.resetsAt
-                let sampleResets = sample.resetsAt
-                // Prefer the sample after a real period advance on the same calendar day.
-                if isBillingPeriodAdvanced(from: existingResets, to: sampleResets),
-                   sample.fetchedAt >= existing.fetchedAt {
-                    endOfDay[day] = sample
-                    continue
-                }
-                // Ignore older-period samples after a newer period already won the day.
-                if isBillingPeriodAdvanced(from: sampleResets, to: existingResets) {
-                    continue
-                }
-                if sample.fetchedAt >= existing.fetchedAt {
-                    endOfDay[day] = sample
-                }
-            } else {
-                endOfDay[day] = sample
-            }
-        }
-
+        let endOfDay = endOfDaySamples(mergedSamples(history: history, current: current, calendar: cal), calendar: cal)
         let sortedDays = endOfDay.keys.sorted()
-        var cumulativeByDay: [Date: Double] = [:]
-        var productsByDay: [Date: [ProductUsage]] = [:]
-        var resetsByDay: [Date: Date?] = [:]
-        for day in sortedDays {
-            guard let snap = endOfDay[day] else { continue }
-            cumulativeByDay[day] = snap.usedPercent
-            productsByDay[day] = snap.products
-            resetsByDay[day] = snap.resetsAt
-        }
-
-        let (weekdayFormatter, dayOfMonthFormatter) = Self.makeDateFormatters(calendar: cal)
 
         // Samples through this period’s last day. The anchor filter excludes prior-period days.
         let samplesThroughWeekEnd = sortedDays.filter { $0 <= weekEnd }
@@ -150,111 +100,38 @@ enum GrokDailyUsageBuilder {
         // prior sample day and start the daily series from that day forward.
         let trackingStartDay = latestMidPeriodRecalibrationDay(
             sampleDays: samePeriodThroughWeekEnd,
-            cumulativeByDay: cumulativeByDay,
+            cumulativeByDay: endOfDay.mapValues(\.usedPercent),
             endOfDay: endOfDay
         )
+        let validSampleDays = trackingStartDay.map { start in samePeriodThroughWeekEnd.filter { $0 >= start } }
+            ?? samePeriodThroughWeekEnd
 
-        let validSampleDays: [Date]
-        if let trackingStartDay {
-            validSampleDays = samePeriodThroughWeekEnd.filter { $0 >= trackingStartDay }
-        } else {
-            validSampleDays = samePeriodThroughWeekEnd
-        }
-
-        var days: [DailyUsageDay] = []
-
-        for offset in 0..<dayCount {
-            guard let dayStart = cal.date(byAdding: .day, value: offset, to: weekStart) else { continue }
-            let isToday = cal.isDate(dayStart, inSameDayAs: now)
-            let isPeriodStart = cal.isDate(dayStart, inSameDayAs: weekStart)
-            let symbol = String(weekdayFormatter.string(from: dayStart).prefix(3))
-            let dayNum = dayOfMonthFormatter.string(from: dayStart)
-
-            // Prefer the latest prior *valid* sample day in the same billing period so a
-            // missing poll day still yields a correct multi-day delta on the next sample.
-            let dayResets = resetsByDay[dayStart] ?? nil
-            let prevDayKey = validSampleDays.last { prev in
-                guard prev < dayStart else { return false }
-                let prevResets = resetsByDay[prev] ?? nil
-                return isSameBillingPeriod(prevResets, dayResets)
-            }
-            let prevCumulative = prevDayKey.flatMap { cumulativeByDay[$0] }
-            let dayCumulative = cumulativeByDay[dayStart]
-            let dayIsValid = validSampleDays.contains(dayStart)
-            let isTrackingStart = trackingStartDay.map { cal.isDate(dayStart, inSameDayAs: $0) } ?? false
-
-            var segments: [DailyUsageSegment] = []
-            var isAfterReset = isTrackingStart
-
-            if let dayCumulative, dayIsValid {
-                let products = productsByDay[dayStart] ?? current?.products ?? []
-                let previousProducts = prevDayKey.flatMap { productsByDay[$0] } ?? []
-                if let previous = prevCumulative {
-                    if dayCumulative + 5 < previous {
-                        // Mid-period rebase drop: restart tracking with absolute week-to-date.
-                        isAfterReset = true
-                        if dayCumulative > 0.05 {
-                            segments.append(
-                                contentsOf: segmentsFromProducts(
-                                    products,
-                                    fallbackTotal: dayCumulative
-                                )
-                            )
-                        }
-                    } else {
-                        // Day-over-day growth. If cumulative is flat or lower without a rebase,
-                        // still show period-to-date on the period-start day when it is the only
-                        // available baseline (first bar after a new week opens).
-                        segments.append(
-                            contentsOf: growthSegments(
-                                previousUsed: previous,
-                                dayUsed: dayCumulative,
-                                previousProducts: previousProducts,
-                                products: products
-                            )
-                        )
-                    }
-                } else if dayCumulative > 0.05, isTrackingStart || isPeriodStart {
-                    // Period-start day (e.g. new-week Thursday) or mid-period rebase:
-                    // show period-to-date so day 1 has a bar after rollover.
-                    if isTrackingStart { isAfterReset = true }
-                    if let priorAny = sortedDays.last(where: { $0 < dayStart }),
-                       isBillingPeriodAdvanced(from: endOfDay[priorAny]?.resetsAt, to: dayResets) {
-                        isAfterReset = true
-                    }
-                    segments.append(
-                        contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative)
-                    )
-                } else if dayCumulative > 0.05,
-                          let priorAny = sortedDays.last(where: { $0 < dayStart && $0 >= weekStart }),
-                          let priorSnap = endOfDay[priorAny],
-                          isBillingPeriodAdvanced(from: priorSnap.resetsAt, to: dayResets) {
-                    // Rollover observed between two days already in this period window:
-                    // paint post-reset week-to-date only, excluding prior-period usage.
-                    isAfterReset = true
-                    segments.append(
-                        contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative)
-                    )
-                }
-                // First sample mid-period: the bar stays empty until a second day.
-            }
-
-            days.append(
-                DailyUsageDay(
-                    dayStart: dayStart,
-                    weekdaySymbol: symbol,
-                    dayOfMonth: dayNum,
-                    segments: segments,
-                    isToday: isToday,
-                    isAfterReset: isAfterReset
-                )
+        let samples = WeekSamples(
+            endOfDay: endOfDay,
+            sortedDays: sortedDays,
+            validSampleDays: validSampleDays,
+            trackingStartDay: trackingStartDay,
+            weekStart: weekStart,
+            currentProducts: current?.products
+        )
+        let (weekdayFormatter, dayOfMonthFormatter) = Self.makeDateFormatters(calendar: cal)
+        let days: [DailyUsageDay] = (0..<dayCount).compactMap { offset in
+            guard let dayStart = cal.date(byAdding: .day, value: offset, to: weekStart) else { return nil }
+            let bar = dayBar(on: dayStart, samples: samples, calendar: cal)
+            return DailyUsageDay(
+                dayStart: dayStart,
+                weekdaySymbol: String(weekdayFormatter.string(from: dayStart).prefix(3)),
+                dayOfMonth: dayOfMonthFormatter.string(from: dayStart),
+                segments: bar.segments,
+                isToday: cal.isDate(dayStart, inSameDayAs: now),
+                isAfterReset: bar.isAfterReset
             )
         }
 
         // Estimated when this period window has fewer than two sample days for deltas.
         let inPeriodSampleDays = validSampleDays.filter { $0 >= weekStart && $0 <= weekEnd }
         let isEstimated = inPeriodSampleDays.count < 2 && weekOffset == 0
-        let localWeek = finalize(
+        return finalize(
             weekStart: weekStart,
             weekEnd: weekEnd,
             days: days,
@@ -262,98 +139,139 @@ enum GrokDailyUsageBuilder {
             resetsAt: effectiveResetsAt,
             calendar: cal
         )
-        return localWeek
     }
 
-    /// Preview billing-period week (Thu→Wed) with sample product bars.
-    static func preview(now: Date = Date(), calendar: Calendar = .current) -> DailyUsageWeek {
-        let cal = calendar
-        // Anchor a synthetic reset so the preview is always a Thu→Wed period.
-        let resetAt = ISO8601DateFormatter.parseFlexible("2026-07-16T20:25:00Z")
-            ?? now.addingTimeInterval(3 * 24 * 3600)
-        guard let (weekStart, weekEnd) = billingPeriodWeekBounds(
-            resetsAt: resetAt,
-            weekOffset: 0,
-            calendar: cal,
-            now: resetAt.addingTimeInterval(-2 * 24 * 3600)
-        ) else {
-            return finalize(
-                weekStart: now,
-                weekEnd: now,
-                days: [],
-                isEstimated: true,
-                resetsAt: resetAt,
-                calendar: cal
-            )
+    /// End-of-day samples of the displayed week, ready to turn into bars.
+    private struct WeekSamples {
+        /// The last sample of each calendar day (see `endOfDaySamples`).
+        let endOfDay: [Date: WeeklyUsageSnapshot]
+        let sortedDays: [Date]
+        /// Sample days in the displayed period, from the last mid-period rebase on.
+        let validSampleDays: [Date]
+        let trackingStartDay: Date?
+        let weekStart: Date
+        let currentProducts: [ProductUsage]?
+    }
+
+    /// `history` plus `current` when it is newer and not a same-day
+    /// near-duplicate of the last sample, oldest first.
+    private static func mergedSamples(
+        history: [WeeklyUsageSnapshot],
+        current: WeeklyUsageSnapshot?,
+        calendar cal: Calendar
+    ) -> [WeeklyUsageSnapshot] {
+        var samples = history
+        if let current, samples.isEmpty || (samples.last.map { $0.fetchedAt < current.fetchedAt } ?? true) {
+            let isNearDuplicate = samples.last.map { last in
+                abs(last.usedPercent - current.usedPercent) < 0.05
+                    && abs(last.fetchedAt.timeIntervalSince(current.fetchedAt)) < 60
+                    && cal.isDate(last.fetchedAt, inSameDayAs: current.fetchedAt)
+            } ?? false
+            if !isNearDuplicate {
+                samples.append(current)
+            }
         }
+        return samples.sorted { $0.fetchedAt < $1.fetchedAt }
+    }
 
-        let pattern: [(Double, Double, Double)] = [
-            (5, 1, 0),   // period start (e.g. Thu)
-            (7, 2, 1),   // Fri
-            (2, 1, 0),   // Sat
-            (0, 0, 0),   // Sun
-            (18, 5, 1),  // Mon
-            (4, 1, 0),   // Tue
-            (3, 0, 0)    // Wed
-        ]
-
-        let (weekdayFormatter, dayOfMonthFormatter) = Self.makeDateFormatters(calendar: cal)
-
-        var days: [DailyUsageDay] = []
-        for offset in 0..<7 {
-            guard let dayStart = cal.date(byAdding: .day, value: offset, to: weekStart) else { continue }
-            var segments: [DailyUsageSegment] = []
-            let (build, api, chat) = pattern[offset]
-            if build > 0 {
-                segments.append(
-                    DailyUsageSegment(
-                        productID: "build",
-                        displayName: "Grok Build",
-                        percentOfWeekly: build,
-                        colorToken: .build
-                    )
-                )
+    /// End-of-day cumulative used% (last sample that day), preferring
+    /// post-rollover samples when `resetsAt` advances mid-day.
+    private static func endOfDaySamples(
+        _ samples: [WeeklyUsageSnapshot],
+        calendar cal: Calendar
+    ) -> [Date: WeeklyUsageSnapshot] {
+        var endOfDay: [Date: WeeklyUsageSnapshot] = [:]
+        for sample in samples {
+            let day = cal.startOfDay(for: sample.fetchedAt)
+            guard let existing = endOfDay[day] else {
+                endOfDay[day] = sample
+                continue
             }
-            if api > 0 {
-                segments.append(
-                    DailyUsageSegment(
-                        productID: "api",
-                        displayName: "API",
-                        percentOfWeekly: api,
-                        colorToken: .api
-                    )
-                )
+            // Prefer the sample after a real period advance on the same calendar day.
+            if isBillingPeriodAdvanced(from: existing.resetsAt, to: sample.resetsAt),
+               sample.fetchedAt >= existing.fetchedAt {
+                endOfDay[day] = sample
+                continue
             }
-            if chat > 0 {
-                segments.append(
-                    DailyUsageSegment(
-                        productID: "chat",
-                        displayName: "Chat",
-                        percentOfWeekly: chat,
-                        colorToken: .chat
-                    )
-                )
+            // Ignore older-period samples after a newer period already won the day.
+            if isBillingPeriodAdvanced(from: sample.resetsAt, to: existing.resetsAt) {
+                continue
             }
-            days.append(
-                DailyUsageDay(
-                    dayStart: dayStart,
-                    weekdaySymbol: String(weekdayFormatter.string(from: dayStart).prefix(3)),
-                    dayOfMonth: dayOfMonthFormatter.string(from: dayStart),
-                    segments: segments,
-                    isToday: false,
-                    isAfterReset: false
-                )
-            )
+            if sample.fetchedAt >= existing.fetchedAt {
+                endOfDay[day] = sample
+            }
         }
+        return endOfDay
+    }
 
-        return finalize(
-            weekStart: weekStart,
-            weekEnd: weekEnd,
-            days: days,
-            isEstimated: false,
-            resetsAt: resetAt,
-            calendar: cal
-        )
+    /// The bar for the day starting at `dayStart`: its product segments and
+    /// whether it opens after a reset.
+    private static func dayBar(
+        on dayStart: Date,
+        samples: WeekSamples,
+        calendar cal: Calendar
+    ) -> (segments: [DailyUsageSegment], isAfterReset: Bool) {
+        let endOfDay = samples.endOfDay
+        let isPeriodStart = cal.isDate(dayStart, inSameDayAs: samples.weekStart)
+
+        // Prefer the latest prior *valid* sample day in the same billing period so a
+        // missing poll day still yields a correct multi-day delta on the next sample.
+        let dayResets = endOfDay[dayStart]?.resetsAt
+        let prevDayKey = samples.validSampleDays.last { prev in
+            prev < dayStart && isSameBillingPeriod(endOfDay[prev]?.resetsAt, dayResets)
+        }
+        let prevCumulative = prevDayKey.flatMap { endOfDay[$0]?.usedPercent }
+        let isTrackingStart = samples.trackingStartDay.map { cal.isDate(dayStart, inSameDayAs: $0) } ?? false
+
+        var segments: [DailyUsageSegment] = []
+        var isAfterReset = isTrackingStart
+
+        guard let dayCumulative = endOfDay[dayStart]?.usedPercent,
+              samples.validSampleDays.contains(dayStart)
+        else { return (segments, isAfterReset) }
+
+        let products = endOfDay[dayStart]?.products ?? samples.currentProducts ?? []
+        let previousProducts = prevDayKey.flatMap { endOfDay[$0]?.products } ?? []
+        if let previous = prevCumulative {
+            if dayCumulative + 5 < previous {
+                // Mid-period rebase drop: restart tracking with absolute week-to-date.
+                isAfterReset = true
+                if dayCumulative > 0.05 {
+                    segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+                }
+            } else {
+                // Day-over-day growth. If cumulative is flat or lower without a rebase,
+                // still show period-to-date on the period-start day when it is the only
+                // available baseline (first bar after a new week opens).
+                segments.append(
+                    contentsOf: growthSegments(
+                        previousUsed: previous,
+                        dayUsed: dayCumulative,
+                        previousProducts: previousProducts,
+                        products: products
+                    )
+                )
+            }
+        } else if dayCumulative > 0.05, isTrackingStart || isPeriodStart {
+            // Period-start day (e.g. new-week Thursday) or mid-period rebase:
+            // show period-to-date so day 1 has a bar after rollover.
+            if isTrackingStart { isAfterReset = true }
+            if let priorAny = samples.sortedDays.last(where: { $0 < dayStart }),
+               isBillingPeriodAdvanced(from: endOfDay[priorAny]?.resetsAt, to: dayResets) {
+                isAfterReset = true
+            }
+            segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+        } else if dayCumulative > 0.05,
+                  let priorAny = samples.sortedDays.last(where: { $0 < dayStart && $0 >= samples.weekStart }),
+                  let priorSnap = endOfDay[priorAny],
+                  isBillingPeriodAdvanced(from: priorSnap.resetsAt, to: dayResets) {
+            // Rollover observed between two days already in this period window:
+            // paint post-reset week-to-date only, excluding prior-period usage.
+            isAfterReset = true
+            segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+        }
+        // First sample mid-period: the bar stays empty until a second day.
+        return (segments, isAfterReset)
     }
 
     // MARK: - Billing period week
@@ -446,7 +364,7 @@ enum GrokDailyUsageBuilder {
         return currentResetsAt
     }
 
-    private static func finalize(
+    static func finalize(
         weekStart: Date,
         weekEnd: Date,
         days: [DailyUsageDay],

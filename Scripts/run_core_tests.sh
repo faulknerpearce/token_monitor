@@ -17,6 +17,7 @@ PROVIDER_SOURCES=(
   TokenMon/Providers/Grok/GrokUsageResponseParser.swift
   TokenMon/Providers/Grok/GRPCWebParser.swift
   TokenMon/Providers/Grok/GrokDailyUsageBuilder.swift
+  TokenMon/Providers/Grok/GrokDailyUsagePreview.swift
   TokenMon/Providers/Grok/GrokExportService.swift
   Tests/Manual/CoreTestsMain.swift
 )
