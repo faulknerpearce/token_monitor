@@ -96,7 +96,7 @@ enum OrderStatus: String, Codable, CaseIterable, Hashable, Sendable {
 
 **Project convention: tests live in `TokenMonTests/`, never in `TokenMon/` source.**
 
-- One `XCTestCase` file per unit under test, grouped by feature folder: `TokenMonTests/Grok/`, `TokenMonTests/OpenCode/`, `TokenMonTests/Cursor/`.
+- One `XCTestCase` file per unit under test, in the folder that mirrors its source: `TokenMonTests/Core/Polling/`, `TokenMonTests/Providers/Grok/`, `TokenMonTests/Features/Settings/`.
 - Import with `@testable import TokenMon`. Keep internals `internal` — `@testable` reaches them from the test bundle, so you do NOT need to widen visibility to `public` for tests.
 - NEVER add `#if DEBUG` test-only code or inline test modules to source files; production modules stay free of test-only imports and behavior.
 - Use descriptive test names: `testWorkspaceIDFromURL`, `testExportCSVNeutralizesFormulaInjection`, `testOrderStatusRejectsInvalidInput` — not `test1`.
@@ -561,11 +561,11 @@ Push back on "optimize everything" — prioritize the critical 3%.
 2. Design types first — define enums, structs, and protocols before writing logic.
 3. Implement with value semantics and composability — small functions/views, no unnecessary mutation.
 4. Document everything — `///` comments with `- Parameters:`, `- Returns:`, `- Throws:` on public items.
-5. Write tests — `TokenMonTests/<Feature>/<Type>Tests.swift` plus `Tests/Manual/CoreTestsMain.swift` for CLT-friendly parsers, covering happy paths, errors, and edge cases. Never add test-only modules to source.
+5. Write tests — `TokenMonTests/<Layer>/<Area>/<Type>Tests.swift` (mirroring the source folder) plus `Tests/Manual/CoreTestsMain.swift` for CLT-friendly parsers, covering happy paths, errors, and edge cases. Never add test-only modules to source.
 6. Review for hot paths — once correct, optimize allocation patterns, COW/copy behavior, main-actor usage, and caching (see Performance & Micro-Optimizations, and Deep Audits for review hunts).
 7. Self-review — before presenting code, verify: Are all types documented? Are there tests and are they hermetic? Is mutation minimized? Are strings eliminated in favor of enums? Are errors properly typed? Any hot-path smells (formatter-per-call, per-row full-JSON, `[UInt8]` copies, eager log strings)?
 8. **Quality gate (MANDATORY before claiming done or asking to commit/deploy)** — the same checks CI runs. From the repo root:
-   1. `make project` when files were added, moved, or removed, and commit the regenerated `TokenMon.xcodeproj` — CI fails when `make project` leaves `git diff` non-empty (project drift check). New core-test sources also go in `CORE_SOURCES` in `Scripts/run_core_tests.sh`.
+   1. `make project` when files were added, moved, or removed, and commit the regenerated `TokenMon.xcodeproj` — CI fails when `make project` leaves `git diff` non-empty (project drift check). The core test script compiles every file under `TokenMon/Core`; a provider file it needs goes in `PROVIDER_SOURCES` in `Scripts/run_core_tests.sh`. Code under `TokenMon/Core` imports no UI framework (`core_imports_no_ui` in `.swiftlint.yml`).
    2. `make lint` — SwiftLint strict; every warning is an error.
    3. `make format` — SwiftFormat lint; no drift.
    4. `make secrets` — gitleaks over the working tree and history.

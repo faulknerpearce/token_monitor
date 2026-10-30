@@ -110,4 +110,12 @@ opt_in_rules:
   - vertical_whitespace_opening_braces
   - xct_specific_matcher
 
+custom_rules:
+  core_imports_no_ui:
+    name: "Core imports no UI framework"
+    message: "TokenMon/Core builds without AppKit, SwiftUI, WebKit or SwiftData; move UI-dependent code to Platform, UI or Providers."
+    included: "TokenMon/Core/.*\\.swift"
+    regex: "^import (AppKit|SwiftUI|WebKit|SwiftData|UserNotifications)\\b"
+    severity: error
+
 reporter: "xcode"

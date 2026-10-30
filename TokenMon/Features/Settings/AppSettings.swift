@@ -377,3 +377,17 @@ final class AppSettings {
         providerOrder = order
     }
 }
+
+extension AppSettings {
+    /// Seconds between polls: the active interval while the menu is open,
+    /// the idle interval otherwise.
+    func pollSeconds(menuIsOpen: Bool) -> TimeInterval {
+        TimeInterval(menuIsOpen ? activePollSeconds : idlePollSeconds)
+    }
+
+    /// The poll interval for `provider`, or nil while it does not need
+    /// polling, so its loop parks until woken.
+    func pollInterval(for provider: MonitorProvider, menuIsOpen: Bool) -> TimeInterval? {
+        needsPolling(provider) ? pollSeconds(menuIsOpen: menuIsOpen) : nil
+    }
+}
