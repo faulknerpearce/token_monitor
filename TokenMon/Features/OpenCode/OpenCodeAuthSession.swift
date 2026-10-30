@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import os
 import WebKit
@@ -10,7 +9,7 @@ private let openCodeHosts = ["opencode.ai", "auth.opencode.ai"]
 @MainActor
 final class OpenCodeAuthSession: ProviderAuthSession {
     /// Last known workspace id (`wrk_…`) from redirect or prior fetch.
-    @Published private(set) var workspaceID: String?
+    private(set) var workspaceID: String?
 
     /// Console session cookie. The console authenticates separately from the
     /// site's `auth` cookie, so this is captured and sent to `/console/api/*`.

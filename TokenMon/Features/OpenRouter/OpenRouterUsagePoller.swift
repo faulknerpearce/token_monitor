@@ -1,15 +1,17 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Polls OpenRouter usage for the saved API key.
 @MainActor
-final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: OpenRouterSnapshot?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
-    @Published var menuIsOpen = false {
+@Observable
+final class OpenRouterUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: OpenRouterSnapshot?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -18,9 +20,9 @@ final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchSnapshot: (String) async throws -> OpenRouterSnapshot
     private let logger = Logger(category: "OpenRouter")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

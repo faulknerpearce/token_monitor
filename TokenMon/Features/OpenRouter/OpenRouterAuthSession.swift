@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Stores the user's OpenRouter API key.
@@ -7,10 +8,11 @@ import os
 /// OpenRouter authenticates with a plain bearer key (`sk-or-…`), so this
 /// session persists only the key, in the Keychain.
 @MainActor
-final class OpenRouterAuthSession: ObservableObject {
-    @Published private(set) var isSignedIn = false
-    @Published var needsSignIn = true
-    @Published private(set) var lastAuthError: String?
+@Observable
+final class OpenRouterAuthSession {
+    private(set) var isSignedIn = false
+    var needsSignIn = true
+    private(set) var lastAuthError: String?
 
     /// Fires on explicit sign-out; see `ProviderAuthSession.signedOut`.
     let signedOut = PassthroughSubject<Void, Never>()

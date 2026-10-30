@@ -2,8 +2,8 @@ import SwiftUI
 
 /// OpenRouter panel with credit budget, stats, and model spend.
 struct OpenRouterPanelView: View {
-    @ObservedObject var poller: OpenRouterUsagePoller
-    @ObservedObject var auth: OpenRouterAuthSession
+    let poller: OpenRouterUsagePoller
+    let auth: OpenRouterAuthSession
     @State private var apiKeyDraft = ""
     @State private var isReplacingKey = false
 

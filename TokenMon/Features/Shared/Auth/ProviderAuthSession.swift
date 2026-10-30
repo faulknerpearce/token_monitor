@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import Observation
 import os
 import WebKit
 
@@ -29,13 +30,14 @@ struct ProviderAuthConfig {
 /// hosts, extra persisted keys) and inherit disk refresh, sign-in state machine,
 /// cookie capture, and sign-out behavior.
 @MainActor
-class ProviderAuthSession: ObservableObject, ProviderCookieCapturing {
+@Observable
+class ProviderAuthSession: ProviderCookieCapturing {
     let config: ProviderAuthConfig
 
-    @Published private(set) var isSignedIn = false
-    @Published private(set) var accountEmail: String?
-    @Published var needsSignIn = true
-    @Published private(set) var lastAuthError: String?
+    private(set) var isSignedIn = false
+    private(set) var accountEmail: String?
+    var needsSignIn = true
+    private(set) var lastAuthError: String?
 
     /// Fires when locally stored usage history stops belonging to the session:
     /// a capture or poll for a different account than the stored identity. That

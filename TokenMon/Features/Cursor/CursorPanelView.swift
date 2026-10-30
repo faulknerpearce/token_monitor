@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Cursor usage panel (pools, daily bars, and cost stats).
 struct CursorPanelView: View {
-    @ObservedObject var poller: CursorUsagePoller
-    @ObservedObject var auth: CursorAuthSession
+    let poller: CursorUsagePoller
+    let auth: CursorAuthSession
     let openSignIn: () -> Void
 
     var body: some View {

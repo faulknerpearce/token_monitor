@@ -1,18 +1,42 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Periodically refreshes usage and publishes the latest snapshot.
 @MainActor
-final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: WeeklyUsageSnapshot?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
-    /// Daily bars for the current billing-period week; rebuilt when the
-    /// snapshot or the stored history changes, `nil` without a reset instant.
-    @Published private(set) var currentWeek: DailyUsageWeek?
-    @Published var menuIsOpen = false {
+@Observable
+final class GrokUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: WeeklyUsageSnapshot?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
+    /// The current week's bars and the inputs they were built from.
+    @ObservationIgnored private var weekCache: (key: WeekKey, week: DailyUsageWeek?)?
+
+    /// What the current week's bars depend on.
+    private struct WeekKey: Equatable {
+        var snapshotID: UUID?
+        var recordIDs: [UUID]
+        var day: Date
+    }
+
+    /// Daily bars for the current billing-period week, `nil` without a reset
+    /// instant. Rebuilt only when the snapshot, the stored history or the day
+    /// changes.
+    var currentWeek: DailyUsageWeek? {
+        let recent = history.recent
+        let key = WeekKey(
+            snapshotID: snapshot?.id,
+            recordIDs: recent.map(\.id),
+            day: Calendar.current.startOfDay(for: Date())
+        )
+        if let weekCache, weekCache.key == key { return weekCache.week }
+        let week = Self.buildWeek(recent: recent, current: snapshot, weekOffset: 0)
+        weekCache = (key, week)
+        return week
+    }
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -24,11 +48,11 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     private let fetchUsage: (String?, String?) async throws -> WeeklyUsageSnapshot
     private let logger = Logger(category: "Grok")
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     init(
         auth: GrokAuthSession,
@@ -45,14 +69,6 @@ final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
             try await GrokUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         history.setActiveAccount(auth.accountEmail)
-        // `@Published` emits the new values before they are stored, so the
-        // week is built from the emitted values.
-        history.$recent
-            .combineLatest($snapshot)
-            .sink { [weak self] recent, snapshot in
-                self?.currentWeek = Self.buildWeek(recent: recent, current: snapshot, weekOffset: 0)
-            }
-            .store(in: &cancellables)
         // Signing out drops the snapshot; the account-scoped hourly deltas are
         // kept for the same account and cleared when a different account signs in.
         auth.signedOut

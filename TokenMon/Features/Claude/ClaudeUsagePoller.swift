@@ -1,22 +1,24 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Polls Claude rate limits and builds weekly-window daily bars.
 @MainActor
-final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: ClaudeSnapshot?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
+@Observable
+final class ClaudeUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: ClaudeSnapshot?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
     /// Daily bars for the current weekly window, anchored to the pool's actual
     /// `resets_at`: % of the weekly pool burned per calendar day.
-    @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
+    private(set) var dailyBudgetDays: [DailyBudgetDay]?
     /// Claude Code usage on this Mac, valued at API rates; `nil` when Claude
     /// Code has no logs on this Mac. Read from local logs on every poll, so it
     /// needs no claude.ai session and is kept across sign-out.
-    @Published private(set) var codeUsage: ClaudeCodeUsageSummary?
-    @Published var menuIsOpen = false {
+    private(set) var codeUsage: ClaudeCodeUsageSummary?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -31,7 +33,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// `fetchUsage` unless a test supplies one.
     private let loadCodeUsage: (Date) async -> ClaudeCodeUsageSummary?
     private let logger = Logger(category: "Claude")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     /// Last observed weekly `resets_at`; anchors the chart when a later payload
     /// omits the reset time. Accumulated day deltas survive a forward move.
@@ -40,7 +42,7 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     /// the same window.
     private var budgetReferenceNow: Date?
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

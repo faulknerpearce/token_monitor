@@ -3,28 +3,27 @@ import SwiftUI
 
 /// Aggregate cards for every enabled provider plus the hourly chart.
 struct OverviewPanelView: View {
-    @ObservedObject var grokPoller: GrokUsagePoller
-    @ObservedObject var openCodePoller: OpenCodeUsagePoller
-    @ObservedObject var cursorPoller: CursorUsagePoller
-    @ObservedObject var claudePoller: ClaudeUsagePoller
-    @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
-    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
-    @ObservedObject var grokbotPoller: GrokbotUsagePoller
-    @ObservedObject var settings: AppSettings
+    let grokPoller: GrokUsagePoller
+    let openCodePoller: OpenCodeUsagePoller
+    let cursorPoller: CursorUsagePoller
+    let claudePoller: ClaudeUsagePoller
+    let chatGPTPoller: ChatGPTUsagePoller
+    let openRouterPoller: OpenRouterUsagePoller
+    let grokbotPoller: GrokbotUsagePoller
+    let settings: AppSettings
     // The hourly stores are observed so today's chart redraws when they grow.
-    @ObservedObject var grokHourly: HourlyDeltaActivityStore
-    @ObservedObject var claudeHourly: HourlyDeltaActivityStore
-    @ObservedObject var grokbotHourly: HourlyDeltaActivityStore
-    @ObservedObject var hourlyHistory: OverviewHourlyHistoryStore
+    let grokHourly: HourlyDeltaActivityStore
+    let claudeHourly: HourlyDeltaActivityStore
+    let grokbotHourly: HourlyDeltaActivityStore
+    let hourlyHistory: OverviewHourlyHistoryStore
     /// Today's live chart inputs for a moment in today.
     var todaySeries: (Date) -> OverviewDaySeries
-    @ObservedObject var grokAuth: GrokAuthSession
-    @ObservedObject var openCodeAuth: OpenCodeAuthSession
-    @ObservedObject var cursorAuth: CursorAuthSession
-    @ObservedObject var claudeAuth: ClaudeAuthSession
-    @ObservedObject var chatGPTAuth: ChatGPTAuthSession
-    @ObservedObject var openRouterAuth: OpenRouterAuthSession
-
+    let grokAuth: GrokAuthSession
+    let openCodeAuth: OpenCodeAuthSession
+    let cursorAuth: CursorAuthSession
+    let claudeAuth: ClaudeAuthSession
+    let chatGPTAuth: ChatGPTAuthSession
+    let openRouterAuth: OpenRouterAuthSession
     /// Opens the sign-in window for a provider's session.
     var openSignIn: (MonitorProvider) -> Void
     var selectOpenRouter: () -> Void
@@ -425,7 +424,7 @@ struct OverviewPanelView: View {
 /// step between days.
 struct OverviewDailyUsageCard: View {
     let now: Date
-    @ObservedObject var history: OverviewHourlyHistoryStore
+    let history: OverviewHourlyHistoryStore
     let todaySeries: (Date) -> OverviewDaySeries
     var calendar: Calendar = .current
 

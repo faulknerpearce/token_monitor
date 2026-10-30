@@ -1,22 +1,24 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Polls console Go usage with a local-estimate fallback.
 @MainActor
-final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: OpenCodeSnapshot?
-    @Published private(set) var dayHourlyUsage: OpenCodeDayHourlyUsage?
-    @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
+@Observable
+final class OpenCodeUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: OpenCodeSnapshot?
+    private(set) var dayHourlyUsage: OpenCodeDayHourlyUsage?
+    private(set) var dailyBudgetDays: [DailyBudgetDay]?
     /// Full monthly-period start matching `dailyBudgetDays` (for pace captions).
-    @Published private(set) var dailyBudgetPeriodStart: Date?
+    private(set) var dailyBudgetPeriodStart: Date?
     /// Last month build, kept so week arrows can re-slice without another SQLite read.
     private var budgetSource: OpenCodeLocalStats.OpenCodeMonthBudget?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
-    @Published private(set) var dataSourceLabel: String?
-    @Published var menuIsOpen = false {
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
+    private(set) var dataSourceLabel: String?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -26,9 +28,9 @@ final class OpenCodeUsagePoller: ObservableObject, ProviderUsagePoller {
     private let fetchConsole: (String, String?) async throws -> (OpenCodeSnapshot, String)
     private let fetchLocal: () async throws -> (OpenCodeSnapshot?, OpenCodeDayHourlyUsage?)
     private let logger = Logger(category: "OpenCode")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

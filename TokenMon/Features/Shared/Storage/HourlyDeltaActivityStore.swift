@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Tracks a provider's local-day quota growth per hour (percentage-point deltas
 /// between polls), keyed by an arbitrary `storageKey` so each provider persists
@@ -13,9 +13,10 @@ import Foundation
 /// between the last sample of one day and the first of the next is credited to
 /// the new day's first hour.
 @MainActor
-final class HourlyDeltaActivityStore: ObservableObject {
-    @Published private(set) var hourWeights: [Double]
-    @Published private(set) var dayStart: Date
+@Observable
+final class HourlyDeltaActivityStore {
+    private(set) var hourWeights: [Double]
+    private(set) var dayStart: Date
 
     private let store: FileBackedStringStore
     private let storageKey: String
@@ -23,7 +24,7 @@ final class HourlyDeltaActivityStore: ObservableObject {
     private var lastUsedPercent: Double?
     /// `DayKey` of the day `hourWeights` belongs to.
     private var dayKey: String
-    private var timeZoneObserver: NSObjectProtocol?
+    @ObservationIgnored private var timeZoneObserver: NSObjectProtocol?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 

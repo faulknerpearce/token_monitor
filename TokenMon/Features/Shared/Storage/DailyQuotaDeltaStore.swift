@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Provider-reported bounds of a quota window. Both ends are optional because
 /// providers differ: Grokbot and Cursor send a start *and* a reset instant,
@@ -85,9 +85,10 @@ enum QuotaWindowTransition: Hashable, Sendable {
 /// start-of-day dates in the store's calendar, and again when the system time
 /// zone changes. Only the last `retentionDays` days are kept.
 @MainActor
-final class DailyQuotaDeltaStore: ObservableObject {
+@Observable
+final class DailyQuotaDeltaStore {
     /// Local-start-of-day → percentage-point growth of the tracked window.
-    @Published private(set) var spentByDay: [Date: Double] = [:]
+    private(set) var spentByDay: [Date: Double] = [:]
 
     /// Days kept, counted back from today. Covers a 31-day billing cycle plus
     /// its reset-day bar and the Monday-aligned week the monthly chart shows.
@@ -122,7 +123,7 @@ final class DailyQuotaDeltaStore: ObservableObject {
     private let decoder = JSONDecoder()
     /// Last payload read from or written to disk; `persist()` skips identical writes.
     private var persisted: Payload?
-    private var timeZoneObserver: NSObjectProtocol?
+    @ObservationIgnored private var timeZoneObserver: NSObjectProtocol?
 
     /// `dayTotals` holds the days by `DayKey`. `days` holds the same totals
     /// keyed by start-of-day instants, the format of payloads without

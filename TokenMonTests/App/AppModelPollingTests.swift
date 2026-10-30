@@ -20,7 +20,6 @@ final class AppModelPollingTests: XCTestCase {
         XCTAssertEqual(model.providers.pollers(sharingSessionWith: .cursor).count, 2)
         XCTAssertEqual(model.providers.pollers(sharingSessionWith: .grokbot).count, 2)
         XCTAssertEqual(model.providers.pollers(sharingSessionWith: .claude).count, 1)
-        XCTAssertEqual(model.providers.sessions.count, MonitorProvider.usageProviders.count - 1)
     }
 
     /// Grokbot opens Cursor's sign-in window; every other provider its own.

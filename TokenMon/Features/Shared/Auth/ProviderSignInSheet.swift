@@ -11,7 +11,7 @@ protocol ProviderSignInProviding: ProviderCookieCapturing {
 
 /// Auth types that can capture a WebKit session for a provider sign-in sheet.
 @MainActor
-protocol ProviderCookieCapturing: ObservableObject {
+protocol ProviderCookieCapturing: AnyObject, Observable {
     var lastAuthError: String? { get }
     var accountEmail: String? { get }
     /// Isolated WebKit store this provider signs into and captures from.
@@ -56,11 +56,11 @@ struct ProviderSignInConfig {
 /// Guided sign-in: the user signs in on the provider's own page and the sheet
 /// finishes on its own, showing a brief confirmation before it closes.
 struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
-    @ObservedObject var auth: Auth
+    let auth: Auth
     let config: ProviderSignInConfig
     var onComplete: () -> Void
 
-    @StateObject private var browser = SignInBrowserController()
+    @State private var browser = SignInBrowserController()
     @State private var phase: Phase = .signingIn
     @State private var didHintTimeout = false
     @State private var isDismissed = false
@@ -262,8 +262,7 @@ struct ProviderSignInSheet<Auth: ProviderCookieCapturing>: View {
 
 /// Back / Forward / Reload / Close popup chrome for the sign-in WebKit host.
 private struct SignInNavigationBar: View {
-    @ObservedObject var browser: SignInBrowserController
-
+    let browser: SignInBrowserController
     var body: some View {
         HStack(spacing: 8) {
             Button(action: browser.goBack) {

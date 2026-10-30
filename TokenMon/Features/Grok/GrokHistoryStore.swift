@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 import os
 import SwiftData
 
@@ -76,7 +76,8 @@ final class UsageSnapshotRecord {
 /// Persists one snapshot per calendar day and account, and publishes the
 /// recent window for the active account.
 @MainActor
-final class GrokHistoryStore: ObservableObject {
+@Observable
+final class GrokHistoryStore {
     private static let logger = Logger(category: "GrokHistoryStore")
 
     private var container: ModelContainer?
@@ -85,7 +86,7 @@ final class GrokHistoryStore: ObservableObject {
     private var dirty = false
 
     /// Rows for `activeAccount`, newest first.
-    @Published private(set) var recent: [WeeklyUsageSnapshot] = []
+    private(set) var recent: [WeeklyUsageSnapshot] = []
 
     /// Account email whose rows `recent` holds and same-day collapsing
     /// matches. Rows of other accounts stay on disk (and in exports) and feed
@@ -95,7 +96,7 @@ final class GrokHistoryStore: ObservableObject {
     /// True when the persistent store could not be opened. History then runs
     /// session-only (in-memory); Settings surfaces this so the user knows the
     /// data is lost on relaunch.
-    @Published private(set) var storeFailed = false
+    private(set) var storeFailed = false
 
     init(inMemory: Bool = false) {
         if let container = Self.makeContainer(inMemory: inMemory) {

@@ -2,10 +2,9 @@ import SwiftUI
 
 /// Panel section showing the SuperGrok weekly pool, categories, and daily chart.
 struct GrokPanelView: View {
-    @ObservedObject var auth: GrokAuthSession
-    @ObservedObject var poller: GrokUsagePoller
-    @ObservedObject var settings: AppSettings
-
+    let auth: GrokAuthSession
+    let poller: GrokUsagePoller
+    let settings: AppSettings
     let openSignIn: () -> Void
 
     /// 0 = current calendar week; negative = past weeks.

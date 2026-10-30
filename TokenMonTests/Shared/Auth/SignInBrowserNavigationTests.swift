@@ -114,13 +114,11 @@ final class SignInBrowserNavigationTests: XCTestCase {
 
     // MARK: - Controller publishing
 
-    /// Re-applying unchanged state publishes no `objectWillChange`.
+    /// Re-applying unchanged state notifies no observer.
     @MainActor
     func testApplyDoesNotPublishWhenNothingChanged() {
         let controller = SignInBrowserController()
-        var changes = 0
-        let token = controller.objectWillChange.sink { _ in changes += 1 }
-        defer { token.cancel() }
+        let probe = ObservationProbe { _ = (controller.canGoBack, controller.canGoForward, controller.isLoading, controller.currentURL, controller.popupDepth) }
 
         controller.apply(
             canGoBack: true,
@@ -129,8 +127,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
             currentURL: "https://chatgpt.com/",
             popupDepth: 1
         )
-        let afterFirst = changes
-        XCTAssertGreaterThan(afterFirst, 0)
+        XCTAssertTrue(probe.changed())
 
         for _ in 0..<5 {
             controller.apply(
@@ -141,7 +138,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
                 popupDepth: 1
             )
         }
-        XCTAssertEqual(changes, afterFirst)
+        XCTAssertFalse(probe.changed())
     }
 
     @MainActor
@@ -157,9 +154,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
         XCTAssertFalse(controller.hasPopup)
         XCTAssertFalse(controller.backIsEnabled)
 
-        var changes = 0
-        let token = controller.objectWillChange.sink { _ in changes += 1 }
-        defer { token.cancel() }
+        let probe = ObservationProbe { _ = (controller.canGoBack, controller.canGoForward, controller.isLoading, controller.currentURL, controller.popupDepth) }
 
         controller.apply(
             canGoBack: false,
@@ -168,7 +163,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
             currentURL: "https://cursor.com/",
             popupDepth: 1
         )
-        XCTAssertEqual(changes, 1)
+        XCTAssertTrue(probe.changed())
         XCTAssertTrue(controller.hasPopup)
         XCTAssertTrue(controller.backIsEnabled, "Back must dismiss a popup with no history")
 
@@ -179,7 +174,7 @@ final class SignInBrowserNavigationTests: XCTestCase {
             currentURL: "https://accounts.google.com/",
             popupDepth: 1
         )
-        XCTAssertEqual(changes, 2)
+        XCTAssertTrue(probe.changed())
         XCTAssertEqual(controller.currentURL, "https://accounts.google.com/")
     }
 
@@ -196,14 +191,12 @@ final class SignInBrowserNavigationTests: XCTestCase {
         )
         controller.attach(browser)
 
-        var changes = 0
-        let token = controller.objectWillChange.sink { _ in changes += 1 }
-        defer { token.cancel() }
+        let probe = ObservationProbe { _ = (controller.canGoBack, controller.canGoForward, controller.isLoading, controller.currentURL, controller.popupDepth) }
 
         for _ in 0..<5 {
             controller.attach(browser)
         }
-        XCTAssertEqual(changes, 0, "Re-attaching the same browser must not publish")
+        XCTAssertFalse(probe.changed(), "Re-attaching the same browser must not publish")
     }
 
     // MARK: - Sign-in browser identity
@@ -274,12 +267,10 @@ final class SignInBrowserNavigationTests: XCTestCase {
         )
         controller.attach(browser)
 
-        var changes = 0
-        let token = controller.objectWillChange.sink { _ in changes += 1 }
-        defer { token.cancel() }
+        let probe = ObservationProbe { _ = (controller.canGoBack, controller.canGoForward, controller.isLoading, controller.currentURL, controller.popupDepth) }
 
         controller.rearmReturn()
-        XCTAssertEqual(changes, 0)
+        XCTAssertFalse(probe.changed())
     }
 
     func testGrokAuthHostUsesExactOrSuffixMatch() {

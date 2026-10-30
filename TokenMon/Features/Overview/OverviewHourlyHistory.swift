@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// A provider series on the Overview hourly chart.
 ///
@@ -84,12 +84,13 @@ extension ProviderDayHourlyUsage {
 /// current day's hours, so earlier days exist only from when they were
 /// recorded here. Days older than `retentionDays` are dropped.
 @MainActor
-final class OverviewHourlyHistoryStore: ObservableObject {
+@Observable
+final class OverviewHourlyHistoryStore {
     /// Number of days kept, including today.
     static let retentionDays = 30
 
     /// Saved days keyed by ``DayKey``.
-    @Published private(set) var days: [String: OverviewDaySeries]
+    private(set) var days: [String: OverviewDaySeries]
 
     private struct Payload: Codable, Equatable {
         var version = 1

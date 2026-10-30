@@ -1,5 +1,5 @@
 import AppKit
-import Combine
+import Observation
 import WebKit
 
 /// Observable chrome for the provider sign-in browser.
@@ -8,12 +8,13 @@ import WebKit
 /// Reload / Close popup. The AppKit `SignInBrowserView` publishes live
 /// `WKWebView` state into it.
 @MainActor
-final class SignInBrowserController: ObservableObject {
-    @Published private(set) var canGoBack = false
-    @Published private(set) var canGoForward = false
-    @Published private(set) var isLoading = false
-    @Published private(set) var currentURL = ""
-    @Published private(set) var popupDepth = 0
+@Observable
+final class SignInBrowserController {
+    private(set) var canGoBack = false
+    private(set) var canGoForward = false
+    private(set) var isLoading = false
+    private(set) var currentURL = ""
+    private(set) var popupDepth = 0
 
     /// True while an OAuth `window.open` popup is covering the provider page.
     var hasPopup: Bool { popupDepth > 0 }
@@ -21,7 +22,7 @@ final class SignInBrowserController: ObservableObject {
     /// Back is enabled when the frontmost page has history, or a popup can be dismissed.
     var backIsEnabled: Bool { canGoBack || hasPopup }
 
-    fileprivate weak var browser: SignInBrowserView?
+    @ObservationIgnored private weak var browser: SignInBrowserView?
 
     /// Wires this controller to its AppKit browser. Idempotent: re-attaching the
     /// same view is a no-op.
@@ -41,8 +42,8 @@ final class SignInBrowserController: ObservableObject {
     func rearmReturn() { browser?.rearmReturn() }
 
     /// Publishes live web view state. Only changed values are assigned, since
-    /// `@Published` emits on every assignment and unconditional writes would
-    /// create an endless publish/update cycle.
+    /// every assignment to an observed property notifies its views and
+    /// unconditional writes would create an endless update cycle.
     func apply(
         canGoBack: Bool,
         canGoForward: Bool,

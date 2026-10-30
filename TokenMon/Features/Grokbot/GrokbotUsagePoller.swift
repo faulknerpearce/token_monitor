@@ -1,18 +1,20 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Periodically refreshes the Grok Bot allowance from the shared Cursor session.
 @MainActor
-final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: GrokbotSnapshot?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
+@Observable
+final class GrokbotUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: GrokbotSnapshot?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
     /// Daily bars for the current allowance period, anchored to the provider's
     /// own `next_reset_timestamp_utc`: % of the pool burned per calendar day.
-    @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
-    @Published var menuIsOpen = false {
+    private(set) var dailyBudgetDays: [DailyBudgetDay]?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -25,7 +27,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchSnapshot: (String, String?) async throws -> GrokbotSnapshot
     private let logger = Logger(category: "Grokbot")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     /// Last observed reset instant, so the chart stays anchored if a later
     /// payload omits it.
@@ -34,7 +36,7 @@ final class GrokbotUsagePoller: ObservableObject, ProviderUsagePoller {
     /// the same window.
     private var budgetReferenceNow: Date?
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

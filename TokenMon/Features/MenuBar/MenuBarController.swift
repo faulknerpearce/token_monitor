@@ -1,5 +1,5 @@
 import AppKit
-import Combine
+import Observation
 import SwiftUI
 
 /// Owns the menu bar status item and its dropdown panel.
@@ -21,7 +21,7 @@ final class MenuBarController: NSObject {
     private var hosting: NSHostingController<MenuBarPanelContent>?
     /// Whether the panel is shorter than its content; drives the scroll bar.
     private let scrollState = MenuBarPanelScrollState()
-    private var cancellables = Set<AnyCancellable>()
+    private var statusLoop: ObservationLoop?
     private var regions: [MenuBarStatusRenderer.Region] = []
     private var escapeMonitor: Any?
     private var observers: [NSObjectProtocol] = []
@@ -74,33 +74,15 @@ final class MenuBarController: NSObject {
             return dismissed ? nil : event
         }
 
-        observeStatusInputs()
         observeAppearance()
-
-        // `AppModel` emits once per burst of changes, after the values are set.
-        // Content height can change (e.g. switching provider tabs), so re-fit
-        // the panel's bottom edge once SwiftUI has laid out.
-        model.objectWillChange
-            .sink { [weak self] _ in
-                DispatchQueue.main.async { self?.resizePanelIfNeeded() }
+        statusLoop = ObservationLoop(
+            coalescing: AppModel.changeCoalescing,
+            track: { [weak self] in self?.statusInput() },
+            handle: { [weak self] input in
+                guard let input else { return }
+                self?.render(input)
             }
-            .store(in: &cancellables)
-
-        refreshStatusItem()
-    }
-
-    /// Re-renders the status image when anything it draws changes. `@Published`
-    /// emits in `willSet`; the throttle delivers on a later run-loop pass, after
-    /// the new values are stored.
-    private func observeStatusInputs() {
-        let inputs: [AnyPublisher<Void, Never>] = [
-            model.settings.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            model.grokAuth.objectWillChange.map { _ in () }.eraseToAnyPublisher()
-        ] + model.providers.all.map { $0.poller.objectWillChange.map { _ in () }.eraseToAnyPublisher() }
-        Publishers.MergeMany(inputs)
-            .throttle(for: AppModel.changeCoalescing, scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] in self?.refreshStatusItem() }
-            .store(in: &cancellables)
+        )
     }
 
     /// The label bitmap bakes in the menu bar's label colour, so a light/dark
@@ -123,25 +105,34 @@ final class MenuBarController: NSObject {
         })
     }
 
+    /// Re-renders the status image for the current inputs (after an
+    /// appearance change, which the inputs do not cover).
     private func refreshStatusItem() {
+        render(statusInput())
+    }
+
+    /// Everything the status image draws. Reading it inside `statusLoop`
+    /// makes each value it reads a dependency.
+    private func statusInput() -> MenuBarStatusRenderer.Input {
         let settings = model.settings
-        let rendered = MenuBarStatusRenderer.render(
-            MenuBarStatusRenderer.Input(
-                selectedProvider: settings.selectedProvider,
-                showSelectedProvider: settings.showSelectedProviderInMenuBar,
-                usedPercent: Dictionary(uniqueKeysWithValues: model.providers.all.compactMap { entry in
-                    entry.poller.headlineUsedPercent.map { (entry.provider, $0) }
-                }),
-                grokSnapshot: model.grokPoller.snapshot,
-                isGrokSignedIn: model.grokAuth.isSignedIn && !model.grokAuth.needsSignIn,
-                menuBarGraphs: settings.menuBarGraphProviders,
-                showGrokCategories: settings.showCategoriesInMenuBar,
-                providerOrder: settings.orderedUsageProviders,
-                visibleProductIDs: settings.visibleProductIDs,
-                enabledProviders: settings.enabledProviderIDs
-            ),
-            appearance: statusItem.button?.effectiveAppearance
+        return MenuBarStatusRenderer.Input(
+            selectedProvider: settings.selectedProvider,
+            showSelectedProvider: settings.showSelectedProviderInMenuBar,
+            usedPercent: Dictionary(uniqueKeysWithValues: model.providers.all.compactMap { entry in
+                entry.poller.headlineUsedPercent.map { (entry.provider, $0) }
+            }),
+            grokSnapshot: model.grokPoller.snapshot,
+            isGrokSignedIn: model.grokAuth.isSignedIn && !model.grokAuth.needsSignIn,
+            menuBarGraphs: settings.menuBarGraphProviders,
+            showGrokCategories: settings.showCategoriesInMenuBar,
+            providerOrder: settings.orderedUsageProviders,
+            visibleProductIDs: settings.visibleProductIDs,
+            enabledProviders: settings.enabledProviderIDs
         )
+    }
+
+    private func render(_ input: MenuBarStatusRenderer.Input) {
+        let rendered = MenuBarStatusRenderer.render(input, appearance: statusItem.button?.effectiveAppearance)
         regions = rendered.regions
         guard rendered.key != statusKey else { return }
         statusKey = rendered.key
@@ -178,7 +169,14 @@ final class MenuBarController: NSObject {
         // `sizingOptions` stays at its default: a window AppKit resizes itself
         // grows from the wrong edge and the content shifts, so the panel frame
         // is set explicitly from the status item.
-        let hosting = NSHostingController(rootView: MenuBarPanelContent(model: model, scrollState: scrollState))
+        let hosting = NSHostingController(rootView: MenuBarPanelContent(
+            model: model,
+            scrollState: scrollState,
+            contentHeightChanged: { [weak self] in
+                // Re-fit after SwiftUI has laid out the new height.
+                DispatchQueue.main.async { self?.resizePanelIfNeeded() }
+            }
+        ))
         self.hosting = hosting
         panel.contentViewController = hosting
 
@@ -285,12 +283,19 @@ final class MenuBarController: NSObject {
 /// panel re-fits a tick later, and a scroll bar would flash in that gap.
 private struct MenuBarPanelContent: View {
     let model: AppModel
-    @ObservedObject var scrollState: MenuBarPanelScrollState
+    let scrollState: MenuBarPanelScrollState
+    /// Called when the content's height changes (a tab switch, a section
+    /// opening, new data), so the panel can re-fit its bottom edge.
+    let contentHeightChanged: () -> Void
 
     var body: some View {
         ScrollView(.vertical) {
             MenuBarRoot(model: model)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: PanelContentHeightKey.self, value: geometry.size.height)
+                })
         }
+        .onPreferenceChange(PanelContentHeightKey.self) { _ in contentHeightChanged() }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(scrollState.isHeightClamped ? .automatic : .never)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -300,6 +305,16 @@ private struct MenuBarPanelContent: View {
 /// Whether the dropdown panel is shorter than its content because the screen
 /// clamped its height.
 @MainActor
-final class MenuBarPanelScrollState: ObservableObject {
-    @Published var isHeightClamped = false
+@Observable
+final class MenuBarPanelScrollState {
+    var isHeightClamped = false
+}
+
+/// The dropdown content's laid-out height.
+private struct PanelContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }

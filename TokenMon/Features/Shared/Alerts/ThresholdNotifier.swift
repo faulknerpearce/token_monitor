@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import os
 import UserNotifications
@@ -13,7 +12,7 @@ struct ThresholdAlert: Equatable {
 /// Fires one local notification per usage-threshold crossing, tracked
 /// separately for each provider and account.
 @MainActor
-final class ThresholdNotifier: ObservableObject {
+final class ThresholdNotifier {
     private let logger = Logger(category: "Alerts")
     private let defaults: UserDefaults
     /// Delivery seam (tests record calls); defaults to a local notification.

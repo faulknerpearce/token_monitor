@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import ServiceManagement
 import SwiftUI
 
@@ -23,11 +24,12 @@ enum PanelSection: String, Codable, CaseIterable, Hashable, Sendable {
 
 /// Persisted user settings published to pollers and menu-bar surfaces.
 @MainActor
-final class AppSettings: ObservableObject {
+@Observable
+final class AppSettings {
     private let defaults: UserDefaults
     private let loginItem: LoginItemService
 
-    @Published var showCategoriesInMenuBar: Bool {
+    var showCategoriesInMenuBar: Bool {
         didSet {
             guard showCategoriesInMenuBar != oldValue else { return }
             defaults.set(showCategoriesInMenuBar, forKey: Keys.showCategories)
@@ -37,7 +39,7 @@ final class AppSettings: ObservableObject {
     /// Providers whose usage graph shows in the menu bar (see
     /// `MonitorProvider.supportsMenuBarGraph`). Grok's segment shows whenever
     /// Grok is enabled; this set adds its bar.
-    @Published var menuBarGraphProviders: Set<MonitorProvider> {
+    var menuBarGraphProviders: Set<MonitorProvider> {
         didSet {
             guard menuBarGraphProviders != oldValue else { return }
             defaults.set(menuBarGraphProviders.map(\.rawValue).sorted(), forKey: Keys.menuBarGraphs)
@@ -61,7 +63,7 @@ final class AppSettings: ObservableObject {
     /// When on, TokenMon checks GitHub for a newer release and shows a row in
     /// the menu when one exists. Installing it is a separate, user-initiated
     /// action (`UpdateChecker.installAvailableUpdate`).
-    @Published var checksForUpdates: Bool {
+    var checksForUpdates: Bool {
         didSet {
             guard checksForUpdates != oldValue else { return }
             defaults.set(checksForUpdates, forKey: Keys.checksForUpdates)
@@ -70,14 +72,14 @@ final class AppSettings: ObservableObject {
 
     /// When on, the menu bar shows only the selected provider (icon + % + bar);
     /// when off, it shows the pinned graph composite.
-    @Published var showSelectedProviderInMenuBar: Bool {
+    var showSelectedProviderInMenuBar: Bool {
         didSet {
             guard showSelectedProviderInMenuBar != oldValue else { return }
             defaults.set(showSelectedProviderInMenuBar, forKey: Keys.showSelectedProvider)
         }
     }
 
-    @Published var activePollSeconds: Int {
+    var activePollSeconds: Int {
         didSet {
             let clamped = Self.clampActivePoll(activePollSeconds)
             if activePollSeconds != clamped { activePollSeconds = clamped }
@@ -85,7 +87,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var idlePollSeconds: Int {
+    var idlePollSeconds: Int {
         didSet {
             let clamped = Self.clampIdlePoll(idlePollSeconds)
             if idlePollSeconds != clamped { idlePollSeconds = clamped }
@@ -93,13 +95,13 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var thresholdEnabled: Bool {
+    var thresholdEnabled: Bool {
         didSet { defaults.set(thresholdEnabled, forKey: Keys.thresholdEnabled) }
     }
 
     /// Providers the usage alert watches while it is on. Only these keep
     /// polling for the alert when they are not otherwise needed.
-    @Published var alertProviders: Set<MonitorProvider> {
+    var alertProviders: Set<MonitorProvider> {
         didSet {
             guard alertProviders != oldValue else { return }
             defaults.set(alertProviders.map(\.rawValue).sorted(), forKey: Keys.alertProviders)
@@ -111,7 +113,7 @@ final class AppSettings: ObservableObject {
         thresholdEnabled && alertProviders.contains(provider)
     }
 
-    @Published var thresholdPercent: Double {
+    var thresholdPercent: Double {
         didSet {
             let clamped = Self.clampThreshold(thresholdPercent)
             if thresholdPercent != clamped { thresholdPercent = clamped }
@@ -119,14 +121,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var visibleProductIDs: Set<String> {
+    var visibleProductIDs: Set<String> {
         didSet {
             defaults.set(Array(visibleProductIDs), forKey: Keys.visibleProducts)
         }
     }
 
     /// Panel sections the user has closed; every other section is open.
-    @Published var collapsedPanelSections: Set<PanelSection> {
+    var collapsedPanelSections: Set<PanelSection> {
         didSet {
             guard collapsedPanelSections != oldValue else { return }
             defaults.set(collapsedPanelSections.map(\.rawValue).sorted(), forKey: Keys.collapsedPanelSections)
@@ -159,7 +161,7 @@ final class AppSettings: ObservableObject {
 
     /// Saved permutation of usage providers; drives tab order, Overview cards,
     /// and composite menu-bar graph order.
-    @Published var providerOrder: [MonitorProvider] {
+    var providerOrder: [MonitorProvider] {
         didSet {
             guard providerOrder != oldValue else { return }
             // Assigning inside `didSet` does not re-run the observer, so the
@@ -172,7 +174,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var enabledProviderIDs: Set<MonitorProvider> {
+    var enabledProviderIDs: Set<MonitorProvider> {
         didSet {
             guard enabledProviderIDs != oldValue else { return }
             if enabledProviderIDs.isEmpty || !enabledProviderIDs.isSubset(of: Set(MonitorProvider.usageProviders)) {
@@ -187,7 +189,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var selectedProvider: MonitorProvider {
+    var selectedProvider: MonitorProvider {
         didSet {
             guard selectedProvider != oldValue else { return }
             defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider)
@@ -196,7 +198,7 @@ final class AppSettings: ObservableObject {
 
     /// On when the login item is registered, including while macOS still waits
     /// for the user to approve it (see `launchAtLoginNeedsApproval`).
-    @Published var launchAtLogin: Bool {
+    var launchAtLogin: Bool {
         didSet {
             guard !isRevertingLaunchAtLogin, launchAtLogin != oldValue else { return }
             updateLaunchAtLogin()
@@ -205,7 +207,7 @@ final class AppSettings: ObservableObject {
 
     /// True while the login item is registered but awaiting approval in
     /// System Settings › General › Login Items.
-    @Published private(set) var launchAtLoginNeedsApproval = false
+    private(set) var launchAtLoginNeedsApproval = false
 
     /// A provider polls only when the user has it enabled. The selection and
     /// menu-bar flags filter visibility; this gate stops a disabled provider

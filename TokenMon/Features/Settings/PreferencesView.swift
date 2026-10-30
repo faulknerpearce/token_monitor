@@ -10,9 +10,9 @@ import UniformTypeIdentifiers
 /// provider's session or poller.
 struct PreferencesView: View {
     let model: AppModel
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var history: GrokHistoryStore
-    @ObservedObject var updateChecker: UpdateChecker
+    @Bindable var settings: AppSettings
+    let history: GrokHistoryStore
+    let updateChecker: UpdateChecker
     let openWindow: (AppWindow) -> Void
 
     var body: some View {
@@ -41,9 +41,8 @@ struct PreferencesView: View {
 /// Startup, updates, refresh timing, alerts, and quitting.
 private struct GeneralSettingsTab: View {
     let model: AppModel
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var updateChecker: UpdateChecker
-
+    @Bindable var settings: AppSettings
+    let updateChecker: UpdateChecker
     var body: some View {
         Form {
             Section("Startup") {
@@ -153,7 +152,7 @@ private struct GeneralSettingsTab: View {
 
 /// Which provider tabs show and in what order, and what the menu bar draws.
 private struct ProvidersSettingsTab: View {
-    @ObservedObject var settings: AppSettings
+    @Bindable var settings: AppSettings
     @State private var draggingProvider: MonitorProvider?
 
     var body: some View {
@@ -290,8 +289,8 @@ private struct AccountsSettingsTab: View {
 
 /// SuperGrok categories plus exporting and clearing local history.
 private struct DataSettingsTab: View {
-    @ObservedObject var settings: AppSettings
-    @ObservedObject var history: GrokHistoryStore
+    @Bindable var settings: AppSettings
+    let history: GrokHistoryStore
     @State private var exportError: String?
 
     var body: some View {
@@ -394,7 +393,7 @@ private struct ProviderReorderDropDelegate: DropDelegate {
 /// who is signed in, and the sign-in actions.
 private struct ProviderAccountRow: View {
     let provider: MonitorProvider
-    @ObservedObject var auth: ProviderAuthSession
+    let auth: ProviderAuthSession
     let signInTitle: String
     let openSignIn: () -> Void
 
@@ -432,7 +431,7 @@ private struct ProviderAccountRow: View {
 
 /// OpenRouter account rows; OpenRouter connects with an API key.
 private struct OpenRouterAccountSection: View {
-    @ObservedObject var auth: OpenRouterAuthSession
+    let auth: OpenRouterAuthSession
     let poller: OpenRouterUsagePoller
     @State private var keyDraft = ""
 
@@ -469,7 +468,7 @@ private struct OpenRouterAccountSection: View {
 
 /// A poller's last refresh time and, without a `label`, its last error.
 private struct PollerRefreshStatus<Poller: ProviderUsagePoller>: View {
-    @ObservedObject var poller: Poller
+    let poller: Poller
     /// Prefixes the time with the provider name (Overview lists every provider).
     let label: String?
 

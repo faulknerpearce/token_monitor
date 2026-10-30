@@ -1,18 +1,20 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Polls Cursor usage and builds billing-cycle daily bars.
 @MainActor
-final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: CursorSnapshot?
-    @Published private(set) var dayHourlyUsage: CursorDayHourlyUsage?
-    @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
-    @Published private(set) var dataSourceLabel: String?
-    @Published var menuIsOpen = false {
+@Observable
+final class CursorUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: CursorSnapshot?
+    private(set) var dayHourlyUsage: CursorDayHourlyUsage?
+    private(set) var dailyBudgetDays: [DailyBudgetDay]?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
+    private(set) var dataSourceLabel: String?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -23,7 +25,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     private let fetchSnapshot:
         (String) async throws -> (CursorSnapshot, CursorDayHourlyUsage, [Date: Double])
     private let logger = Logger(category: "Cursor")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     /// Last observed billing-cycle end, so the chart stays anchored if a later
     /// payload omits it.
@@ -46,7 +48,7 @@ final class CursorUsagePoller: ObservableObject, ProviderUsagePoller {
     /// are paged at most every `CursorUsageClient.eventsRefreshInterval`.
     private let eventCache: CursorEventCache
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

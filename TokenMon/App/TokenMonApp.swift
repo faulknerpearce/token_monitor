@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 /// Menu-bar app root wiring `AppModel` to settings and sign-in scenes.
@@ -82,7 +81,7 @@ enum AppWindow: Hashable {
 
 /// Shared app services owned for the process lifetime.
 @MainActor
-final class AppModel: ObservableObject {
+final class AppModel {
     let grokAuth: GrokAuthSession
     let openCodeAuth: OpenCodeAuthSession
     let cursorAuth: CursorAuthSession
@@ -110,14 +109,13 @@ final class AppModel: ObservableObject {
     let providers: ProviderRegistry
     let updateChecker: UpdateChecker
 
-    private var cancellables = Set<AnyCancellable>()
+    private var observers: [ObservationLoop] = []
     private var terminateObserver: NSObjectProtocol?
     private var wakeGate: SystemWakeGate?
-    private let childChanges = PassthroughSubject<Void, Never>()
 
-    /// Window over which bursts of child changes (one poll emits several)
-    /// collapse into a single `objectWillChange`.
-    static let changeCoalescing: RunLoop.SchedulerTimeType.Stride = .milliseconds(100)
+    /// Wait after a change before reacting, so a burst of changes (one poll
+    /// sets several values) is handled once.
+    static let changeCoalescing: Duration = .milliseconds(100)
 
     /// A menu open refreshes a provider only when its data is older than this,
     /// so quickly reopening the menu reuses the loaded data.
@@ -192,31 +190,12 @@ final class AppModel: ObservableObject {
             // Grokbot bills through the Cursor account and shares its session.
             .init(provider: .grokbot, poller: grokbotPoller, auth: cursorAuth)
         ])
-        // One coalesced change per burst, delivered after the values are set.
-        childChanges
-            .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &cancellables)
         observeOverviewInputs()
-        forwardChanges(from: settings)
-        forwardChanges(from: grokHistory)
-        forwardChanges(from: grokHourly)
-        forwardChanges(from: claudeHourly)
-        forwardChanges(from: claudeDaily)
-        forwardChanges(from: cursorDaily)
-        forwardChanges(from: grokbotHourly)
-        forwardChanges(from: grokbotDaily)
-        for (_, providerPoller) in providers.all {
-            forwardChanges(from: providerPoller)
-        }
-        for session in providers.sessions {
-            forwardChanges(from: session)
-        }
-        forwardChanges(from: updateChecker)
-        settings.$checksForUpdates
-            .dropFirst()
-            .sink { [weak self] _ in self?.updateChecker.settingChanged() }
-            .store(in: &cancellables)
+        observers.append(ObservationLoop(
+            initial: false,
+            track: { [settings] in settings.checksForUpdates },
+            handle: { [updateChecker] _ in updateChecker.settingChanged() }
+        ))
         observePollingInputs()
         observeUsageAlerts()
         guard !Self.isRunningTests else { return }
@@ -261,66 +240,67 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Records today's Overview chart inputs when one of them changes: the
-    /// hourly stores, the pollers' hourly usage, or the enabled providers.
-    /// The history itself is not an input, so recording it does not loop.
+    /// Records today's Overview chart inputs whenever one of them changes.
+    /// Building the series reads exactly those inputs; recording happens
+    /// outside tracking, so writing the history does not loop.
     private func observeOverviewInputs() {
-        let inputs: [AnyPublisher<Void, Never>] = [
-            grokHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            claudeHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            grokbotHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            cursorPoller.$dayHourlyUsage.map { _ in () }.eraseToAnyPublisher(),
-            openCodePoller.$dayHourlyUsage.map { _ in () }.eraseToAnyPublisher(),
-            settings.$enabledProviderIDs.map { _ in () }.eraseToAnyPublisher()
-        ]
-        Publishers.MergeMany(inputs)
-            .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] in self?.recordOverviewHistory() }
-            .store(in: &cancellables)
+        observers.append(ObservationLoop(
+            coalescing: Self.changeCoalescing,
+            track: { [weak self] in self?.overviewSeries(on: Date()) ?? OverviewDaySeries() },
+            handle: { [overviewHistory] series in overviewHistory.record(series, at: Date()) }
+        ))
     }
 
-    /// Re-arms the polling loops when a setting that feeds their interval or
-    /// "needed" check changes, and refreshes a provider at once when its menu
-    /// bar graph is switched on.
+    /// Re-arms the polling loops when an input to their interval or "needed"
+    /// check changes, and refreshes a provider at once when its menu bar graph
+    /// is switched on.
     private func observePollingInputs() {
-        settings.objectWillChange
-            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
-            .sink { [weak self] _ in self?.forEachPollingLoop { $0.wake() } }
-            .store(in: &cancellables)
-        // A graph switched on refreshes its provider at once.
-        settings.$menuBarGraphProviders
-            .scan((previous: Set<MonitorProvider>(), added: Set<MonitorProvider>())) { state, current in
-                (current, current.subtracting(state.previous))
-            }
-            .dropFirst()
-            .sink { [weak self] state in
-                guard let self else { return }
-                for (provider, providerPoller) in providers.all where state.added.contains(provider) {
+        observers.append(ObservationLoop(
+            coalescing: Self.changeCoalescing,
+            initial: false,
+            track: { [settings] in
+                (
+                    MonitorProvider.usageProviders.map(settings.needsPolling),
+                    settings.activePollSeconds,
+                    settings.idlePollSeconds
+                )
+            },
+            handle: { [weak self] _ in self?.forEachPollingLoop { $0.wake() } }
+        ))
+        var shownGraphs = settings.menuBarGraphProviders
+        observers.append(ObservationLoop(
+            initial: false,
+            track: { [settings] in settings.menuBarGraphProviders },
+            handle: { [weak self] graphs in
+                let added = graphs.subtracting(shownGraphs)
+                shownGraphs = graphs
+                for (provider, providerPoller) in self?.providers.all ?? [] where added.contains(provider) {
                     Task { await providerPoller.refreshNow() }
                 }
             }
-            .store(in: &cancellables)
+        ))
     }
 
-    /// Evaluates the usage alert after each change of a provider poller,
-    /// from its headline figures.
+    /// Evaluates the usage alert whenever a provider's headline figures or the
+    /// alert settings change.
     private func observeUsageAlerts() {
         for (provider, providerPoller) in providers.all {
-            providerPoller.objectWillChange
-                .receive(on: RunLoop.main)
-                .sink { [weak self, weak providerPoller] _ in
-                    guard let self, let providerPoller,
-                          let usedPercent = providerPoller.headlineUsedPercent
-                    else { return }
+            observers.append(ObservationLoop(
+                track: { [settings] in
+                    _ = (settings.thresholdEnabled, settings.thresholdPercent, settings.alertProviders)
+                    return (providerPoller.headlineUsedPercent, providerPoller.headlineResetsAt, providerPoller.alertAccount)
+                },
+                handle: { [weak self] reading in
+                    guard let self, let usedPercent = reading.0 else { return }
                     notifier.evaluate(
                         provider: provider,
                         usedPercent: usedPercent,
                         settings: settings,
-                        account: providerPoller.alertAccount,
-                        resetsAt: providerPoller.headlineResetsAt
+                        account: reading.2,
+                        resetsAt: reading.1
                     )
                 }
-                .store(in: &cancellables)
+            ))
         }
     }
 
@@ -334,14 +314,6 @@ final class AppModel: ObservableObject {
             // Delivered on the main queue.
             MainActor.assumeIsolated { self?.grokHistory.flush() }
         }
-    }
-
-    /// Funnels a child's changes into `childChanges`, which `AppModel` re-emits
-    /// at most once per `changeCoalescing` (see `init`).
-    private func forwardChanges(from object: some ObservableObject) {
-        object.objectWillChange
-            .sink { [weak self] _ in self?.childChanges.send() }
-            .store(in: &cancellables)
     }
 
     /// Activates dock presence, then opens `window`.

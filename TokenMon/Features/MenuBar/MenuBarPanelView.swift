@@ -8,7 +8,7 @@ import SwiftUI
 /// re-render the visible tab.
 struct MenuBarPanelView: View {
     let model: AppModel
-    @ObservedObject var settings: AppSettings
+    @Bindable var settings: AppSettings
     let openWindow: (AppWindow) -> Void
 
     /// Fixed dropdown width. The panel host sizes only its height, so the

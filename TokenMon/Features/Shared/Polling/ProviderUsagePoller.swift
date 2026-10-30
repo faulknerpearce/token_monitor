@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Uniform surface every provider poller implements.
 ///
@@ -8,7 +8,7 @@ import Foundation
 /// app wiring iterates over providers; each poller's full snapshot stays on
 /// its concrete type.
 @MainActor
-protocol ProviderUsagePoller: ObservableObject where ObjectWillChangePublisher == ObservableObjectPublisher {
+protocol ProviderUsagePoller: AnyObject, Observable {
     var menuIsOpen: Bool { get set }
     var lastRefreshedAt: Date? { get }
     var lastError: String? { get }

@@ -1,15 +1,17 @@
 import Combine
 import Foundation
+import Observation
 import os
 
 /// Polls ChatGPT usage for the captured session cookie.
 @MainActor
-final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
-    @Published private(set) var snapshot: ChatGPTSnapshot?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastRefreshedAt: Date?
-    @Published var menuIsOpen = false {
+@Observable
+final class ChatGPTUsagePoller: ProviderUsagePoller {
+    private(set) var snapshot: ChatGPTSnapshot?
+    private(set) var isRefreshing = false
+    private(set) var lastError: String?
+    private(set) var lastRefreshedAt: Date?
+    var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
@@ -21,9 +23,9 @@ final class ChatGPTUsagePoller: ObservableObject, ProviderUsagePoller {
     /// Access token reused across polls by the live client.
     private let tokenCache: ChatGPTAccessTokenCache
     private let logger = Logger(category: "ChatGPT")
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
-    private(set) lazy var pollingLoop = PollingLoop(
+    @ObservationIgnored private(set) lazy var pollingLoop = PollingLoop(
         interval: { [weak self] in self?.pollInterval() },
         refresh: { [weak self] in await self?.performRefresh() ?? .skipped }
     )

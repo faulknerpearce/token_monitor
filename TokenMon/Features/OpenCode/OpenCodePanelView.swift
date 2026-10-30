@@ -2,8 +2,8 @@ import SwiftUI
 
 /// OpenCode Go panel with limit bars, budget, models, and stats.
 struct OpenCodePanelView: View {
-    @ObservedObject var poller: OpenCodeUsagePoller
-    @ObservedObject var auth: OpenCodeAuthSession
+    let poller: OpenCodeUsagePoller
+    let auth: OpenCodeAuthSession
     /// Whether the "Top Models by Spend" list is open; saved in settings.
     @Binding var modelsExpanded: Bool
     let openSignIn: () -> Void

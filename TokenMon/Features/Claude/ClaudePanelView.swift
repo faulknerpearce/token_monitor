@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Claude usage panel (5-hour and weekly windows plus daily bars).
 struct ClaudePanelView: View {
-    @ObservedObject var poller: ClaudeUsagePoller
-    @ObservedObject var auth: ClaudeAuthSession
+    let poller: ClaudeUsagePoller
+    let auth: ClaudeAuthSession
     /// Whether the "Models This Month" list is open; saved in settings.
     @Binding var modelsExpanded: Bool
     let openSignIn: () -> Void
