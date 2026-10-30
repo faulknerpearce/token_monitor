@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Aggregate cards for every enabled provider plus the hourly chart.
 struct OverviewPanelView: View {
-    @ObservedObject var grokPoller: UsagePoller
+    @ObservedObject var grokPoller: GrokUsagePoller
     @ObservedObject var openCodePoller: OpenCodeUsagePoller
     @ObservedObject var cursorPoller: CursorUsagePoller
     @ObservedObject var claudePoller: ClaudeUsagePoller
@@ -18,7 +18,7 @@ struct OverviewPanelView: View {
     @ObservedObject var hourlyHistory: OverviewHourlyHistoryStore
     /// Today's live chart inputs for a moment in today.
     var todaySeries: (Date) -> OverviewDaySeries
-    @ObservedObject var grokAuth: AuthSessionService
+    @ObservedObject var grokAuth: GrokAuthSession
     @ObservedObject var openCodeAuth: OpenCodeAuthSession
     @ObservedObject var cursorAuth: CursorAuthSession
     @ObservedObject var claudeAuth: ClaudeAuthSession

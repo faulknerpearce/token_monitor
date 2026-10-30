@@ -12,7 +12,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         // Reset Thu Jul 16 → period bars Thu Jul 9 – Wed Jul 15 (mid-period).
         let now = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
         let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
-        let bounds = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let bounds = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,
@@ -27,7 +27,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         // Still before reset on that Thursday morning: the running period owns today,
         // so the window keeps its start and runs through the reset day.
         let resetMorning = ISO8601DateFormatter().date(from: "2026-07-16T12:00:00Z")!
-        let onResetDayMorning = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let onResetDayMorning = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,
@@ -38,7 +38,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.dateComponents([.day], from: onResetDayMorning.start, to: onResetDayMorning.end).day, 7)
 
         // Browsing back from the reset morning still shows whole 7-day periods.
-        let previousFromMorning = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let previousFromMorning = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: -1,
             calendar: cal,
@@ -49,7 +49,7 @@ final class BillingPeriodWindowTests: XCTestCase {
 
         // After reset fires (API may lag): the entire window rolls to a single new Thursday.
         let afterReset = ISO8601DateFormatter().date(from: "2026-07-16T20:00:00Z")!
-        let rolled = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let rolled = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,
@@ -67,7 +67,7 @@ final class BillingPeriodWindowTests: XCTestCase {
 
         // After API advances resetsAt: same new-period window.
         let nextResets = ISO8601DateFormatter().date(from: "2026-07-23T18:57:00Z")!
-        let next = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let next = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: nextResets,
             weekOffset: 0,
             calendar: cal,
@@ -76,7 +76,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: next.start), 16)
         XCTAssertEqual(cal.component(.day, from: next.end), 22)
 
-        let previous = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let previous = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: -1,
             calendar: cal,
@@ -95,7 +95,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         // Reset Thu Jul 16, but the API never advanced it; now is Mon Jul 27.
         let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
         let now = ISO8601DateFormatter().date(from: "2026-07-27T12:00:00Z")!
-        let bounds = try XCTUnwrap(DailyUsageBuilder.billingPeriodWeekBounds(
+        let bounds = try XCTUnwrap(GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,
@@ -127,7 +127,7 @@ final class BillingPeriodWindowTests: XCTestCase {
                 ]
             )
         ]
-        XCTAssertNil(DailyUsageBuilder.week(
+        XCTAssertNil(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -155,7 +155,7 @@ final class BillingPeriodWindowTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -197,7 +197,7 @@ final class BillingPeriodWindowTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -262,7 +262,7 @@ final class BillingPeriodWindowTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: -1,
@@ -305,7 +305,7 @@ final class BillingPeriodWindowTests: XCTestCase {
                 products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 72)]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -346,7 +346,7 @@ final class BillingPeriodWindowTests: XCTestCase {
             try snap("2026-10-03T12:00:00Z", 8, newResets)
         ]
 
-        let current = try XCTUnwrap(DailyUsageBuilder.week(
+        let current = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -358,7 +358,7 @@ final class BillingPeriodWindowTests: XCTestCase {
         let oct2 = try XCTUnwrap(current.days.first { cal.component(.day, from: $0.dayStart) == 2 })
         XCTAssertEqual(oct2.totalPercent, 3, accuracy: 0.5)
 
-        let previous = try XCTUnwrap(DailyUsageBuilder.week(
+        let previous = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: -1,

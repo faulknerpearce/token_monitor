@@ -133,11 +133,11 @@ final class PollerSessionGuardTests: XCTestCase {
     // MARK: - Grok
 
     func testGrokStaleUnauthorizedDoesNotInvalidateNewSession() async {
-        let auth = AuthSessionService(directory: dir)
+        let auth = GrokAuthSession(directory: dir)
         auth.save(cookieHeader: "sso=old")
-        let poller = UsagePoller(
+        let poller = GrokUsagePoller(
             auth: auth,
-            history: HistoryStore(inMemory: true),
+            history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
             notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
@@ -153,11 +153,11 @@ final class PollerSessionGuardTests: XCTestCase {
     }
 
     func testGrokCurrentUnauthorizedInvalidatesSession() async {
-        let auth = AuthSessionService(directory: dir)
+        let auth = GrokAuthSession(directory: dir)
         auth.save(cookieHeader: "sso=live")
-        let poller = UsagePoller(
+        let poller = GrokUsagePoller(
             auth: auth,
-            history: HistoryStore(inMemory: true),
+            history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
             notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),
@@ -169,11 +169,11 @@ final class PollerSessionGuardTests: XCTestCase {
     }
 
     func testGrokStaleTransportErrorDoesNotClobberNewSession() async {
-        let auth = AuthSessionService(directory: dir)
+        let auth = GrokAuthSession(directory: dir)
         auth.save(cookieHeader: "sso=old")
-        let poller = UsagePoller(
+        let poller = GrokUsagePoller(
             auth: auth,
-            history: HistoryStore(inMemory: true),
+            history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
             notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourlyStore("grok"),

@@ -95,15 +95,15 @@ final class MenuBarController: NSObject {
     private func observeStatusInputs() {
         let inputs: [AnyPublisher<Void, Never>] = [
             model.settings.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            model.poller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.grokPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.openCodePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.cursorPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.claudePoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.chatGPTPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.openRouterPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
             model.grokbotPoller.$snapshot.map { _ in () }.eraseToAnyPublisher(),
-            model.auth.$isSignedIn.map { _ in () }.eraseToAnyPublisher(),
-            model.auth.$needsSignIn.map { _ in () }.eraseToAnyPublisher()
+            model.grokAuth.$isSignedIn.map { _ in () }.eraseToAnyPublisher(),
+            model.grokAuth.$needsSignIn.map { _ in () }.eraseToAnyPublisher()
         ]
         Publishers.MergeMany(inputs)
             .throttle(for: AppModel.changeCoalescing, scheduler: RunLoop.main, latest: true)
@@ -136,14 +136,14 @@ final class MenuBarController: NSObject {
         let rendered = MenuBarStatusRenderer.render(
             selectedProvider: settings.selectedProvider,
             showSelectedProvider: settings.showSelectedProviderInMenuBar,
-            snapshot: model.poller.snapshot,
+            snapshot: model.grokPoller.snapshot,
             openCodeSnapshot: model.openCodePoller.snapshot,
             cursorSnapshot: model.cursorPoller.snapshot,
             claudeSnapshot: model.claudePoller.snapshot,
             chatGPTSnapshot: model.chatGPTPoller.snapshot,
             openRouterSnapshot: model.openRouterPoller.snapshot,
             grokbotSnapshot: model.grokbotPoller.snapshot,
-            isGrokSignedIn: model.auth.isSignedIn && !model.auth.needsSignIn,
+            isGrokSignedIn: model.grokAuth.isSignedIn && !model.grokAuth.needsSignIn,
             showGrokBar: settings.showGrokBarInMenuBar,
             showGrokCategories: settings.showCategoriesInMenuBar,
             showOpenCodeBar: settings.showOpenCodeBarInMenuBar,

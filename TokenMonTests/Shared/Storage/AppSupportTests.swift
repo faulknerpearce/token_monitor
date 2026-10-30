@@ -59,7 +59,7 @@ final class AppSupportTests: XCTestCase {
     /// from any thread.
     func testRealHomeDirectoryIsTheUserHome() async {
         let expected = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
-        let fromDetached = await Task.detached { OpenCodeLocalStats.realHomeDirectory.standardizedFileURL.path }.value
+        let fromDetached = await Task.detached { AppSupport.realHomeDirectory.standardizedFileURL.path }.value
         XCTAssertEqual(fromDetached, expected)
     }
 }

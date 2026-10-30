@@ -1,7 +1,7 @@
 import Foundation
 
 /// Serializes usage snapshots to CSV or JSON for export.
-enum ExportService {
+enum GrokExportService {
     /// Supported export file format.
     enum Format {
         case csv

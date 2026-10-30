@@ -54,10 +54,10 @@ struct MenuBarPanelView: View {
 
     private var grokContent: some View {
         GrokPanelView(
-            auth: model.auth,
-            poller: model.poller,
+            auth: model.grokAuth,
+            poller: model.grokPoller,
             settings: settings,
-            history: model.history,
+            history: model.grokHistory,
             openSignIn: { openWindow(.grokSignIn) }
         )
     }
@@ -121,7 +121,7 @@ struct MenuBarPanelView: View {
 
     private var overviewContent: some View {
         OverviewPanelView(
-            grokPoller: model.poller,
+            grokPoller: model.grokPoller,
             openCodePoller: model.openCodePoller,
             cursorPoller: model.cursorPoller,
             claudePoller: model.claudePoller,
@@ -134,7 +134,7 @@ struct MenuBarPanelView: View {
             grokbotHourly: model.grokbotHourly,
             hourlyHistory: model.overviewHistory,
             todaySeries: { [model] date in model.overviewSeries(on: date) },
-            grokAuth: model.auth,
+            grokAuth: model.grokAuth,
             openCodeAuth: model.openCodeAuth,
             cursorAuth: model.cursorAuth,
             claudeAuth: model.claudeAuth,

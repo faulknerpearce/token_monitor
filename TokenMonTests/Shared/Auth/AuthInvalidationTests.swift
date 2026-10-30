@@ -196,16 +196,16 @@ final class AuthInvalidationTests: XCTestCase {
     // MARK: - Grok
 
     func testGrokInvalidationAndSignOutKeepHourlyDeltas() async {
-        let auth = AuthSessionService(directory: nil, store: InMemoryCredentialStore())
+        let auth = GrokAuthSession(directory: nil, store: InMemoryCredentialStore())
         auth.save(cookieHeader: "sso=live")
         let hourly = hourlyStore("grok")
         hourly.record(usedPercent: 10, at: Date().addingTimeInterval(-120))
         hourly.record(usedPercent: 12, at: Date())
         let recorded = hourly.hourWeights
         XCTAssertFalse(recorded.allSatisfy { $0 == 0 })
-        let poller = UsagePoller(
+        let poller = GrokUsagePoller(
             auth: auth,
-            history: HistoryStore(inMemory: true),
+            history: GrokHistoryStore(inMemory: true),
             settings: settings(.grok),
             notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: hourly,

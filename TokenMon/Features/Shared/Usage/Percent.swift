@@ -7,7 +7,7 @@ enum Percent {
 
     /// A drop at least this large is a quota-window reset; anything smaller is
     /// downward noise. Aligns with the mid-period rebase floor in
-    /// `DailyUsageBuilder` (`dayCumulative + 5 < previous`).
+    /// `GrokDailyUsageBuilder` (`dayCumulative + 5 < previous`).
     static let resetDropFloor: Double = 5
 
     static func clamp(_ value: Double) -> Double {

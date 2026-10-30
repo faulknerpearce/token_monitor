@@ -11,10 +11,12 @@ mkdir -p "$OUT"
 CORE_SOURCES=(
   TokenMon/Features/Shared/Utilities/AppLog.swift
   TokenMon/Features/Shared/Networking/StaticURL.swift
-  TokenMon/Features/Grok/Usage/UsageModels.swift
-  TokenMon/Features/Grok/Usage/UsageClient.swift
-  TokenMon/Features/Grok/Usage/DailyUsageBuilder.swift
-  TokenMon/Features/Grok/History/ExportService.swift
+  TokenMon/Features/Grok/GrokModels.swift
+  TokenMon/Features/Grok/GrokUsageClient.swift
+  TokenMon/Features/Grok/GrokUsageResponseParser.swift
+  TokenMon/Features/Grok/GRPCWebParser.swift
+  TokenMon/Features/Grok/GrokDailyUsageBuilder.swift
+  TokenMon/Features/Grok/GrokExportService.swift
   TokenMon/Features/Shared/Usage/Percent.swift
   TokenMon/Features/Shared/Utilities/Format.swift
   TokenMon/Features/Shared/Utilities/JSON.swift
@@ -23,6 +25,7 @@ CORE_SOURCES=(
   TokenMon/Features/Shared/Networking/UsageError.swift
   TokenMon/Features/Shared/Networking/AuthenticatedRequest.swift
   TokenMon/Features/Shared/Networking/ProviderError.swift
+  TokenMon/Features/Shared/Networking/ProviderHTTP.swift
   Tests/Manual/CoreTestsMain.swift
 )
 

@@ -25,7 +25,7 @@ struct DailyUsageChartView: View {
             DailyBudgetDay(
                 date: $0.dayStart,
                 spentUSD: $0.totalPercent,
-                budgetUSD: DailyUsageBuilder.dailyCapPercent
+                budgetUSD: GrokDailyUsageBuilder.dailyCapPercent
             )
         }
         // Billing-period week already spans the full SuperGrok pool window.
@@ -53,7 +53,7 @@ struct DailyUsageChartView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 PanelSectionHeader(title: "Daily Budget")
-                Text(String(format: "%.1f%%", DailyUsageBuilder.dailyCapPercent))
+                Text(String(format: "%.1f%%", GrokDailyUsageBuilder.dailyCapPercent))
                     .font(PanelTypography.bodyDigit)
                     .foregroundStyle(.primary)
                 Spacer(minLength: 8)
@@ -125,13 +125,13 @@ struct DailyUsageChartView: View {
 
     /// Maps weekly-pool percent into track height using the equal daily cap (`100/7`).
     static func fillFraction(forDayUsage percent: Double) -> Double {
-        DailyUsageBuilder.fillFraction(forDayUsage: percent)
+        GrokDailyUsageBuilder.fillFraction(forDayUsage: percent)
     }
 }
 
 #if DEBUG
 #Preview {
-    DailyUsageChartView(week: DailyUsageBuilder.preview(), periodUsedPercent: 12)
+    DailyUsageChartView(week: GrokDailyUsageBuilder.preview(), periodUsedPercent: 12)
         .padding()
         .frame(width: 340)
 }

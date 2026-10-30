@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 struct PreferencesView: View {
     let model: AppModel
     @ObservedObject var settings: AppSettings
-    @ObservedObject var history: HistoryStore
+    @ObservedObject var history: GrokHistoryStore
     @ObservedObject var updateChecker: UpdateChecker
     let openWindow: (AppWindowID) -> Void
 
@@ -230,7 +230,7 @@ private struct AccountsSettingsTab: View {
             Section {
                 ProviderAccountRow(
                     provider: .grok,
-                    auth: model.auth,
+                    auth: model.grokAuth,
                     signInTitle: "Sign In…",
                     openSignIn: { openWindow(.grokSignIn) }
                 )
@@ -273,7 +273,7 @@ private struct AccountsSettingsTab: View {
 /// SuperGrok categories plus exporting and clearing local history.
 private struct DataSettingsTab: View {
     @ObservedObject var settings: AppSettings
-    @ObservedObject var history: HistoryStore
+    @ObservedObject var history: GrokHistoryStore
     @State private var exportError: String?
 
     var body: some View {
@@ -328,12 +328,12 @@ private struct DataSettingsTab: View {
         .formStyle(.grouped)
     }
 
-    private func export(_ format: ExportService.Format) {
+    private func export(_ format: GrokExportService.Format) {
         // Clears any prior failure so a successful export dismisses the red
         // message.
         exportError = nil
         do {
-            let data = try ExportService.export(history.allSnapshots(), format: format)
+            let data = try GrokExportService.export(history.allSnapshots(), format: format)
             let panel = NSSavePanel()
             panel.allowedContentTypes = [format == .csv ? .commaSeparatedText : .json]
             panel.nameFieldStringValue = format == .csv ? "grok-usage.csv" : "grok-usage.json"

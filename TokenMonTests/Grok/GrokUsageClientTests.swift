@@ -41,20 +41,20 @@ private final class GrokStubProtocol: URLProtocol {
 }
 
 final class UsageClientTests: XCTestCase {
-    private let billingPath = UsageClient.billingEndpoint.path
+    private let billingPath = GrokUsageClient.billingEndpoint.path
     private let grpcHex = "000000005f0a5d0d0000104212001a00220b08b1debfd20610b8efb07f2a0b08b1d3e4d20610b8efb07f" +
         "3a070804150000b8413a07080215000050413a020806421c0802120b08b1debfd20610b8efb07f1a0b08b1d3e4d20610b8efb07f" +
         "580162006801800000000f677270632d7374617475733a300d0a"
 
-    private func client() -> UsageClient {
+    private func client() -> GrokUsageClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GrokStubProtocol.self]
-        return UsageClient(cookieHeader: "sso=x", accountEmail: nil, session: URLSession(configuration: configuration))
+        return GrokUsageClient(cookieHeader: "sso=x", accountEmail: nil, session: URLSession(configuration: configuration))
     }
 
     /// A fetch cancelled mid-request surfaces as `CancellationError`.
     func testCancelledFetchThrowsCancellationError() async {
-        let client = UsageClient(cookieHeader: "sso=x", accountEmail: nil, session: NeverRespondingURLProtocol.session())
+        let client = GrokUsageClient(cookieHeader: "sso=x", accountEmail: nil, session: NeverRespondingURLProtocol.session())
         let task = Task { try await client.fetchUsage() }
         task.cancel()
         do {
@@ -71,7 +71,7 @@ final class UsageClientTests: XCTestCase {
     }
 
     private var restPaths: [String] {
-        UsageClient.restCandidates.map(\.path)
+        GrokUsageClient.restCandidates.map(\.path)
     }
 
     /// gRPC billing answers first; the guessed REST paths are never requested.
@@ -156,17 +156,17 @@ final class UsageClientTests: XCTestCase {
     /// An unrelated 200 with a bare `percent` is not usage.
     func testUnrelatedPercentKeyIsNotUsage() {
         let json = Data(#"{"data":{"percent":50,"name":"profile completion"}}"#.utf8)
-        XCTAssertNil(UsageResponseParser.parseJSON(json, accountEmail: nil))
+        XCTAssertNil(GrokUsageResponseParser.parseJSON(json, accountEmail: nil))
     }
 
     func testOutOfRangeUsageIsRejected() {
-        XCTAssertNil(UsageResponseParser.parseJSON(Data(#"{"usedPercent":1500}"#.utf8), accountEmail: nil))
-        XCTAssertNil(UsageResponseParser.parseJSON(Data(#"{"usedPercent":-3}"#.utf8), accountEmail: nil))
+        XCTAssertNil(GrokUsageResponseParser.parseJSON(Data(#"{"usedPercent":1500}"#.utf8), accountEmail: nil))
+        XCTAssertNil(GrokUsageResponseParser.parseJSON(Data(#"{"usedPercent":-3}"#.utf8), accountEmail: nil))
     }
 
     /// Product rows count only with a usage-specific percent key.
     func testProductsWithoutUsageKeysAreIgnored() {
         let json = Data(#"{"products":[{"id":"chat","value":30},{"id":"build","percent":20}]}"#.utf8)
-        XCTAssertNil(UsageResponseParser.parseJSON(json, accountEmail: nil))
+        XCTAssertNil(GrokUsageResponseParser.parseJSON(json, accountEmail: nil))
     }
 }

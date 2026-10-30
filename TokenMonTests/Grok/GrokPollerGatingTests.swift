@@ -25,12 +25,12 @@ final class GrokPollerGatingTests: XCTestCase {
     private func makePoller(
         settings: AppSettings,
         fetch: @escaping (String?, String?) async throws -> WeeklyUsageSnapshot
-    ) -> (UsagePoller, AuthSessionService) {
-        let auth = AuthSessionService(directory: dir)
+    ) -> (GrokUsagePoller, GrokAuthSession) {
+        let auth = GrokAuthSession(directory: dir)
         auth.save(cookieHeader: "sso=live")
-        let poller = UsagePoller(
+        let poller = GrokUsagePoller(
             auth: auth,
-            history: HistoryStore(inMemory: true),
+            history: GrokHistoryStore(inMemory: true),
             settings: settings,
             notifier: ThresholdNotifier(defaults: defaults, deliver: { _ in }),
             grokHourly: HourlyDeltaActivityStore(

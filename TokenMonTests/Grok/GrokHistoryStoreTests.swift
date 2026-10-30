@@ -1,14 +1,14 @@
 @testable import TokenMon
 import XCTest
 
-/// `HistoryStore` (in-memory SwiftData): same-day `recent` upsert, skip
+/// `GrokHistoryStore` (in-memory SwiftData): same-day `recent` upsert, skip
 /// window, 200-entry cap, and `clear`.
 @MainActor
 final class HistoryStoreTests: XCTestCase {
-    private var store: HistoryStore!
+    private var store: GrokHistoryStore!
 
     override func setUp() async throws {
-        store = HistoryStore(inMemory: true)
+        store = GrokHistoryStore(inMemory: true)
     }
 
     private func snapshot(

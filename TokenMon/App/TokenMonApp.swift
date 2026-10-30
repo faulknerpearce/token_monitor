@@ -32,7 +32,7 @@ struct TokenMonApp: App {
         .defaultSize(width: 480, height: 640)
 
         ProviderSignInWindow(title: "Sign in to Grok", id: .grokSignIn) {
-            SignInView(auth: model.auth) { model.signInCompleted(.grok) }
+            GrokSignInView(auth: model.grokAuth) { model.signInCompleted(.grok) }
         }
         ProviderSignInWindow(title: "Sign in to OpenCode", id: .openCodeSignIn) {
             OpenCodeSignInView(auth: model.openCodeAuth) { model.signInCompleted(.opencode) }
@@ -83,14 +83,14 @@ enum AppWindowID: String {
 /// Shared app services owned for the process lifetime.
 @MainActor
 final class AppModel: ObservableObject {
-    let auth: AuthSessionService
+    let grokAuth: GrokAuthSession
     let openCodeAuth: OpenCodeAuthSession
     let cursorAuth: CursorAuthSession
     let claudeAuth: ClaudeAuthSession
     let chatGPTAuth: ChatGPTAuthSession
     let openRouterAuth: OpenRouterAuthSession
     let settings: AppSettings
-    let history = HistoryStore(inMemory: AppModel.isRunningTests)
+    let grokHistory = GrokHistoryStore(inMemory: AppModel.isRunningTests)
     let notifier: ThresholdNotifier
     let grokHourly = HourlyDeltaActivityStore(storageKey: "grok_hourly_today")
     let claudeHourly = HourlyDeltaActivityStore(storageKey: "claude_hourly_today")
@@ -100,7 +100,7 @@ final class AppModel: ObservableObject {
     let grokbotDaily = DailyQuotaDeltaStore(storageKey: "grokbot_daily_usage")
     /// Earlier days of the Overview hourly chart.
     let overviewHistory = OverviewHourlyHistoryStore()
-    let poller: UsagePoller
+    let grokPoller: GrokUsagePoller
     let openCodePoller: OpenCodeUsagePoller
     let cursorPoller: CursorUsagePoller
     let claudePoller: ClaudeUsagePoller
@@ -151,21 +151,21 @@ final class AppModel: ObservableObject {
         notifier = ThresholdNotifier(defaults: defaults)
         // The test host uses an in-memory store, leaving the user's credentials untouched.
         let store: () -> (any CredentialStore)? = { Self.isRunningTests ? InMemoryCredentialStore() : nil }
-        let auth = AuthSessionService(directory: nil, store: store())
+        let grokAuth = GrokAuthSession(directory: nil, store: store())
         let openCodeAuth = OpenCodeAuthSession(store: store())
         let cursorAuth = CursorAuthSession(store: store())
         let claudeAuth = ClaudeAuthSession(store: store())
         let chatGPTAuth = ChatGPTAuthSession(store: store())
         let openRouterAuth = OpenRouterAuthSession(store: store())
-        self.auth = auth
+        self.grokAuth = grokAuth
         self.openCodeAuth = openCodeAuth
         self.cursorAuth = cursorAuth
         self.claudeAuth = claudeAuth
         self.chatGPTAuth = chatGPTAuth
         self.openRouterAuth = openRouterAuth
-        poller = UsagePoller(
-            auth: auth,
-            history: history,
+        grokPoller = GrokUsagePoller(
+            auth: grokAuth,
+            history: grokHistory,
             settings: settings,
             notifier: notifier,
             grokHourly: grokHourly
@@ -184,7 +184,7 @@ final class AppModel: ObservableObject {
         )
         updateChecker = UpdateChecker(settings: settings)
         providers = ProviderRegistry(
-            grok: poller,
+            grok: grokPoller,
             openCode: openCodePoller,
             cursor: cursorPoller,
             claude: claudePoller,
@@ -202,7 +202,7 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
         forwardChanges(from: settings)
-        forwardChanges(from: history)
+        forwardChanges(from: grokHistory)
         forwardChanges(from: grokHourly)
         forwardChanges(from: claudeHourly)
         forwardChanges(from: claudeDaily)
@@ -212,7 +212,7 @@ final class AppModel: ObservableObject {
         for (_, providerPoller) in providers.all {
             forwardChanges(from: providerPoller)
         }
-        forwardChanges(from: auth)
+        forwardChanges(from: grokAuth)
         forwardChanges(from: openCodeAuth)
         forwardChanges(from: cursorAuth)
         forwardChanges(from: claudeAuth)
@@ -279,7 +279,7 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _ in self?.forEachPollingLoop { $0.wake() } }
             .store(in: &cancellables)
         let graphToggles: [(Published<Bool>.Publisher, any ProviderUsagePoller)] = [
-            (settings.$showGrokBarInMenuBar, poller),
+            (settings.$showGrokBarInMenuBar, grokPoller),
             (settings.$showOpenCodeBarInMenuBar, openCodePoller),
             (settings.$showCursorBarInMenuBar, cursorPoller),
             (settings.$showClaudeBarInMenuBar, claudePoller),
@@ -366,7 +366,7 @@ final class AppModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             // Delivered on the main queue.
-            MainActor.assumeIsolated { self?.history.flush() }
+            MainActor.assumeIsolated { self?.grokHistory.flush() }
         }
     }
 
@@ -409,7 +409,7 @@ private struct PreferencesRoot: View {
         PreferencesView(
             model: model,
             settings: model.settings,
-            history: model.history,
+            history: model.grokHistory,
             updateChecker: model.updateChecker,
             openWindow: { model.openWindow($0, openWindow: openWindow) }
         )

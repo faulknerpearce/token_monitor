@@ -74,7 +74,7 @@ enum ClaudeCodeLocalStats {
     /// (comma-separated) when set, else `~/.config/claude` and `~/.claude`.
     static func projectsDirectories(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: URL = OpenCodeLocalStats.realHomeDirectory
+        home: URL = AppSupport.realHomeDirectory
     ) -> [URL] {
         if let configured = environment["CLAUDE_CONFIG_DIR"]?.trimmingCharacters(in: .whitespaces),
            !configured.isEmpty {

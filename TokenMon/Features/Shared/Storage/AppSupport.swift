@@ -12,6 +12,21 @@ enum AppSupport {
     /// True when the process is the XCTest host.
     static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
+    /// Real user home outside the sandbox container (`NSHomeDirectory` resolves
+    /// to the app container). Resolved once with the reentrant `getpwuid_r`, so
+    /// detached readers avoid sharing `getpwuid`'s static buffer.
+    static let realHomeDirectory: URL = {
+        var record = passwd()
+        var result: UnsafeMutablePointer<passwd>?
+        let suggested = sysconf(Int32(_SC_GETPW_R_SIZE_MAX))
+        var buffer = [CChar](repeating: 0, count: suggested > 0 ? suggested : 4096)
+        if getpwuid_r(getuid(), &record, &buffer, buffer.count, &result) == 0,
+           result != nil, let dir = record.pw_dir {
+            return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
+        }
+        return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+    }()
+
     /// Parent of the app's folder: the user's Application Support directory, or
     /// a per-process temporary directory under XCTest so tests stay isolated
     /// from the user's files.

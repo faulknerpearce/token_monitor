@@ -24,7 +24,7 @@ struct CoreTestsMain {
         }
         """.utf8)
 
-        guard let snap = UsageResponseParser.parseJSON(json, accountEmail: nil) else {
+        guard let snap = GrokUsageResponseParser.parseJSON(json, accountEmail: nil) else {
             throw TestFailure("parse fixture")
         }
         try assertTrue(abs(snap.usedPercent - 35) < 0.01, "usedPercent")
@@ -35,12 +35,12 @@ struct CoreTestsMain {
         let rem = WeeklyUsageSnapshot(usedPercent: 40)
         try assertTrue(abs(rem.remainingPercent - 60) < 0.01, "remaining default")
 
-        let csv = try ExportService.export([.preview], format: .csv)
+        let csv = try GrokExportService.export([.preview], format: .csv)
         let csvText = String(data: csv, encoding: .utf8)!
         try assertTrue(csvText.contains("fetchedAt,usedPercent"), "csv header")
         try assertTrue(csvText.contains("build:25"), "csv products")
 
-        let jdata = try ExportService.export([.preview], format: .json)
+        let jdata = try GrokExportService.export([.preview], format: .json)
         try assertTrue((try JSONSerialization.jsonObject(with: jdata)) is [Any], "json array")
 
         try assertTrue(ProductColor.from(productID: "build") == .build, "color map build")
@@ -49,7 +49,7 @@ struct CoreTestsMain {
         let byProduct = Data("""
         { "usedPercent": 35, "byProduct": { "build": 25, "api": 9, "chat": 1 } }
         """.utf8)
-        guard let mapped = UsageResponseParser.parseJSON(byProduct, accountEmail: nil) else {
+        guard let mapped = GrokUsageResponseParser.parseJSON(byProduct, accountEmail: nil) else {
             throw TestFailure("byProduct parse")
         }
         try assertTrue(mapped.products.count == 3, "byProduct count")
@@ -65,17 +65,17 @@ struct CoreTestsMain {
         try assertTrue(grpc.products.contains(where: { $0.id == "chat" && abs($0.percentOfPool - 23) < 0.01 }), "grpc chat")
         try assertTrue(grpc.products.contains(where: { $0.id == "build" && abs($0.percentOfPool - 13) < 0.01 }), "grpc build")
 
-        let previewWeek = DailyUsageBuilder.preview()
+        let previewWeek = GrokDailyUsageBuilder.preview()
         try assertTrue(previewWeek.days.count == 7, "daily week days")
         try assertTrue(previewWeek.hasDailyData, "daily has data")
-        try assertTrue(abs(DailyUsageBuilder.fillFraction(forDayUsage: 10) - 10.0 / (100.0 / 7.0)) < 0.001, "daily cap math")
+        try assertTrue(abs(GrokDailyUsageBuilder.fillFraction(forDayUsage: 10) - 10.0 / (100.0 / 7.0)) < 0.001, "daily cap math")
 
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!
         cal.firstWeekday = 2
         let now = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
         let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
-        guard let bounds = DailyUsageBuilder.billingPeriodWeekBounds(
+        guard let bounds = GrokDailyUsageBuilder.billingPeriodWeekBounds(
             resetsAt: resetsAt,
             weekOffset: 0,
             calendar: cal,

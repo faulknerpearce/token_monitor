@@ -4,7 +4,7 @@ import os
 
 /// Periodically refreshes usage and publishes the latest snapshot.
 @MainActor
-final class UsagePoller: ObservableObject, ProviderUsagePoller {
+final class GrokUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var snapshot: WeeklyUsageSnapshot?
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
@@ -13,8 +13,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
 
-    private let auth: AuthSessionService
-    private let history: HistoryStore
+    private let auth: GrokAuthSession
+    private let history: GrokHistoryStore
     private let settings: AppSettings
     private let notifier: ThresholdNotifier
     private let grokHourly: HourlyDeltaActivityStore
@@ -29,8 +29,8 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
     private var cancellables = Set<AnyCancellable>()
 
     init(
-        auth: AuthSessionService,
-        history: HistoryStore,
+        auth: GrokAuthSession,
+        history: GrokHistoryStore,
         settings: AppSettings,
         notifier: ThresholdNotifier,
         grokHourly: HourlyDeltaActivityStore,
@@ -42,7 +42,7 @@ final class UsagePoller: ObservableObject, ProviderUsagePoller {
         self.notifier = notifier
         self.grokHourly = grokHourly
         self.fetchUsage = fetchUsage ?? { cookieHeader, accountEmail in
-            try await UsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
+            try await GrokUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchUsage()
         }
         history.setActiveAccount(auth.accountEmail)
         // Signing out drops the snapshot; the account-scoped hourly deltas are

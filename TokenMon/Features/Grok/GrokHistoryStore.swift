@@ -76,8 +76,8 @@ final class UsageSnapshotRecord {
 /// Persists one snapshot per calendar day and account, and publishes the
 /// recent window for the active account.
 @MainActor
-final class HistoryStore: ObservableObject {
-    private static let logger = Logger(category: "HistoryStore")
+final class GrokHistoryStore: ObservableObject {
+    private static let logger = Logger(category: "GrokHistoryStore")
 
     private var container: ModelContainer?
     private var context: ModelContext?

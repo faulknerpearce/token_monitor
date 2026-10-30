@@ -122,7 +122,7 @@ The billing API returns no per-day series:
 | `GetGrokUsageInfo` / `GetGrokBuildBillingHistory` | HTTP 200, **empty body** (even with period params) |
 | `GetUsage` / `GetDailyUsage` / REST `/usage/daily` | Empty or 404 |
 
-The daily chart is therefore built from local samples (`DailyUsageBuilder`):
+The daily chart is therefore built from local samples (`GrokDailyUsageBuilder`):
 
 1. It shows the **billing-period** week: seven days starting at the previous reset's calendar day (for example Thu→Wed). On the reset day itself, before the reset instant, the running period still owns today, so the reset day appears as an eighth bar.
 2. Bars are deltas between successive local end-of-day samples in the same billing period. They stay empty until two same-period sample days exist.

@@ -15,7 +15,7 @@ excluded:
 # Length thresholds sit just above the codebase maxima, so `--strict`
 # (warning → error) fails on a regression. Largest file/type:
 # OpenCodeStatsTests (~808 file / ~805 type lines); the longest functions are in
-# DailyUsageBuilder (190 lines, complexity 25) and the menu-bar renderer.
+# GrokDailyUsageBuilder (190 lines, complexity 25) and the menu-bar renderer.
 line_length:
   warning: 160
   error: 200

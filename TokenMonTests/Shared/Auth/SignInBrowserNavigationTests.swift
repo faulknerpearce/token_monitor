@@ -283,19 +283,19 @@ final class SignInBrowserNavigationTests: XCTestCase {
     }
 
     func testGrokAuthHostUsesExactOrSuffixMatch() {
-        XCTAssertTrue(SignInView.isAuthHost("accounts.x.ai"))
-        XCTAssertTrue(SignInView.isAuthHost("x.com"))
-        XCTAssertTrue(SignInView.isAuthHost("api.x.com"))
+        XCTAssertTrue(GrokSignInView.isAuthHost("accounts.x.ai"))
+        XCTAssertTrue(GrokSignInView.isAuthHost("x.com"))
+        XCTAssertTrue(GrokSignInView.isAuthHost("api.x.com"))
         // Hosts that only contain an auth host's name are rejected.
-        XCTAssertFalse(SignInView.isAuthHost("netflix.com"))
-        XCTAssertFalse(SignInView.isAuthHost("x.com.evil.example"))
+        XCTAssertFalse(GrokSignInView.isAuthHost("netflix.com"))
+        XCTAssertFalse(GrokSignInView.isAuthHost("x.com.evil.example"))
     }
 
     func testGrokReturnPageRejectsLookalikeHost() {
-        XCTAssertTrue(SignInView.isReturnPage(URL(string: "https://grok.com/?_s=usage")!))
-        XCTAssertTrue(SignInView.isReturnPage(URL(string: "https://www.grok.com/")!))
-        XCTAssertFalse(SignInView.isReturnPage(URL(string: "https://grok.com.evil.example/")!))
-        XCTAssertFalse(SignInView.isReturnPage(URL(string: "https://notgrok.com/")!))
+        XCTAssertTrue(GrokSignInView.isReturnPage(URL(string: "https://grok.com/?_s=usage")!))
+        XCTAssertTrue(GrokSignInView.isReturnPage(URL(string: "https://www.grok.com/")!))
+        XCTAssertFalse(GrokSignInView.isReturnPage(URL(string: "https://grok.com.evil.example/")!))
+        XCTAssertFalse(GrokSignInView.isReturnPage(URL(string: "https://notgrok.com/")!))
     }
 }
 

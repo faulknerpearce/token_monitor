@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// WebView sheet that captures the grok.com session after xAI sign-in.
-struct SignInView: View {
-    @ObservedObject var auth: AuthSessionService
+struct GrokSignInView: View {
+    @ObservedObject var auth: GrokAuthSession
     var onComplete: () -> Void
 
     /// Identity providers that host the Grok/xAI sign-in flow.

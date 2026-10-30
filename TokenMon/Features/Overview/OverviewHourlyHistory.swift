@@ -170,7 +170,7 @@ extension AppModel {
             return store.hourWeights
         }
 
-        if enabled.contains(.grok), auth.isSignedIn, !auth.needsSignIn {
+        if enabled.contains(.grok), grokAuth.isSignedIn, !grokAuth.needsSignIn {
             series.weights[.grok] = today(grokHourly)
         }
         if enabled.contains(.claude), claudeAuth.isSignedIn, !claudeAuth.needsSignIn {

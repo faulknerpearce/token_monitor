@@ -4,7 +4,7 @@ import Foundation
 /// 7 calendar days starting at the period start (e.g. Thu→Wed). Prefers local
 /// day-over-day snapshot deltas within the period, falls back to a server daily
 /// series, and leaves bars empty until two valid sample days exist.
-enum DailyUsageBuilder {
+enum GrokDailyUsageBuilder {
     /// Equal daily share of the weekly SuperGrok pool.
     static let dailyCapPercent: Double = 100.0 / 7.0
 

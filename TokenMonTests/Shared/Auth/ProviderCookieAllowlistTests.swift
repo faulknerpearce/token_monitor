@@ -75,7 +75,7 @@ final class ProviderCookieAllowlistTests: XCTestCase {
             cookie("_ga", value: "tracker", domain: "grok.com")
         ]
         XCTAssertEqual(
-            selectedNames(cookies, policy: AuthSessionService.grokPolicy()),
+            selectedNames(cookies, policy: GrokAuthSession.grokPolicy()),
             ["sso"]
         )
     }
@@ -122,10 +122,10 @@ final class ProviderCookieAllowlistTests: XCTestCase {
 
     /// X/Twitter hosts are not part of the Grok session at all.
     func testGrokDomainExcludesXAndTwitter() {
-        XCTAssertFalse(AuthSessionService.isGrokDomain("x.com"))
-        XCTAssertFalse(AuthSessionService.isGrokDomain(".twitter.com"))
-        XCTAssertTrue(AuthSessionService.isGrokDomain(".grok.com"))
-        XCTAssertTrue(SignInView.isAuthHost("x.com"))
+        XCTAssertFalse(GrokAuthSession.isGrokDomain("x.com"))
+        XCTAssertFalse(GrokAuthSession.isGrokDomain(".twitter.com"))
+        XCTAssertTrue(GrokAuthSession.isGrokDomain(".grok.com"))
+        XCTAssertTrue(GrokSignInView.isAuthHost("x.com"))
     }
 
     /// A Grok jar without `sso` is not captured, even with auth-looking cookies.
@@ -134,6 +134,6 @@ final class ProviderCookieAllowlistTests: XCTestCase {
             cookie("x-session-hint", value: "v", domain: "grok.com"),
             cookie("_ga", value: "tracker", domain: "grok.com")
         ]
-        XCTAssertNil(WebKitCookieCapture.select(from: cookies, policy: AuthSessionService.grokPolicy()))
+        XCTAssertNil(WebKitCookieCapture.select(from: cookies, policy: GrokAuthSession.grokPolicy()))
     }
 }

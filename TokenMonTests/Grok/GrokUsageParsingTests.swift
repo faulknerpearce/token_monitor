@@ -16,7 +16,7 @@ final class UsageParsingTests: XCTestCase {
         }
         """.utf8)
 
-        let snap = try XCTUnwrap(UsageResponseParser.parseJSON(json, accountEmail: nil))
+        let snap = try XCTUnwrap(GrokUsageResponseParser.parseJSON(json, accountEmail: nil))
         XCTAssertEqual(snap.usedPercent, 35, accuracy: 0.01)
         XCTAssertEqual(snap.remainingPercent, 65, accuracy: 0.01)
         XCTAssertEqual(snap.products.count, 3)
@@ -42,10 +42,10 @@ final class UsageParsingTests: XCTestCase {
     }
 
     func testGrokDomainMatchingDoesNotAcceptLookalikes() {
-        XCTAssertTrue(AuthSessionService.isGrokDomain(".grok.com"))
-        XCTAssertTrue(AuthSessionService.isGrokDomain("accounts.x.ai"))
-        XCTAssertFalse(AuthSessionService.isGrokDomain("evilgrok.com"))
-        XCTAssertFalse(AuthSessionService.isGrokDomain("x.ai.evil.example"))
+        XCTAssertTrue(GrokAuthSession.isGrokDomain(".grok.com"))
+        XCTAssertTrue(GrokAuthSession.isGrokDomain("accounts.x.ai"))
+        XCTAssertFalse(GrokAuthSession.isGrokDomain("evilgrok.com"))
+        XCTAssertFalse(GrokAuthSession.isGrokDomain("x.ai.evil.example"))
     }
 
     func testProductColorMapping() {
@@ -55,7 +55,7 @@ final class UsageParsingTests: XCTestCase {
     }
 
     func testExportCSVContainsHeader() throws {
-        let data = try ExportService.export([.preview], format: .csv)
+        let data = try GrokExportService.export([.preview], format: .csv)
         let text = String(data: data, encoding: .utf8)!
         XCTAssertTrue(text.contains("fetchedAt,usedPercent"))
         XCTAssertTrue(text.contains("build:25"))
@@ -63,7 +63,7 @@ final class UsageParsingTests: XCTestCase {
 
     func testExportCSVNeutralizesFormulaInjection() throws {
         let snap = WeeklyUsageSnapshot(usedPercent: 10, accountEmail: "=cmd|'/C calc'!A1")
-        let data = try ExportService.export([snap], format: .csv)
+        let data = try GrokExportService.export([snap], format: .csv)
         let text = String(data: data, encoding: .utf8)!
         // A leading =, +, -, or @ is prefixed with a quote so spreadsheets treat
         // the cell as text.
@@ -72,23 +72,23 @@ final class UsageParsingTests: XCTestCase {
     }
 
     func testCSVEscapeGuardsLeadingTabAndCarriageReturn() {
-        XCTAssertEqual(ExportService.csvEscape("\t=1+1"), "'\t=1+1")
-        XCTAssertEqual(ExportService.csvEscape("\r=1+1"), "\"'\r=1+1\"")
-        XCTAssertEqual(ExportService.csvEscape("\r\n=1+1"), "\"'\r\n=1+1\"")
-        XCTAssertEqual(ExportService.csvEscape("-5"), "'-5")
-        XCTAssertEqual(ExportService.csvEscape("plain"), "plain")
+        XCTAssertEqual(GrokExportService.csvEscape("\t=1+1"), "'\t=1+1")
+        XCTAssertEqual(GrokExportService.csvEscape("\r=1+1"), "\"'\r=1+1\"")
+        XCTAssertEqual(GrokExportService.csvEscape("\r\n=1+1"), "\"'\r\n=1+1\"")
+        XCTAssertEqual(GrokExportService.csvEscape("-5"), "'-5")
+        XCTAssertEqual(GrokExportService.csvEscape("plain"), "plain")
     }
 
     func testCSVEscapeQuotesCarriageReturnAndLineBreaks() {
-        XCTAssertEqual(ExportService.csvEscape("a\rb"), "\"a\rb\"")
-        XCTAssertEqual(ExportService.csvEscape("a\r\nb"), "\"a\r\nb\"")
-        XCTAssertEqual(ExportService.csvEscape("a\nb"), "\"a\nb\"")
-        XCTAssertEqual(ExportService.csvEscape("a,b"), "\"a,b\"")
-        XCTAssertEqual(ExportService.csvEscape("say \"hi\""), "\"say \"\"hi\"\"\"")
+        XCTAssertEqual(GrokExportService.csvEscape("a\rb"), "\"a\rb\"")
+        XCTAssertEqual(GrokExportService.csvEscape("a\r\nb"), "\"a\r\nb\"")
+        XCTAssertEqual(GrokExportService.csvEscape("a\nb"), "\"a\nb\"")
+        XCTAssertEqual(GrokExportService.csvEscape("a,b"), "\"a,b\"")
+        XCTAssertEqual(GrokExportService.csvEscape("say \"hi\""), "\"say \"\"hi\"\"\"")
     }
 
     func testExportJSONRoundTrip() throws {
-        let data = try ExportService.export([.preview], format: .json)
+        let data = try GrokExportService.export([.preview], format: .json)
         let obj = try JSONSerialization.jsonObject(with: data)
         XCTAssertTrue(obj is [Any])
     }
@@ -100,7 +100,7 @@ final class UsageParsingTests: XCTestCase {
           "byProduct": { "build": 25, "api": 9, "chat": 1 }
         }
         """.utf8)
-        let snap = try XCTUnwrap(UsageResponseParser.parseJSON(json, accountEmail: nil))
+        let snap = try XCTUnwrap(GrokUsageResponseParser.parseJSON(json, accountEmail: nil))
         XCTAssertEqual(snap.products.count, 3)
     }
 
@@ -305,7 +305,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -357,7 +357,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -403,7 +403,7 @@ final class UsageParsingTests: XCTestCase {
                 products: products
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -437,7 +437,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -497,7 +497,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -563,7 +563,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -616,7 +616,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -660,7 +660,7 @@ final class UsageParsingTests: XCTestCase {
                 ]
             )
         ]
-        let week = try XCTUnwrap(DailyUsageBuilder.week(
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
             history: history,
             current: history.last,
             weekOffset: 0,
@@ -675,11 +675,11 @@ final class UsageParsingTests: XCTestCase {
 
     func testDailyCapFillFraction() {
         // 10% of weekly pool / (100/7) ≈ 0.70 of the daily track.
-        let fraction = DailyUsageBuilder.fillFraction(forDayUsage: 10)
+        let fraction = GrokDailyUsageBuilder.fillFraction(forDayUsage: 10)
         XCTAssertEqual(fraction, 10.0 / (100.0 / 7.0), accuracy: 0.001)
         // Over daily cap clamps to full track.
-        XCTAssertEqual(DailyUsageBuilder.fillFraction(forDayUsage: 21), 1.0, accuracy: 0.001)
-        XCTAssertEqual(DailyUsageBuilder.fillFraction(forDayUsage: 0), 0, accuracy: 0.001)
+        XCTAssertEqual(GrokDailyUsageBuilder.fillFraction(forDayUsage: 21), 1.0, accuracy: 0.001)
+        XCTAssertEqual(GrokDailyUsageBuilder.fillFraction(forDayUsage: 0), 0, accuracy: 0.001)
     }
 
     /// A lagging gRPC payload whose canonical reset already passed keeps
@@ -700,7 +700,7 @@ final class UsageParsingTests: XCTestCase {
     func testDailyUsagePreviewHasSevenDays() {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!
-        let week = DailyUsageBuilder.preview(calendar: cal)
+        let week = GrokDailyUsageBuilder.preview(calendar: cal)
         XCTAssertEqual(week.days.count, 7)
         XCTAssertTrue(week.hasDailyData)
         // Billing period: first day is Thursday for the synthetic Jul 16 reset.

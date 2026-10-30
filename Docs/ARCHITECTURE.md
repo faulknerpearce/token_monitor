@@ -60,7 +60,7 @@ TokenMon is an agent-style macOS app (`LSUIElement` + a custom `NSStatusItem`, n
 
 ## Auth sessions and storage
 
-Each cookie provider has a `ProviderAuthSession` subclass: `AuthSessionService` (Grok), `CursorAuthSession` (also used by Grokbot), `OpenCodeAuthSession`, `ClaudeAuthSession`, and `ChatGPTAuthSession`. `OpenRouterAuthSession` stores a pasted API key instead of cookies. Each session signs in through its own non-persistent `WKWebsiteDataStore`, keeps only an allowlist of essential cookies, and invalidates itself after three consecutive rejections (`authFailureThreshold`). A `sessionGeneration` counter lets pollers drop responses that finish after a sign-out or account switch.
+Each cookie provider has a `ProviderAuthSession` subclass: `GrokAuthSession` (Grok), `CursorAuthSession` (also used by Grokbot), `OpenCodeAuthSession`, `ClaudeAuthSession`, and `ChatGPTAuthSession`. `OpenRouterAuthSession` stores a pasted API key instead of cookies. Each session signs in through its own non-persistent `WKWebsiteDataStore`, keeps only an allowlist of essential cookies, and invalidates itself after three consecutive rejections (`authFailureThreshold`). A `sessionGeneration` counter lets pollers drop responses that finish after a sign-out or account switch.
 
 Credentials are stored through `SecretRoutingCredentialStore`:
 

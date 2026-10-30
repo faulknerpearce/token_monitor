@@ -9,7 +9,7 @@ struct ProviderRegistry {
     private let pollers: [MonitorProvider: any ProviderUsagePoller]
 
     init(
-        grok: UsagePoller,
+        grok: GrokUsagePoller,
         openCode: OpenCodeUsagePoller,
         cursor: CursorUsagePoller,
         claude: ClaudeUsagePoller,

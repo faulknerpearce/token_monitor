@@ -41,7 +41,7 @@ final class ProductCatalogTests: XCTestCase {
     /// A breakdown-less snapshot arrives as a synthesized "other" slice carrying
     /// the full used%; the panel shows it so the bar carries that usage.
     func testPanelProductsKeepsSynthesizedOtherSlice() {
-        let synthesized = UsageClient.synthesizeProducts(usedPercent: 64)
+        let synthesized = GrokUsageClient.synthesizeProducts(usedPercent: 64)
         let result = ProductCatalog.panelProducts(synthesized, visible: Set(ProductCatalog.knownIDs))
         XCTAssertEqual(result.map(\.id), ["other"])
         XCTAssertEqual(result.first?.percentOfPool, 64)
