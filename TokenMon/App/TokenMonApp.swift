@@ -195,12 +195,9 @@ final class AppModel: ObservableObject {
         // One coalesced change per burst, delivered after the values are set.
         childChanges
             .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] in
-                self?.objectWillChange.send()
-                // The history is not forwarded, so recording it does not loop.
-                self?.recordOverviewHistory()
-            }
+            .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        observeOverviewInputs()
         forwardChanges(from: settings)
         forwardChanges(from: grokHistory)
         forwardChanges(from: grokHourly)
@@ -262,6 +259,24 @@ final class AppModel: ObservableObject {
         for (_, providerPoller) in providers.all {
             body(providerPoller.pollingLoop)
         }
+    }
+
+    /// Records today's Overview chart inputs when one of them changes: the
+    /// hourly stores, the pollers' hourly usage, or the enabled providers.
+    /// The history itself is not an input, so recording it does not loop.
+    private func observeOverviewInputs() {
+        let inputs: [AnyPublisher<Void, Never>] = [
+            grokHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            claudeHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            grokbotHourly.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            cursorPoller.$dayHourlyUsage.map { _ in () }.eraseToAnyPublisher(),
+            openCodePoller.$dayHourlyUsage.map { _ in () }.eraseToAnyPublisher(),
+            settings.$enabledProviderIDs.map { _ in () }.eraseToAnyPublisher()
+        ]
+        Publishers.MergeMany(inputs)
+            .throttle(for: Self.changeCoalescing, scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] in self?.recordOverviewHistory() }
+            .store(in: &cancellables)
     }
 
     /// Re-arms the polling loops when a setting that feeds their interval or

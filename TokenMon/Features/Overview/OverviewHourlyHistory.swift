@@ -121,17 +121,25 @@ final class OverviewHourlyHistoryStore: ObservableObject {
     }
 
     /// Merges `series` into the day containing `date`, drops days past the
-    /// retention window, and saves when anything changed.
+    /// retention window, and saves when anything changed. Only that day's
+    /// entry is compared, so an unchanged record costs one day's merge.
     func record(_ series: OverviewDaySeries, at date: Date) {
         let key = DayKey.key(for: date, calendar: calendar)
         var next = days
+        var changed = false
         if series.hasActivity || next[key] != nil {
-            next[key] = (next[key] ?? OverviewDaySeries()).merging(series)
+            let merged = (next[key] ?? OverviewDaySeries()).merging(series)
+            if merged != next[key] {
+                next[key] = merged
+                changed = true
+            }
         }
-        if let oldest = DayKey.adding(days: -(Self.retentionDays - 1), to: key, calendar: calendar) {
+        if let oldest = DayKey.adding(days: -(Self.retentionDays - 1), to: key, calendar: calendar),
+           next.keys.contains(where: { $0 < oldest }) {
             next = next.filter { $0.key >= oldest }
+            changed = true
         }
-        guard next != days else { return }
+        guard changed else { return }
         days = next
         save()
     }
