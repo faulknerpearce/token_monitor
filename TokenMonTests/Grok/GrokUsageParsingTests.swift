@@ -1,7 +1,7 @@
 @testable import TokenMon
 import XCTest
 
-final class UsageParsingTests: XCTestCase {
+final class GrokUsageParsingTests: XCTestCase {
     func testParseFixtureJSON() throws {
         let json = Data("""
         {

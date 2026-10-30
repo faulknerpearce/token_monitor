@@ -40,7 +40,7 @@ private final class GrokStubProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-final class UsageClientTests: XCTestCase {
+final class GrokUsageClientTests: XCTestCase {
     private let billingPath = GrokUsageClient.billingEndpoint.path
     private let grpcHex = "000000005f0a5d0d0000104212001a00220b08b1debfd20610b8efb07f2a0b08b1d3e4d20610b8efb07f" +
         "3a070804150000b8413a07080215000050413a020806421c0802120b08b1debfd20610b8efb07f1a0b08b1d3e4d20610b8efb07f" +
