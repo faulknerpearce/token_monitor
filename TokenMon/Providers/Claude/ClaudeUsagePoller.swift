@@ -279,12 +279,8 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
         calendar: Calendar = .current
     ) -> [DailyBudgetDay] {
         guard !byDay.isEmpty else { return days }
-        return days.map { day in
-            var copy = day
-            if let models = byDay[DayKey.key(for: day.date, calendar: calendar)] {
-                copy.tokens = DailyTokenUsage(claudeModels: models)
-            }
-            return copy
+        return days.attachingTokens(calendar: calendar) { key in
+            byDay[key].map(DailyTokenUsage.init(claudeModels:))
         }
     }
 

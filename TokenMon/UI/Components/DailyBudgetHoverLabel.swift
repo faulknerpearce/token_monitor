@@ -123,3 +123,87 @@ struct DailyBudgetHoverLabel: View {
         }
     }
 }
+
+/// Hover tracking for a row of equal-width day columns: reports the column
+/// under the pointer and floats a ``DailyBudgetHoverLabel`` for it beside the
+/// pointer. Shared by every daily bar chart.
+private struct DailyBarsHoverModifier: ViewModifier {
+    let days: [DailyBudgetDay]
+    let allowanceNoun: String
+    @Binding var hoveredIndex: Int?
+
+    /// Pointer position in the row while it hovers there.
+    @State private var location: CGPoint?
+    /// Measured size of the label, for placing it beside the pointer.
+    @State private var labelSize: CGSize = .zero
+
+    func body(content: Content) -> some View {
+        GeometryReader { geo in
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case let .active(point):
+                        location = point
+                        hoveredIndex = DailyBudgetHover.columnIndex(
+                            x: point.x,
+                            columnWidth: days.isEmpty ? 0 : geo.size.width / CGFloat(days.count),
+                            count: days.count
+                        )
+                    case .ended:
+                        location = nil
+                        hoveredIndex = nil
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if let hoveredIndex, let location, days.indices.contains(hoveredIndex) {
+                        label(for: days[hoveredIndex], at: location, containerWidth: geo.size.width)
+                    }
+                }
+        }
+    }
+
+    private func label(for day: DailyBudgetDay, at pointer: CGPoint, containerWidth: CGFloat) -> some View {
+        let origin = DailyBudgetHover.labelOrigin(
+            pointer: pointer,
+            labelSize: labelSize,
+            containerWidth: containerWidth
+        )
+        return DailyBudgetHoverLabel(
+            day: day,
+            allowanceNoun: allowanceNoun,
+            isFuture: day.date > Calendar.current.startOfDay(for: Date())
+        )
+        .fixedSize()
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { size in
+            labelSize = size
+        }
+        // Hidden until measured, so it never flashes at the corner.
+        .opacity(labelSize == .zero ? 0 : 1)
+        .offset(x: origin.x, y: origin.y)
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// Floats a day's detail label beside the pointer over this row of
+    /// `days.count` equal-width columns, and reports the hovered column.
+    func dailyBarsHover(
+        days: [DailyBudgetDay],
+        allowanceNoun: String,
+        hoveredIndex: Binding<Int?>
+    ) -> some View {
+        modifier(DailyBarsHoverModifier(days: days, allowanceNoun: allowanceNoun, hoveredIndex: hoveredIndex))
+    }
+
+    /// Outlines a bar's stem while its column is hovered.
+    func hoverOutline(_ isHovered: Bool, cornerRadius: CGFloat = PanelChartStem.cornerRadius) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(isHovered ? 0.35 : 0), lineWidth: 1)
+        )
+    }
+}

@@ -113,6 +113,9 @@ struct GrokPanelView: View {
                         resetsAt: weekOffset == 0 ? snapshot.resetsAt : nil
                     )
                 }
+                // The bars' hover label can extend past the card; keep it
+                // above the views that follow.
+                .zIndex(1)
             }
 
             if let error = poller.lastError {

@@ -219,7 +219,7 @@ final class OpenCodeUsagePoller: ProviderUsagePoller {
             historyByDay: budgetSource.historyPercentByDay,
             weekOffset: weekOffset,
             now: budgetSource.referenceNow
-        )?.days
+        )?.days.attachingTokens(budgetSource.tokensByDay)
     }
 
     private static func buildDailyBudgetDays(
@@ -233,11 +233,16 @@ final class OpenCodeUsagePoller: ProviderUsagePoller {
         let usedPercent = snapshot.monthlyUsedPercent
         let resetsAt = monthly?.resetsAt
         return await Task.detached(priority: .utility) {
-            OpenCodeLocalStats.monthDailyBudgetDays(
+            guard var budget = OpenCodeLocalStats.monthDailyBudgetDays(
                 limitUSD: monthlyLimit,
                 usedPercent: usedPercent,
                 periodResetsAt: resetsAt
+            ) else { return nil }
+            budget.tokensByDay = OpenCodeLocalStats.dailyTokens(
+                since: OpenCodeLocalStats.scanStart(now: budget.referenceNow)
             )
+            budget.days = budget.days.attachingTokens(budget.tokensByDay)
+            return budget
         }.value
     }
 

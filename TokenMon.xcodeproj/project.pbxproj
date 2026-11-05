@@ -22,6 +22,7 @@
 		12CE961787E2B45C2EB685BB /* GrokHistoryImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 208DE1472F36E49ECB046CB8 /* GrokHistoryImport.swift */; };
 		141AE334C343C2386FA351C7 /* UsagePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD114DF69FF92FB987B1451 /* UsagePool.swift */; };
 		1494260E1ECFA7526F241973 /* AppSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73439FAC00207D1AEBE354C /* AppSupport.swift */; };
+		153980E568520A501C80A8F6 /* DailyTokenUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0936695A686A705D9616D5 /* DailyTokenUsageTests.swift */; };
 		17371E94D2D0D78EC3F2AD7E /* AppVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0298514421CD199D587E721F /* AppVersionTests.swift */; };
 		183C01B83BA35972D2664899 /* GrokModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C36666A29CD67949F2198A /* GrokModels.swift */; };
 		18E25EA4F0173604E6813A3A /* ChatGPTAccessTokenCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22D6EEACD62BFA89A36B71 /* ChatGPTAccessTokenCacheTests.swift */; };
@@ -39,6 +40,7 @@
 		26404D26FAD27814ACCFBBBB /* GrokDailyUsageBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69DF42E1E35463C382C71A1D /* GrokDailyUsageBuilder.swift */; };
 		27708FE67616DF783006606C /* ChatGPTPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C9BA690FBDE2552436BE62 /* ChatGPTPanelView.swift */; };
 		280BCF1923E8768B3B5A28E4 /* GrokbotPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128B083D5F66A4B86258C392 /* GrokbotPanelView.swift */; };
+		28C7D215ECCA6ECAD81C99C3 /* DailyTokenUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D8EE1005CB6E65C0D5459 /* DailyTokenUsage.swift */; };
 		298C863AB7E62E9D5CB3CC99 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB537762C8DFD0F0A4108A10 /* UpdateCheckerTests.swift */; };
 		2BEB233FB9952B848CC40070 /* DailyBudgetHoverLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A2479978DF223C5A3FB032 /* DailyBudgetHoverLabel.swift */; };
 		2C9A81B0E389C33AD009717F /* OpenCodeZenCostEstimate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87B8D8414E03E5B888599ED /* OpenCodeZenCostEstimate.swift */; };
@@ -344,6 +346,7 @@
 		98AF438463764D00181B1BDF /* GrokbotUsagePollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsagePollerTests.swift; sourceTree = "<group>"; };
 		9945496BC4F5F1460E0D9980 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		99D2E036E380B0DDABA98D7A /* NeverRespondingURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeverRespondingURLProtocol.swift; sourceTree = "<group>"; };
+		9A0936695A686A705D9616D5 /* DailyTokenUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTokenUsageTests.swift; sourceTree = "<group>"; };
 		9A94E1DFC2CFDEAF07C859D8 /* GrokPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokPanelView.swift; sourceTree = "<group>"; };
 		9D349E106AF7E3ACD74E9615 /* PanelTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelTypography.swift; sourceTree = "<group>"; };
 		9E18DFF7A512205660DEF588 /* CursorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorPanelView.swift; sourceTree = "<group>"; };
@@ -414,6 +417,7 @@
 		F35DC558D3B83BCDF5570A43 /* OpenRouterAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterAuthSession.swift; sourceTree = "<group>"; };
 		F430FF7C5A3558077DD46EA1 /* SignInBrowserNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserNavigation.swift; sourceTree = "<group>"; };
 		F4BDA550A83633C5A4301FF7 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
+		F69D8EE1005CB6E65C0D5459 /* DailyTokenUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTokenUsage.swift; sourceTree = "<group>"; };
 		F6C0354565D378468D97357D /* ProviderColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColors.swift; sourceTree = "<group>"; };
 		F727FF0E3AAB4DA6D1CBA072 /* CursorUsageEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorUsageEvents.swift; sourceTree = "<group>"; };
 		F9786F9913C1B736A61D9F14 /* SegmentedUsageBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedUsageBarTests.swift; sourceTree = "<group>"; };
@@ -883,6 +887,7 @@
 		AF6811CF3D2D5DF066E1A339 /* Usage */ = {
 			isa = PBXGroup;
 			children = (
+				9A0936695A686A705D9616D5 /* DailyTokenUsageTests.swift */,
 				D083AECFFB3A2E279673002F /* DayKeyTests.swift */,
 				7F3D6079EADCE7FAFE6973C7 /* UsagePoolTests.swift */,
 			);
@@ -916,6 +921,7 @@
 			children = (
 				8D1811D20FD36F1FE6B12397 /* DailyBudget.swift */,
 				FDEE04D675F839698D199A6B /* DailyBudgetPace.swift */,
+				F69D8EE1005CB6E65C0D5459 /* DailyTokenUsage.swift */,
 				0F31151B54ECEEE84B43FDD8 /* DayKey.swift */,
 				72E61C3E4D69105F655DCB85 /* Percent.swift */,
 				ADD114DF69FF92FB987B1451 /* UsagePool.swift */,
@@ -1207,6 +1213,7 @@
 				F6BEE4D070BD4C2FDF13EC40 /* DailyBudgetTests.swift in Sources */,
 				81960443E797D0AA8D68A31C /* DailyBudgetWeekOffsetTests.swift in Sources */,
 				2CF14F3F7EDE7A31413484BC /* DailyQuotaDeltaStoreTests.swift in Sources */,
+				153980E568520A501C80A8F6 /* DailyTokenUsageTests.swift in Sources */,
 				7A8B6C6D83133E7D71903FF0 /* DayKeyTests.swift in Sources */,
 				0343F0863B6CA22D49109EE0 /* FormatTests.swift in Sources */,
 				34D45993280F40BA41CC9BA5 /* GrokHistoryStoreTests.swift in Sources */,
@@ -1298,6 +1305,7 @@
 				2BEB233FB9952B848CC40070 /* DailyBudgetHoverLabel.swift in Sources */,
 				022CDBAC0DC5B0255C333910 /* DailyBudgetPace.swift in Sources */,
 				BCD4EC6E69DAD41E771AD486 /* DailyQuotaDeltaStore.swift in Sources */,
+				28C7D215ECCA6ECAD81C99C3 /* DailyTokenUsage.swift in Sources */,
 				A7F8E2401F0FEF2E1EA8A9FC /* DailyUsageChartView.swift in Sources */,
 				21A4AFC7363077FA40FF9EB5 /* DayKey.swift in Sources */,
 				453118CA173530F3D8E442DF /* Domain.swift in Sources */,
