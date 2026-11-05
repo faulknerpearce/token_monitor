@@ -145,6 +145,7 @@ final class CursorUsagePoller: ProviderUsagePoller {
                 if snap.costStats == nil, let previous = snapshot,
                    previous.billingCycleStart == snap.billingCycleStart {
                     snap.costStats = previous.costStats
+                    snap.dailyTokens = previous.dailyTokens
                     hourly = Self.carriedHourly(dayHourlyUsage, fallback: hourly)
                     estimatedWeightByDay = budgetContext?.estimatedWeightByDay ?? estimatedWeightByDay
                 }
@@ -180,7 +181,7 @@ final class CursorUsagePoller: ProviderUsagePoller {
                     billingCycleStart: snap.billingCycleStart,
                     billingCycleEnd: cycleEnd,
                     now: snap.fetchedAt
-                )
+                )?.attachingTokens(snap.dailyTokens)
                 lastError = nil
                 lastRefreshedAt = Date()
                 dataSourceLabel = "Cursor dashboard"
@@ -315,6 +316,6 @@ final class CursorUsagePoller: ProviderUsagePoller {
             billingCycleEnd: budgetContext.billingCycleEnd,
             weekOffset: weekOffset,
             now: budgetContext.referenceNow
-        )
+        )?.attachingTokens(snapshot?.dailyTokens ?? [:])
     }
 }

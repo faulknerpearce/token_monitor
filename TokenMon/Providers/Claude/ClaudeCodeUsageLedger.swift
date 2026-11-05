@@ -201,23 +201,16 @@ extension DailyTokenUsage {
     /// One day's Claude Code counts, summed over `models` and valued at API rates.
     init(claudeModels models: [String: ClaudeModelTokens]) {
         self.init()
-        var cost = 0.0
         for (modelID, counts) in models {
-            inputTokens += counts.inputTokens
-            outputTokens += counts.outputTokens
-            cacheReadTokens += counts.cacheReadTokens
-            cacheWriteTokens += counts.cacheWrite5mTokens + counts.cacheWrite1hTokens
-            if let modelCost = ClaudeAPIPricing.cost(of: counts, modelID: modelID) {
-                cost += modelCost
-            } else if counts.totalTokens > 0 {
-                hasUnpriced = true
-            }
+            add(
+                model: ClaudeModelName.display(modelID),
+                input: counts.inputTokens,
+                output: counts.outputTokens,
+                cacheRead: counts.cacheReadTokens,
+                cacheWrite: counts.cacheWrite5mTokens + counts.cacheWrite1hTokens,
+                costUSD: ClaudeAPIPricing.cost(of: counts, modelID: modelID)
+            )
         }
-        costUSD = cost
-        self.models = models
-            .filter { $0.value.totalTokens > 0 }
-            .map { Model(name: ClaudeModelName.display($0.key), tokens: $0.value.totalTokens) }
-            .sorted { $0.tokens != $1.tokens ? $0.tokens > $1.tokens : $0.name < $1.name }
     }
 }
 

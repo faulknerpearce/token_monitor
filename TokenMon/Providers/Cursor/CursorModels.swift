@@ -83,6 +83,8 @@ struct CursorEventAggregates: Sendable {
     var hourly: CursorDayHourlyUsage
     /// Per-day token weight for the daily back-fill.
     var estimatedWeightByDay: [Date: Double]
+    /// Tokens per local ``DayKey``, for the daily bars' hover label.
+    var tokensByDay: [String: DailyTokenUsage] = [:]
 
     /// True when these aggregates can stand in for a fresh fetch at `now`:
     /// same event window, same calendar day, and younger than
@@ -102,8 +104,12 @@ struct CursorUsageEvent: Hashable, Sendable {
     var requestsCosts: Double
     var inputTokens: Int64
     var outputTokens: Int64
+    var cacheReadTokens: Int64
+    var cacheWriteTokens: Int64
     /// Input + output + cache-write + cache-read tokens.
     var totalTokens: Int64
+    /// Model id as Cursor reports it; empty when missing.
+    var model: String
 
     /// Activity weight: `requestsCosts`, else the token total, else charged
     /// cents, else `1`.
@@ -118,7 +124,8 @@ struct CursorUsageEvent: Hashable, Sendable {
     /// and nil for Cursor Bot (`grok-bot-*`) usage, which has its own
     /// allowance (tracked by the Grokbot provider) outside the Cursor plan pool.
     init?(json event: [String: Any]) {
-        guard !((event["model"] as? String) ?? "").hasPrefix("grok-bot"),
+        let model = (event["model"] as? String) ?? ""
+        guard !model.hasPrefix("grok-bot"),
               let date = CursorUsageClient.eventTimestamp(event)
         else { return nil }
         self.init(
@@ -127,7 +134,10 @@ struct CursorUsageEvent: Hashable, Sendable {
             requestsCosts: max(0, JSON.number(event["requestsCosts"]) ?? 0),
             inputTokens: CursorUsageClient.inputTokenCount(event),
             outputTokens: CursorUsageClient.outputTokenCount(event),
-            totalTokens: CursorUsageClient.tokenCount(event)
+            cacheReadTokens: CursorUsageClient.tokenUsageCount(event, "cacheReadTokens"),
+            cacheWriteTokens: CursorUsageClient.tokenUsageCount(event, "cacheWriteTokens"),
+            totalTokens: CursorUsageClient.tokenCount(event),
+            model: model
         )
     }
 
@@ -137,14 +147,20 @@ struct CursorUsageEvent: Hashable, Sendable {
         requestsCosts: Double = 0,
         inputTokens: Int64 = 0,
         outputTokens: Int64 = 0,
-        totalTokens: Int64 = 0
+        cacheReadTokens: Int64 = 0,
+        cacheWriteTokens: Int64 = 0,
+        totalTokens: Int64 = 0,
+        model: String = ""
     ) {
         self.date = date
         self.chargedCents = chargedCents
         self.requestsCosts = requestsCosts
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
+        self.cacheReadTokens = cacheReadTokens
+        self.cacheWriteTokens = cacheWriteTokens
         self.totalTokens = totalTokens
+        self.model = model
     }
 }
 
@@ -228,6 +244,9 @@ struct CursorSnapshot: Identifiable, Hashable, Sendable {
     var onDemandLimitUSD: Double?
     var costStats: CursorCostStats?
     var accountEmail: String?
+    /// Tokens per local ``DayKey`` from the usage events; empty when the
+    /// events could not be read.
+    var dailyTokens: [String: DailyTokenUsage] = [:]
 
     var resetsAt: Date? { billingCycleEnd }
 

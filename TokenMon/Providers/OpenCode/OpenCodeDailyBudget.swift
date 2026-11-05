@@ -45,6 +45,35 @@ extension OpenCodeLocalStats {
         return byDay
     }
 
+    /// Go-plan tokens per local day (``DayKey`` in `calendar`) since `since`,
+    /// from the cached database scan; empty when the database cannot be read.
+    static func dailyTokens(
+        since: Date,
+        dbURL: URL = databaseURL,
+        calendar: Calendar = .current
+    ) -> [String: DailyTokenUsage] {
+        guard let scan = try? loadScan(dbURL: dbURL, since: since) else { return [:] }
+        return dailyTokens(rows: scan.rows.filter { goEligibleProvider($0.providerID) }, calendar: calendar)
+    }
+
+    /// Tokens of `rows` per local day, valued at their billable cost.
+    static func dailyTokens(rows: [SessionRow], calendar: Calendar = .current) -> [String: DailyTokenUsage] {
+        var tally = DailyTokenUsageTally(calendar: calendar)
+        for row in rows {
+            let billable = row.billable
+            tally.add(
+                at: row.date,
+                model: OpenCodeModelName.display(row.modelID),
+                input: row.inputTokens,
+                output: row.outputTokens,
+                cacheRead: row.cacheReadTokens,
+                cacheWrite: row.cacheWriteTokens,
+                costUSD: billable.isUnpriced ? nil : billable.cost
+            )
+        }
+        return tally.days
+    }
+
     /// Scaled in-period spends plus unscaled history so the panel can re-slice
     /// an earlier Monday week without reading SQLite again.
     struct OpenCodeMonthBudget: Sendable {
@@ -57,6 +86,8 @@ extension OpenCodeLocalStats {
         var knownStart: Date?
         var resetsAt: Date?
         var referenceNow: Date
+        /// Go-plan tokens per local ``DayKey``, for the bars' hover label.
+        var tokensByDay: [String: DailyTokenUsage] = [:]
     }
 
     /// Builds the last-7 daily-budget bars for the Go **subscription** month,

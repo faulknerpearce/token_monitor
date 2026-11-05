@@ -128,13 +128,34 @@ extension CursorUsageClient {
     }
 
     static func inputTokenCount(_ event: [String: Any]) -> Int64 {
-        guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
-        return safeInt64(JSON.number(tokenUsage["inputTokens"]) ?? 0)
+        tokenUsageCount(event, "inputTokens")
     }
 
     static func outputTokenCount(_ event: [String: Any]) -> Int64 {
+        tokenUsageCount(event, "outputTokens")
+    }
+
+    /// One `tokenUsage` count of an event, e.g. `"cacheReadTokens"`; 0 when missing.
+    static func tokenUsageCount(_ event: [String: Any], _ key: String) -> Int64 {
         guard let tokenUsage = event["tokenUsage"] as? [String: Any] else { return 0 }
-        return safeInt64(JSON.number(tokenUsage["outputTokens"]) ?? 0)
+        return safeInt64(JSON.number(tokenUsage[key]) ?? 0)
+    }
+
+    /// Tokens per local day, with each event's charged cost.
+    static func dailyTokens(events: [CursorUsageEvent], calendar: Calendar = .current) -> [String: DailyTokenUsage] {
+        var tally = DailyTokenUsageTally(calendar: calendar)
+        for event in events {
+            tally.add(
+                at: event.date,
+                model: event.model,
+                input: event.inputTokens,
+                output: event.outputTokens,
+                cacheRead: event.cacheReadTokens,
+                cacheWrite: event.cacheWriteTokens,
+                costUSD: event.chargedCents / 100
+            )
+        }
+        return tally.days
     }
 
     /// Per-day token weight for the pool-estimate back-fill, within the

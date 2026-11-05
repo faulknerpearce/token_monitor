@@ -104,10 +104,6 @@ struct DailyBudgetBarsView: View {
 
     /// Index into `days` of the bar under the pointer, if any.
     @State private var hoveredIndex: Int?
-    /// Pointer position in the bars row while it hovers there.
-    @State private var hoverLocation: CGPoint?
-    /// Measured size of the hover label, for placing it beside the pointer.
-    @State private var hoverLabelSize: CGSize = .zero
 
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
@@ -205,56 +201,14 @@ struct DailyBudgetBarsView: View {
         }
     }
 
-    /// The stems, with a floating detail label over the one under the pointer.
+    /// The stems, with a floating detail label beside the pointer.
     private var barsRow: some View {
-        GeometryReader { geo in
-            let columnWidth = days.isEmpty ? 0 : geo.size.width / CGFloat(days.count)
-            HStack(alignment: .bottom, spacing: 0) {
-                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                    dayColumn(day, isHovered: hoveredIndex == index)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .onContinuousHover { phase in
-                switch phase {
-                case let .active(location):
-                    hoverLocation = location
-                    hoveredIndex = DailyBudgetHover.columnIndex(
-                        x: location.x,
-                        columnWidth: columnWidth,
-                        count: days.count
-                    )
-                case .ended:
-                    hoveredIndex = nil
-                    hoverLocation = nil
-                }
-            }
-            .overlay(alignment: .topLeading) {
-                if let hoveredIndex, let hoverLocation, days.indices.contains(hoveredIndex) {
-                    let origin = DailyBudgetHover.labelOrigin(
-                        pointer: hoverLocation,
-                        labelSize: hoverLabelSize,
-                        containerWidth: geo.size.width
-                    )
-                    DailyBudgetHoverLabel(
-                        day: days[hoveredIndex],
-                        allowanceNoun: allowanceNoun,
-                        isFuture: days[hoveredIndex].date > Calendar.current.startOfDay(for: Date())
-                    )
-                    .fixedSize()
-                    .onGeometryChange(for: CGSize.self) { proxy in
-                        proxy.size
-                    } action: { size in
-                        hoverLabelSize = size
-                    }
-                    // Hidden until measured, so it never flashes at the corner.
-                    .opacity(hoverLabelSize == .zero ? 0 : 1)
-                    .offset(x: origin.x, y: origin.y)
-                    .allowsHitTesting(false)
-                }
+        HStack(alignment: .bottom, spacing: 0) {
+            ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                dayColumn(day, isHovered: hoveredIndex == index)
             }
         }
+        .dailyBarsHover(days: days, allowanceNoun: allowanceNoun, hoveredIndex: $hoveredIndex)
         .frame(maxWidth: .infinity)
         .frame(height: trackHeight + 42)
         .zIndex(1)
@@ -283,10 +237,7 @@ struct DailyBudgetBarsView: View {
             }
             .frame(width: Self.stemWidth, height: trackHeight)
             .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isHovered ? 0.35 : 0), lineWidth: 1)
-            )
+            .hoverOutline(isHovered)
             .frame(maxWidth: .infinity)
 
             VStack(spacing: 1) {

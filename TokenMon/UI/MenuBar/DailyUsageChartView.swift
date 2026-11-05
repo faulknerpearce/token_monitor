@@ -15,19 +15,27 @@ struct DailyUsageChartView: View {
     /// Pool reset instant — paces the remainder against time left until reset.
     var resetsAt: Date?
 
+    /// Index into `week.displayDays` of the bar under the pointer, if any.
+    @State private var hoveredIndex: Int?
+
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
 
-    private var pace: DailyBudget.PaceHeadroom? {
-        guard let periodUsedPercent else { return nil }
-        let days = week.displayDays.map {
+    /// The week's days as daily-budget days, for pacing and the hover label.
+    private var budgetDays: [DailyBudgetDay] {
+        week.displayDays.map {
             DailyBudgetDay(
                 date: $0.dayStart,
                 spentUSD: $0.totalPercent,
                 budgetUSD: GrokDailyUsageBuilder.dailyCapPercent
             )
         }
+    }
+
+    private var pace: DailyBudget.PaceHeadroom? {
+        guard let periodUsedPercent else { return nil }
+        let days = budgetDays
         // Billing-period week already spans the full SuperGrok pool window.
         // Credit days elapsed through today so the on-track allowance includes today.
         let elapsed = DailyBudget.elapsedDaysThroughToday(from: week.weekStart)
@@ -69,12 +77,14 @@ struct DailyUsageChartView: View {
             )
 
             HStack(alignment: .bottom, spacing: 0) {
-                ForEach(week.displayDays) { day in
-                    dayColumn(day)
+                ForEach(Array(week.displayDays.enumerated()), id: \.element.id) { index, day in
+                    dayColumn(day, isHovered: hoveredIndex == index)
                 }
             }
+            .dailyBarsHover(days: budgetDays, allowanceNoun: "weekly", hoveredIndex: $hoveredIndex)
             .frame(maxWidth: .infinity)
             .frame(height: trackHeight + 42)
+            .zIndex(1)
 
             if let footerCaption {
                 Text(footerCaption)
@@ -84,7 +94,7 @@ struct DailyUsageChartView: View {
         }
     }
 
-    private func dayColumn(_ day: DailyUsageDay) -> some View {
+    private func dayColumn(_ day: DailyUsageDay, isHovered: Bool) -> some View {
         let fraction = Self.fillFraction(forDayUsage: day.totalPercent)
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
         let isFuture = day.dayStart > Calendar.current.startOfDay(for: Date())
@@ -100,12 +110,8 @@ struct DailyUsageChartView: View {
             }
             .frame(width: Self.stemWidth, height: trackHeight)
             .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
+            .hoverOutline(isHovered)
             .frame(maxWidth: .infinity)
-            .help(
-                day.totalPercent > 0.05
-                    ? String(format: "%.0f%% of weekly allowance", day.totalPercent)
-                    : ""
-            )
 
             VStack(spacing: 1) {
                 Text("\(max(0, Int(day.totalPercent.rounded())))%")

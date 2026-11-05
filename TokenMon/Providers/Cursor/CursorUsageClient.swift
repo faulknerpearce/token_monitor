@@ -73,6 +73,7 @@ struct CursorUsageClient: Sendable {
             return (snap, .empty(dayStart: dayStart), [:])
         }
         snap.costStats = aggregates.costStats
+        snap.dailyTokens = aggregates.tokensByDay
         let hourly = calendar.isDate(aggregates.hourly.dayStart, inSameDayAs: dayStart)
             ? aggregates.hourly
             : .empty(dayStart: dayStart)
@@ -175,7 +176,8 @@ struct CursorUsageClient: Sendable {
                 cycleStart: bounds?.start ?? snap.billingCycleStart,
                 cycleEnd: bounds?.end ?? snap.billingCycleEnd,
                 calendar: calendar
-            )
+            ),
+            tokensByDay: dailyTokens(events: events, calendar: calendar)
         )
     }
 
