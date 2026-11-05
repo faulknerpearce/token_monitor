@@ -102,6 +102,13 @@ struct DailyBudgetBarsView: View {
     /// Past weeks omit pace and the "no usage yet" fallback.
     var showsLiveFooter: Bool = true
 
+    /// Index into `days` of the bar under the pointer, if any.
+    @State private var hoveredIndex: Int?
+    /// Pointer position in the bars row while it hovers there.
+    @State private var hoverLocation: CGPoint?
+    /// Measured size of the hover label, for placing it beside the pointer.
+    @State private var hoverLabelSize: CGSize = .zero
+
     private let trackHeight: CGFloat = PanelChartStem.height
     private static let stemWidth: CGFloat = PanelChartStem.width
     private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
@@ -188,13 +195,7 @@ struct DailyBudgetBarsView: View {
                 )
             }
 
-            HStack(alignment: .bottom, spacing: 0) {
-                ForEach(days) { day in
-                    dayColumn(day)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: trackHeight + 42)
+            barsRow
 
             if let footerCaption {
                 Text(footerCaption)
@@ -204,7 +205,62 @@ struct DailyBudgetBarsView: View {
         }
     }
 
-    private func dayColumn(_ day: DailyBudgetDay) -> some View {
+    /// The stems, with a floating detail label over the one under the pointer.
+    private var barsRow: some View {
+        GeometryReader { geo in
+            let columnWidth = days.isEmpty ? 0 : geo.size.width / CGFloat(days.count)
+            HStack(alignment: .bottom, spacing: 0) {
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    dayColumn(day, isHovered: hoveredIndex == index)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case let .active(location):
+                    hoverLocation = location
+                    hoveredIndex = DailyBudgetHover.columnIndex(
+                        x: location.x,
+                        columnWidth: columnWidth,
+                        count: days.count
+                    )
+                case .ended:
+                    hoveredIndex = nil
+                    hoverLocation = nil
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if let hoveredIndex, let hoverLocation, days.indices.contains(hoveredIndex) {
+                    let origin = DailyBudgetHover.labelOrigin(
+                        pointer: hoverLocation,
+                        labelSize: hoverLabelSize,
+                        containerWidth: geo.size.width
+                    )
+                    DailyBudgetHoverLabel(
+                        day: days[hoveredIndex],
+                        allowanceNoun: allowanceNoun,
+                        isFuture: days[hoveredIndex].date > Calendar.current.startOfDay(for: Date())
+                    )
+                    .fixedSize()
+                    .onGeometryChange(for: CGSize.self) { proxy in
+                        proxy.size
+                    } action: { size in
+                        hoverLabelSize = size
+                    }
+                    // Hidden until measured, so it never flashes at the corner.
+                    .opacity(hoverLabelSize == .zero ? 0 : 1)
+                    .offset(x: origin.x, y: origin.y)
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: trackHeight + 42)
+        .zIndex(1)
+    }
+
+    private func dayColumn(_ day: DailyBudgetDay, isHovered: Bool) -> some View {
         // Full stem height = the day's allowance; fill = usage vs that allowance.
         let fraction = day.percentOfBudget / 100
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
@@ -227,8 +283,11 @@ struct DailyBudgetBarsView: View {
             }
             .frame(width: Self.stemWidth, height: trackHeight)
             .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(isHovered ? 0.35 : 0), lineWidth: 1)
+            )
             .frame(maxWidth: .infinity)
-            .help(dayHelp(day))
 
             VStack(spacing: 1) {
                 Text("\(max(0, Int(day.spentUSD.rounded())))%")
@@ -260,17 +319,6 @@ struct DailyBudgetBarsView: View {
         weekday.dateFormat = "EEE"
         weekdayFormatterCache[key] = weekday
         return weekday
-    }
-
-    private func dayHelp(_ day: DailyBudgetDay) -> String {
-        let dateStr = Format.date(day.date, dateFormat: "EEE, MMM d")
-        if day.isPriorWindow {
-            return String(format: "%@: %.1f%% of the %@ pool before the provider reset it early", dateStr, day.spentUSD, allowanceNoun)
-        }
-        if day.budgetUSD <= 0 { return "\(dateStr): no budget" }
-        if day.spentUSD <= 0.001 { return String(format: "%@: used 0%% of %.1f%% allowance", dateStr, day.budgetUSD) }
-        let ofAllowance = Int((day.spentUSD / day.budgetUSD * 100).rounded())
-        return String(format: "%@: %.1f%% of %@, %d%% of daily allowance", dateStr, day.spentUSD, allowanceNoun, ofAllowance)
     }
 }
 
@@ -339,6 +387,14 @@ struct NavigableDailyBudgetCard: View {
     @State private var weekOffset = 0
 
     var body: some View {
+        card
+            // The bars' hover label can extend past the card; keep it above
+            // the cards that follow.
+            .zIndex(1)
+    }
+
+    @ViewBuilder
+    private var card: some View {
         let days = daysForWeek(weekOffset)
         if !days.isEmpty {
             PanelCard {

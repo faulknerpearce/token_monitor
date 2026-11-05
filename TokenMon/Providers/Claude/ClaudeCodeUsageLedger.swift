@@ -187,6 +187,40 @@ struct ClaudeCodeUsageSummary: Hashable, Sendable {
     }
 }
 
+/// One Claude Code scan for the panel: the ledger's summary, and token counts
+/// per local day for the daily bars.
+struct ClaudeCodeUsageScan: Hashable, Sendable {
+    var summary: ClaudeCodeUsageSummary
+    /// Counts per ``DayKey`` in the current calendar, then model, from the
+    /// transcripts still on this Mac. Unlike the UTC ledger, days whose
+    /// transcripts Claude Code deleted are missing.
+    var localDailyTokens: ClaudeDailyTokens = [:]
+}
+
+extension DailyTokenUsage {
+    /// One day's Claude Code counts, summed over `models` and valued at API rates.
+    init(claudeModels models: [String: ClaudeModelTokens]) {
+        self.init()
+        var cost = 0.0
+        for (modelID, counts) in models {
+            inputTokens += counts.inputTokens
+            outputTokens += counts.outputTokens
+            cacheReadTokens += counts.cacheReadTokens
+            cacheWriteTokens += counts.cacheWrite5mTokens + counts.cacheWrite1hTokens
+            if let modelCost = ClaudeAPIPricing.cost(of: counts, modelID: modelID) {
+                cost += modelCost
+            } else if counts.totalTokens > 0 {
+                hasUnpriced = true
+            }
+        }
+        costUSD = cost
+        self.models = models
+            .filter { $0.value.totalTokens > 0 }
+            .map { Model(name: ClaudeModelName.display($0.key), tokens: $0.value.totalTokens) }
+            .sorted { $0.tokens != $1.tokens ? $0.tokens > $1.tokens : $0.name < $1.name }
+    }
+}
+
 /// Display names for Claude model ids (`claude-opus-5-5` → "Opus 5.5").
 enum ClaudeModelName {
     static func display(_ modelID: String) -> String {

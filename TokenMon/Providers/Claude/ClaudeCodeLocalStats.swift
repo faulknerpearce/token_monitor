@@ -102,6 +102,20 @@ enum ClaudeCodeLocalStats {
         calendar: Calendar = .autoupdatingCurrent,
         cache: ClaudeCodeFileCache = fileCache
     ) -> ClaudeDailyTokens? {
+        scanDailyTokens(directories: directories, calendars: [calendar], cache: cache)?.first
+    }
+
+    /// Token counts per day and model for each of `calendars`, in the same
+    /// order, from one walk of the transcripts; `nil` when no Claude Code
+    /// `projects` directory exists on this Mac.
+    ///
+    /// The ledger keys days in UTC while the daily bars use local days, so one
+    /// scan serves both without walking the folders twice.
+    static func scanDailyTokens(
+        directories: [URL] = projectsDirectories(),
+        calendars: [Calendar],
+        cache: ClaudeCodeFileCache = fileCache
+    ) -> [ClaudeDailyTokens]? {
         let fm = FileManager.default
         let existing = directories.filter { url in
             var isDir: ObjCBool = false
@@ -111,7 +125,7 @@ enum ClaudeCodeLocalStats {
         for directory in existing {
             cache.update(directory: directory)
         }
-        return cache.dailyTokens(calendar: calendar)
+        return calendars.map { cache.dailyTokens(calendar: $0) }
     }
 
     private static let usageMarker = Array("\"usage\"".utf8)
@@ -298,6 +312,10 @@ private struct TranscriptCacheCreation: Decodable {
 /// did not stop after a newline, is parsed again in full. Totals take only
 /// the new entries, and are rebuilt from every file's entries when entries
 /// were dropped (a file removed or parsed again).
+///
+/// One running tally is kept per calendar asked for (the ledger's UTC days and
+/// the bars' local days), each brought up to date from a shared log of the
+/// entries added since the slowest tally last caught up.
 final class ClaudeCodeFileCache: @unchecked Sendable {
     private struct Item {
         /// The scanned folder the file was found under.
@@ -310,11 +328,25 @@ final class ClaudeCodeFileCache: @unchecked Sendable {
         var entries: [ClaudeCodeLocalStats.Entry]
     }
 
+    /// A calendar's running totals and how many added entries they include.
+    private struct TallyState {
+        var tally: ClaudeDailyTokenTally
+        /// Count of entries ever added (`addedCount`) this tally includes.
+        var applied: Int
+    }
+
+    /// Calendars beyond this many (a Mac whose time zone keeps changing) drop
+    /// every other calendar's tally, so the shared log cannot grow unbounded.
+    private static let maxTallies = 4
+
     private let lock = NSLock()
     private var items: [String: Item] = [:]
-    private var tally: ClaudeDailyTokenTally?
-    /// Entries added since `tally` was last brought up to date.
-    private var pending: [ClaudeCodeLocalStats.Entry] = []
+    private var tallies: [Calendar: TallyState] = [:]
+    /// Entries added since the slowest tally was brought up to date;
+    /// `added[0]` is entry number `addedBase`.
+    private var added: [ClaudeCodeLocalStats.Entry] = []
+    private var addedBase = 0
+    private var addedCount: Int { addedBase + added.count }
     private var needsRebuild = false
 
     /// Brings the cached entries up to date with every `.jsonl` file under
@@ -349,23 +381,46 @@ final class ClaudeCodeFileCache: @unchecked Sendable {
     func dailyTokens(calendar: Calendar) -> ClaudeDailyTokens {
         lock.lock()
         defer { lock.unlock() }
-        if needsRebuild || tally?.calendar != calendar {
-            var rebuilt = ClaudeDailyTokenTally(calendar: calendar)
-            for path in items.keys.sorted() {
-                for entry in items[path]?.entries ?? [] {
-                    rebuilt.add(entry)
-                }
-            }
-            tally = rebuilt
+        if needsRebuild {
+            tallies = [:]
             needsRebuild = false
-        } else if var current = tally {
-            for entry in pending {
-                current.add(entry)
-            }
-            tally = current
         }
-        pending = []
-        return tally?.days ?? [:]
+        let state: TallyState
+        if var current = tallies[calendar] {
+            for entry in added[(current.applied - addedBase)...] {
+                current.tally.add(entry)
+            }
+            current.applied = addedCount
+            state = current
+        } else {
+            if tallies.count >= Self.maxTallies {
+                tallies = [:]
+            }
+            state = TallyState(tally: rebuiltTally(calendar: calendar), applied: addedCount)
+        }
+        tallies[calendar] = state
+        trimAdded()
+        return state.tally.days
+    }
+
+    /// A tally over every cached file's entries. Caller holds `lock`.
+    private func rebuiltTally(calendar: Calendar) -> ClaudeDailyTokenTally {
+        var rebuilt = ClaudeDailyTokenTally(calendar: calendar)
+        for path in items.keys.sorted() {
+            for entry in items[path]?.entries ?? [] {
+                rebuilt.add(entry)
+            }
+        }
+        return rebuilt
+    }
+
+    /// Drops logged entries every tally already includes. Caller holds `lock`.
+    private func trimAdded() {
+        let slowest = tallies.values.map(\.applied).min() ?? addedCount
+        let drop = slowest - addedBase
+        guard drop > 0 else { return }
+        added.removeFirst(drop)
+        addedBase = slowest
     }
 
     private func refresh(url: URL, root: String, modified: Date, size: Int, fileID: UInt64?) {
@@ -387,7 +442,7 @@ final class ClaudeCodeFileCache: @unchecked Sendable {
                 parsedBytes: cached.parsedBytes + consumed,
                 entries: cached.entries + entries
             )
-            pending += entries
+            added += entries
             lock.unlock()
             return
         }
@@ -403,7 +458,7 @@ final class ClaudeCodeFileCache: @unchecked Sendable {
             entries: entries
         )
         if cached == nil {
-            pending += entries
+            added += entries
         } else {
             needsRebuild = true
         }

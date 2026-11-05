@@ -12,6 +12,9 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     /// True for a preserved day of the window an early provider reset cut short.
     /// It is history only: pace and elapsed days count the new window's days alone.
     var isPriorWindow = false
+    /// Tokens used that day, for providers that can count them (Claude Code's
+    /// local transcripts); `nil` when unknown.
+    var tokens: DailyTokenUsage?
 
     var percentOfBudget: Double {
         guard budgetUSD > 0 else { return 0 }
@@ -19,6 +22,30 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     }
 
     var isOverBudget: Bool { spentUSD > budgetUSD && budgetUSD > 0 }
+}
+
+/// Tokens used on one day, shown in the daily bars' hover label.
+struct DailyTokenUsage: Hashable, Sendable {
+    /// One model's share of the day.
+    struct Model: Hashable, Sendable {
+        var name: String
+        var tokens: Int64
+    }
+
+    var inputTokens: Int64 = 0
+    var outputTokens: Int64 = 0
+    var cacheReadTokens: Int64 = 0
+    var cacheWriteTokens: Int64 = 0
+    /// Value at API list prices of the priced models; `nil` when not known.
+    var costUSD: Double?
+    /// True when some usage has no listed price, so `costUSD` leaves it out.
+    var hasUnpriced = false
+    /// Models by tokens, most first.
+    var models: [Model] = []
+
+    var totalTokens: Int64 {
+        inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+    }
 }
 
 /// Chevron state for daily-budget week browsing.
