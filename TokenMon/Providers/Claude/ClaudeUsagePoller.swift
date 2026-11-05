@@ -18,6 +18,9 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
     /// Code has no logs on this Mac. Read from local logs on every poll, so it
     /// needs no claude.ai session and is kept across sign-out.
     private(set) var codeUsage: ClaudeCodeUsageSummary?
+    /// Claude Code tokens per local ``DayKey`` and model, for the daily bars'
+    /// hover label; empty when Claude Code has no logs on this Mac.
+    private(set) var localDailyTokens: ClaudeDailyTokens = [:]
     var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
@@ -31,7 +34,7 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
     /// Claude Code usage seam `(now)`; reads Claude Code's local logs and the
     /// saved daily totals in the app, and returns nil under an injected
     /// `fetchUsage` unless a test supplies one.
-    private let loadCodeUsage: (Date) async -> ClaudeCodeUsageSummary?
+    private let loadCodeUsage: (Date) async -> ClaudeCodeUsageScan?
     private let logger = Logger(category: "Claude")
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
@@ -53,7 +56,7 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
         hourly: HourlyDeltaActivityStore,
         daily: DailyQuotaDeltaStore,
         fetchUsage: ((String) async throws -> (ClaudeUsageResponse, Date))? = nil,
-        loadCodeUsage: ((Date) async -> ClaudeCodeUsageSummary?)? = nil
+        loadCodeUsage: ((Date) async -> ClaudeCodeUsageScan?)? = nil
     ) {
         self.settings = settings
         self.auth = auth
@@ -71,9 +74,18 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
             let ledger = ClaudeCodeUsageLedger()
             self.loadCodeUsage = { now in
                 await Task.detached(priority: .utility) {
-                    let calendar = ClaudeCodeUsageLedger.dayCalendar
-                    guard let scanned = ClaudeCodeLocalStats.scanDailyTokens(calendar: calendar) else { return nil }
-                    return ClaudeCodeUsageSummary.make(days: ledger.merge(scanned), now: now, calendar: calendar)
+                    let ledgerCalendar = ClaudeCodeUsageLedger.dayCalendar
+                    guard let scans = ClaudeCodeLocalStats.scanDailyTokens(calendars: [ledgerCalendar, .current]),
+                          scans.count == 2
+                    else { return nil }
+                    return ClaudeCodeUsageScan(
+                        summary: ClaudeCodeUsageSummary.make(
+                            days: ledger.merge(scans[0]),
+                            now: now,
+                            calendar: ledgerCalendar
+                        ),
+                        localDailyTokens: scans[1]
+                    )
                 }.value
             }
         }
@@ -129,7 +141,11 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
 
         let loadedCodeUsage = await loadCodeUsage(Date())
         guard !Task.isCancelled else { return .skipped }
-        codeUsage = loadedCodeUsage
+        codeUsage = loadedCodeUsage?.summary
+        localDailyTokens = loadedCodeUsage?.localDailyTokens ?? [:]
+        if let dailyBudgetDays {
+            self.dailyBudgetDays = withTokens(dailyBudgetDays)
+        }
 
         guard let cookieHeader = auth.cookieHeader(), !cookieHeader.isEmpty else {
             auth.needsSignIn = true
@@ -173,13 +189,13 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
                     )
                 }
                 budgetReferenceNow = fetchedAt
-                dailyBudgetDays = Self.buildDailyBudgetDays(
+                dailyBudgetDays = withTokens(Self.buildDailyBudgetDays(
                     spentByDay: daily.spentByDay,
                     resetsAt: weeklyResetsAt(now: fetchedAt),
                     windowStart: daily.windowStart,
                     interruptedWindowStart: daily.interruptedWindowStart,
                     now: fetchedAt
-                )
+                ))
                 return .success
             },
             reportError: { lastError = $0 }
@@ -240,14 +256,36 @@ final class ClaudeUsagePoller: ProviderUsagePoller {
     /// a new poll. `0` matches ``dailyBudgetDays``.
     func dailyBudgetDays(weekOffset: Int) -> [DailyBudgetDay] {
         let now = budgetReferenceNow ?? Date()
-        return Self.buildDailyBudgetDays(
+        return withTokens(Self.buildDailyBudgetDays(
             spentByDay: daily.spentByDay,
             resetsAt: weeklyResetsAt(now: now),
             windowStart: daily.windowStart,
             interruptedWindowStart: daily.interruptedWindowStart,
             weekOffset: weekOffset,
             now: now
-        )
+        ))
+    }
+
+    /// `days` with each day's Claude Code tokens from ``localDailyTokens``.
+    private func withTokens(_ days: [DailyBudgetDay]) -> [DailyBudgetDay] {
+        Self.attachTokens(localDailyTokens, to: days)
+    }
+
+    /// `days` with the tokens `byDay` holds for each one's local day in
+    /// `calendar`; a day with none recorded keeps `tokens` nil.
+    static func attachTokens(
+        _ byDay: ClaudeDailyTokens,
+        to days: [DailyBudgetDay],
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay] {
+        guard !byDay.isEmpty else { return days }
+        return days.map { day in
+            var copy = day
+            if let models = byDay[DayKey.key(for: day.date, calendar: calendar)] {
+                copy.tokens = DailyTokenUsage(claudeModels: models)
+            }
+            return copy
+        }
     }
 
     /// Weekly reset instant the bars and the reset caption anchor to.

@@ -175,7 +175,7 @@ final class ClaudeUsagePollerTests: XCTestCase {
         let poller = try makePoller(
             daily: store,
             dir: dir,
-            loadCodeUsage: { _ in summary },
+            loadCodeUsage: { _ in ClaudeCodeUsageScan(summary: summary) },
             fetch: { _ in (response, Date()) }
         )
         await poller.refreshNow()
@@ -197,7 +197,7 @@ final class ClaudeUsagePollerTests: XCTestCase {
         let failing = try makePoller(
             daily: store,
             dir: dir,
-            loadCodeUsage: { _ in summary },
+            loadCodeUsage: { _ in ClaudeCodeUsageScan(summary: summary) },
             fetch: { _ in throw URLError(.notConnectedToInternet) }
         )
         await failing.refreshNow()
@@ -210,7 +210,7 @@ final class ClaudeUsagePollerTests: XCTestCase {
             daily: signedOutStore,
             dir: signedOutDir,
             signedIn: false,
-            loadCodeUsage: { _ in summary },
+            loadCodeUsage: { _ in ClaudeCodeUsageScan(summary: summary) },
             fetch: { _ in XCTFail("no fetch without a session"); throw CancellationError() }
         )
         await signedOut.refreshNow()
@@ -227,13 +227,45 @@ final class ClaudeUsagePollerTests: XCTestCase {
         let poller = try makePoller(
             daily: store,
             dir: dir,
-            loadCodeUsage: { _ in summary },
+            loadCodeUsage: { _ in ClaudeCodeUsageScan(summary: summary) },
             fetch: { _ in (response, Date()) }
         )
         await poller.refreshNow()
         poller.clearSnapshot()
         XCTAssertNil(poller.snapshot)
         XCTAssertEqual(poller.codeUsage, summary)
+    }
+
+    /// Each daily bar carries the Claude Code tokens of its local day, summed
+    /// over models and valued at API rates; days without logs carry none.
+    func testAttachTokensAddsEachLocalDaysTokens() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Denver"))
+        let monday = try XCTUnwrap(DayKey.startOfDay(for: "2026-11-02", calendar: calendar))
+        let tuesday = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: monday))
+        let days = [
+            DailyBudgetDay(date: monday, spentUSD: 5, budgetUSD: 100.0 / 7),
+            DailyBudgetDay(date: tuesday, spentUSD: 0, budgetUSD: 100.0 / 7)
+        ]
+        let byDay: ClaudeDailyTokens = ["2026-11-02": [
+            "claude-opus-5-5": ClaudeModelTokens(inputTokens: 10, outputTokens: 20, cacheReadTokens: 1_000_000, cacheWrite5mTokens: 30, cacheWrite1hTokens: 40),
+            "claude-sonnet-5-5": ClaudeModelTokens(inputTokens: 5, outputTokens: 5),
+            "mystery-model": ClaudeModelTokens(outputTokens: 1)
+        ]]
+
+        let attached = ClaudeUsagePoller.attachTokens(byDay, to: days, calendar: calendar)
+        let tokens = try XCTUnwrap(attached[0].tokens)
+        XCTAssertEqual(tokens.inputTokens, 15)
+        XCTAssertEqual(tokens.outputTokens, 26)
+        XCTAssertEqual(tokens.cacheReadTokens, 1_000_000)
+        XCTAssertEqual(tokens.cacheWriteTokens, 70)
+        XCTAssertEqual(tokens.totalTokens, 1_000_111)
+        XCTAssertEqual(tokens.models.map(\.name).first, ClaudeModelName.display("claude-opus-5-5"))
+        XCTAssertEqual(tokens.models.count, 3)
+        XCTAssertGreaterThan(tokens.costUSD ?? 0, 0)
+        XCTAssertTrue(tokens.hasUnpriced)
+        XCTAssertNil(attached[1].tokens)
+        XCTAssertEqual(attached[0].spentUSD, 5)
     }
 
     private static let codeSummary = ClaudeCodeUsageSummary(
@@ -246,7 +278,7 @@ final class ClaudeUsagePollerTests: XCTestCase {
         daily: DailyQuotaDeltaStore,
         dir: URL,
         signedIn: Bool = true,
-        loadCodeUsage: ((Date) async -> ClaudeCodeUsageSummary?)? = nil,
+        loadCodeUsage: ((Date) async -> ClaudeCodeUsageScan?)? = nil,
         fetch: @escaping (String) async throws -> (ClaudeUsageResponse, Date)
     ) throws -> ClaudeUsagePoller {
         let suite = "ClaudePoller-\(UUID().uuidString)"

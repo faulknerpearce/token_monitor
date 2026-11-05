@@ -199,6 +199,49 @@ final class ClaudeCodeLocalStatsTests: XCTestCase {
         XCTAssertEqual(try responses(), 1)
     }
 
+    /// One scan serves several calendars, and each one's running totals keep
+    /// up with appended lines without mixing their days.
+    func testScanKeepsSeparateRunningTotalsPerCalendar() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let projects = root.appendingPathComponent("projects", isDirectory: true)
+        try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var tokyo = Calendar(identifier: .gregorian)
+        tokyo.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let session = projects.appendingPathComponent("session.jsonl")
+        let cache = ClaudeCodeFileCache()
+        func scan() throws -> [ClaudeDailyTokens] {
+            try XCTUnwrap(ClaudeCodeLocalStats.scanDailyTokens(
+                directories: [projects],
+                calendars: [utcCalendar, tokyo],
+                cache: cache
+            ))
+        }
+
+        // 20:00 UTC on the 10th is the 11th in Tokyo.
+        try Data((line(id: "a", request: "r1", at: "2026-10-10T20:00:00Z") + "\n").utf8).write(to: session)
+        var scans = try scan()
+        XCTAssertEqual(scans.count, 2)
+        XCTAssertEqual(Array(scans[0].keys), ["2026-10-10"])
+        XCTAssertEqual(Array(scans[1].keys), ["2026-10-11"])
+
+        let handle = try FileHandle(forWritingTo: session)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data((line(id: "b", request: "r2", at: "2026-10-10T21:00:00Z") + "\n").utf8))
+        try handle.close()
+        scans = try scan()
+        XCTAssertEqual(scans[0]["2026-10-10"]?["claude-opus-4-1"]?.responseCount, 2)
+        XCTAssertEqual(scans[1]["2026-10-11"]?["claude-opus-4-1"]?.responseCount, 2)
+
+        // A calendar asked for only after the append still counts everything.
+        XCTAssertEqual(
+            cache.dailyTokens(calendar: Calendar(identifier: .gregorian)).values
+                .flatMap(\.values).reduce(0) { $0 + $1.responseCount },
+            2
+        )
+    }
+
     func testScanIsNilWithoutClaudeCode() {
         let missing = URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString)/projects")
         XCTAssertNil(ClaudeCodeLocalStats.scanDailyTokens(directories: [missing], cache: ClaudeCodeFileCache()))
