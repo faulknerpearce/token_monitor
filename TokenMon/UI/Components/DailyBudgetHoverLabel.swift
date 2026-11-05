@@ -3,10 +3,10 @@ import SwiftUI
 /// Pointer-to-column and label placement math for the daily bars' hover label.
 enum DailyBudgetHover {
     /// The column under `x`, or nil outside the row.
-    static func columnIndex(x: CGFloat, columnWidth: CGFloat, count: Int) -> Int? {
-        guard count > 0, columnWidth > 0, x >= 0 else { return nil }
+    static func columnIndex(x: CGFloat, columnWidth: CGFloat, columns: Int) -> Int? {
+        guard columns >= 1, columnWidth > 0, x >= 0 else { return nil }
         let index = Int(x / columnWidth)
-        return index < count ? index : nil
+        return index < columns ? index : nil
     }
 
     /// Gap between the pointer and the label.
@@ -149,7 +149,7 @@ private struct DailyBarsHoverModifier: ViewModifier {
                         hoveredIndex = DailyBudgetHover.columnIndex(
                             x: point.x,
                             columnWidth: days.isEmpty ? 0 : geo.size.width / CGFloat(days.count),
-                            count: days.count
+                            columns: days.count
                         )
                     case .ended:
                         location = nil
