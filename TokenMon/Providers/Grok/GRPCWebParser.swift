@@ -22,6 +22,11 @@ enum GRPCWebParser {
         6: ("voice", "Voice")
     ]
 
+    /// Deepest nesting the product scan descends into. The live response nests
+    /// products two levels down; the cap keeps a hostile body of nested
+    /// length-delimited fields from overflowing the stack.
+    private static let maxProductScanDepth = 64
+
     /// Scans gRPC-web `data` for the `[1, 1]` usage percent and reset candidates.
     static func parseUsage(_ data: Data, now: Date = Date()) throws -> Parsed {
         var payloads = dataFrames(from: data)
@@ -107,7 +112,7 @@ enum GRPCWebParser {
     private static func parseProductsFromPayloads(_ payloads: [Data]) -> [ProductUsage] {
         var seen: [String: ProductUsage] = [:]
         for payload in payloads {
-            for product in scanForField7Products(bytes: [UInt8](payload), start: 0, end: payload.count) {
+            for product in scanForField7Products(bytes: [UInt8](payload), start: 0, end: payload.count, depth: 0) {
                 let key = product.id.lowercased()
                 if var existing = seen[key] {
                     existing.percentOfPool += product.percentOfPool
@@ -121,23 +126,26 @@ enum GRPCWebParser {
     }
 
     /// Recursively walks `bytes[start..<end]`, treating the body of every
-    /// length‑delimited field 7 as a product sub‑message.
-    private static func scanForField7Products(bytes: [UInt8], start: Int, end: Int) -> [ProductUsage] {
+    /// length‑delimited field 7 as a product sub‑message. Every read stays
+    /// within `end`, so `index <= end` holds throughout; a field that would
+    /// overrun `end` stops the walk with the products found so far. Nested
+    /// fields below `maxProductScanDepth` are skipped, not scanned.
+    private static func scanForField7Products(bytes: [UInt8], start: Int, end: Int, depth: Int) -> [ProductUsage] {
         var products: [ProductUsage] = []
         var index = start
         while index < end {
-            guard let key = readVarint(bytes, index: &index), key != 0 else { break }
+            guard let key = readVarint(bytes, index: &index, end: end), key != 0 else { break }
             let fieldNumber = key >> 3
             let wireType = key & 0x07
 
             switch wireType {
             case 0:
-                _ = readVarint(bytes, index: &index)
+                guard readVarint(bytes, index: &index, end: end) != nil else { return products }
             case 1:
                 guard index + 8 <= end else { return products }
                 index += 8
             case 2:
-                guard let len = readVarint(bytes, index: &index),
+                guard let len = readVarint(bytes, index: &index, end: end),
                       len <= UInt64(end - index),
                       let intLen = Int(exactly: len) else { return products }
                 let subStart = index
@@ -146,9 +154,14 @@ enum GRPCWebParser {
                     if let product = parseProductSubMessage(bytes: bytes, start: subStart, end: subEnd) {
                         products.append(product)
                     }
-                } else {
+                } else if depth < maxProductScanDepth {
                     // Recurse into any other length‑delimited field.
-                    products.append(contentsOf: scanForField7Products(bytes: bytes, start: subStart, end: subEnd))
+                    products.append(contentsOf: scanForField7Products(
+                        bytes: bytes,
+                        start: subStart,
+                        end: subEnd,
+                        depth: depth + 1
+                    ))
                 }
                 index = subEnd
             case 5:
@@ -161,19 +174,21 @@ enum GRPCWebParser {
         return products
     }
 
+    /// Decodes one product from `bytes[start..<end]`, or nil when a field
+    /// would overrun `end` or the enum or percent is missing.
     private static func parseProductSubMessage(bytes: [UInt8], start: Int, end: Int) -> ProductUsage? {
         var index = start
         var enumValue: UInt64?
         var percent: Double?
 
         while index < end {
-            guard let sk = readVarint(bytes, index: &index), sk != 0 else { return nil }
+            guard let sk = readVarint(bytes, index: &index, end: end), sk != 0 else { return nil }
             let sfn = sk >> 3
             let swt = sk & 0x07
 
             switch swt {
             case 0:
-                guard let value = readVarint(bytes, index: &index) else { return nil }
+                guard let value = readVarint(bytes, index: &index, end: end) else { return nil }
                 if sfn == 1 { enumValue = value }
             case 1:
                 // fixed64 — skip
@@ -190,7 +205,7 @@ enum GRPCWebParser {
                 }
                 index += 4
             case 2:
-                guard let nl = readVarint(bytes, index: &index),
+                guard let nl = readVarint(bytes, index: &index, end: end),
                       nl <= UInt64(end - index),
                       let intNl = Int(exactly: nl) else { return nil }
                 index += intNl
@@ -354,10 +369,14 @@ enum GRPCWebParser {
         return (fixed32, varints, nextOrder)
     }
 
-    private static func readVarint(_ bytes: [UInt8], index: inout Int) -> UInt64? {
+    /// Reads a varint from `bytes[index..<end]` (`end` defaults to the whole
+    /// buffer), or returns nil when it is unterminated before `end`. Either way
+    /// `index` never moves past `end`.
+    private static func readVarint(_ bytes: [UInt8], index: inout Int, end: Int? = nil) -> UInt64? {
+        let limit = min(end ?? bytes.count, bytes.count)
         var value: UInt64 = 0
         var shift: UInt64 = 0
-        while index < bytes.count, shift < 64 {
+        while index < limit, shift < 64 {
             let byte = bytes[index]
             index += 1
             value |= UInt64(byte & 0x7F) << shift

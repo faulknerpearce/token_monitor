@@ -126,6 +126,74 @@ final class GrokUsageParsingTests: XCTestCase {
         XCTAssertThrowsError(try GRPCWebParser.parseUsage(data))
     }
 
+    /// `0a 05 0d 00008042`: path [1, 1] fixed32 = 64.0, so the payloads below
+    /// parse to a usage percent and only the product scan sees the bad bytes.
+    private static let usedPercent64: [UInt8] = [0x0A, 0x05, 0x0D, 0x00, 0x00, 0x80, 0x42]
+
+    /// A key varint inside a nested message that runs past the message end
+    /// (`12 01 | 92 01 00`: field 2 holds one byte, `0x92`, whose continuation
+    /// reads the next byte) leaves the walk past the end; the product scan
+    /// stops there instead of trapping on the remaining-length subtraction.
+    func testNestedKeyVarintPastMessageEndDoesNotCrash() throws {
+        let data = Data(Self.usedPercent64 + [0x12, 0x01, 0x92, 0x01, 0x00])
+
+        let parsed = try GRPCWebParser.parseUsage(data)
+
+        XCTAssertEqual(parsed.usedPercent, 64, accuracy: 0.01)
+        XCTAssertTrue(parsed.products.isEmpty)
+    }
+
+    /// The same overrun inside a field-7 product message (`3a 01 | 92 01 00`)
+    /// rejects that product instead of trapping.
+    func testProductKeyVarintPastMessageEndDoesNotCrash() throws {
+        let data = Data(Self.usedPercent64 + [0x3A, 0x01, 0x92, 0x01, 0x00])
+
+        let parsed = try GRPCWebParser.parseUsage(data)
+
+        XCTAssertEqual(parsed.usedPercent, 64, accuracy: 0.01)
+        XCTAssertTrue(parsed.products.isEmpty)
+    }
+
+    /// A product whose field-1 enum varint runs past the message end
+    /// (`3a 07 | 15 0000f041 08 84` then `01` outside it) is rejected rather
+    /// than reported with an enum assembled from bytes outside the message.
+    func testProductValueVarintPastMessageEndRejectsProduct() throws {
+        let product: [UInt8] = [0x3A, 0x07, 0x15, 0x00, 0x00, 0xF0, 0x41, 0x08, 0x84]
+        let data = Data(Self.usedPercent64 + product + [0x01])
+
+        let parsed = try GRPCWebParser.parseUsage(data)
+
+        XCTAssertEqual(parsed.usedPercent, 64, accuracy: 0.01)
+        XCTAssertTrue(parsed.products.isEmpty)
+    }
+
+    /// 200,000 nested length-delimited messages (`12 <len> 12 <len> ...`) do
+    /// not overflow the stack: the product scan stops descending at its depth cap.
+    func testDeeplyNestedMessagesDoNotOverflowStack() throws {
+        let levels = 200_000
+        // Build back to front so each level's length is the bytes already built.
+        var reversed: [UInt8] = []
+        reversed.reserveCapacity(levels * 4)
+        for _ in 0..<levels {
+            var length = UInt64(reversed.count)
+            var varint: [UInt8] = []
+            repeat {
+                var byte = UInt8(length & 0x7F)
+                length >>= 7
+                if length != 0 { byte |= 0x80 }
+                varint.append(byte)
+            } while length != 0
+            reversed.append(contentsOf: varint.reversed())
+            reversed.append(0x12) // field 2, wire type 2
+        }
+        let data = Data(Self.usedPercent64 + reversed.reversed())
+
+        let parsed = try GRPCWebParser.parseUsage(data)
+
+        XCTAssertEqual(parsed.usedPercent, 64, accuracy: 0.01)
+        XCTAssertTrue(parsed.products.isEmpty)
+    }
+
     /// Live SuperGrok payload (2026-07-28): Build 30, Chat 21, Imagine 12,
     /// Other 1; enum 5 maps to Imagine and enum 3 to Other.
     func testGRPCLiveCreditsConfigEnumMap() throws {
