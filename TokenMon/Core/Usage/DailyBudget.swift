@@ -100,11 +100,14 @@ enum DailyBudget {
     ///
     /// `windowStart` is the start of a window the provider began on its own
     /// (rollover or early reset). When it is later than the start implied by
-    /// `resetsAt` it wins, so an early reset that left `resetsAt` unchanged still
-    /// anchors the bars (and pace) to the new period start. When
-    /// `interruptedWindowStart` is also given and the bars begin exactly at
-    /// `windowStart`, the preserved days of the interrupted window (at most
-    /// `daysInPeriod - 1` of them) lead the result flagged `isPriorWindow`.
+    /// `resetsAt` it wins, so an early reset anchors the bars (and pace) to the
+    /// new period start. The new window's bars stop before the day of a
+    /// `resetsAt` still ahead of `now`: an early reset that left the reset
+    /// instant unchanged opens a window shorter than `daysInPeriod`, and no bar
+    /// is drawn past its end. When `interruptedWindowStart` is also given and
+    /// the bars begin exactly at `windowStart`, the preserved days of the
+    /// interrupted window (at most `daysInPeriod - 1` of them) lead the result
+    /// flagged `isPriorWindow`.
     ///
     /// `weekOffset` browses earlier periods the way the SuperGrok chart does:
     /// `0` is the running window (including any prior-window lead-in), and each
@@ -160,12 +163,30 @@ enum DailyBudget {
                 ))
             }
         }
-        for offset in 0..<count {
+        let windowDays = anchoredToWindowStart
+            ? daysBeforeReset(from: weekStart, resetsAt: resetsAt, upTo: count, now: now, calendar: calendar)
+            : count
+        for offset in 0..<windowDays {
             let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
             let key = calendar.startOfDay(for: day)
             days.append(DailyBudgetDay(date: key, spentUSD: spentByDay[key] ?? 0, budgetUSD: perDay))
         }
         return days
+    }
+
+    /// Bars a window opening on `start` gets before the day of a `resetsAt`
+    /// still ahead of `now`, between 1 and `count`. A past `resetsAt` gives
+    /// `count`.
+    private static func daysBeforeReset(
+        from start: Date,
+        resetsAt: Date,
+        upTo count: Int,
+        now: Date,
+        calendar: Calendar
+    ) -> Int {
+        guard resetsAt > now else { return count }
+        let days = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: resetsAt)).day ?? count
+        return min(count, max(1, days))
     }
 
     /// Start of the running weekly pool. Before `resetsAt`, that is one period

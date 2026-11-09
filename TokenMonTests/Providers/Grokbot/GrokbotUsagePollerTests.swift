@@ -274,7 +274,8 @@ final class GrokbotUsagePollerTests: XCTestCase {
     }
 
     /// When the provider moves the period start but leaves the old reset instant
-    /// in place, the bars still open on the new period start.
+    /// in place, the bars open on the new period start and stop before the reset
+    /// day, so the chart stays one week long.
     func testNewPeriodStartWinsOverUnchangedResetInstant() {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -284,7 +285,9 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertEqual(store.interruptedWindowStart.map { Calendar.current.startOfDay(for: $0) }, Calendar.current.startOfDay(for: local(-3, hour: 8)))
         let window = days.filter { !$0.isPriorWindow }
         XCTAssertTrue(Calendar.current.isDate(window[0].date, inSameDayAs: local(0, hour: 8)))
-        XCTAssertEqual(window.count, 7)
+        XCTAssertEqual(window.count, 4)
+        XCTAssertEqual(days.filter(\.isPriorWindow).count, 3)
+        XCTAssertEqual(days.count, 7)
     }
 
     /// A scheduled rollover still opens a clean 7-bar window with no prior-window

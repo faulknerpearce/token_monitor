@@ -196,6 +196,7 @@
 		ECC86A89EDAED2A82C46525C /* Percent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E61C3E4D69105F655DCB85 /* Percent.swift */; };
 		ECF4D935AA82598C077C7045 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0D256F75FC792D8E73069426 /* PrivacyInfo.xcprivacy */; };
 		EFD7EAF3204F95C041943281 /* DailyBudgetHoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99FBA1A90AF70D29D9E8CEA /* DailyBudgetHoverTests.swift */; };
+		F2186CCA3A8B314321E937F1 /* DailyBudgetResetBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55564038BBB5A4CFF17E17CA /* DailyBudgetResetBoundaryTests.swift */; };
 		F2CF6110673988888DE51EE0 /* ReleaseFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9720EBF79E217B63CE39BE16 /* ReleaseFeed.swift */; };
 		F51039AD97900C7D346CFEC7 /* ProviderSignOutButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 167B7F651A40E82E8DF084B0 /* ProviderSignOutButton.swift */; };
 		F5982E0B139D711442DE68DE /* ChatGPTUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061C3C9D175027F5C518C502 /* ChatGPTUsagePoller.swift */; };
@@ -289,6 +290,7 @@
 		528508A5C024A0F7ACF1ABEB /* CursorEventCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorEventCacheTests.swift; sourceTree = "<group>"; };
 		5375F025FD64E1086E59BBD7 /* PollingLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoopTests.swift; sourceTree = "<group>"; };
 		5404678F894BE67E948C598B /* ClaudeUsagePollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsagePollerTests.swift; sourceTree = "<group>"; };
+		55564038BBB5A4CFF17E17CA /* DailyBudgetResetBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetResetBoundaryTests.swift; sourceTree = "<group>"; };
 		56FF237C2579B9A0ED8E85DF /* ProviderHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHTTP.swift; sourceTree = "<group>"; };
 		59A75CD9EEFE026263DFB293 /* TokenMonTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AFB98C154957652BC2C7649 /* PollingLoop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoop.swift; sourceTree = "<group>"; };
@@ -703,6 +705,7 @@
 			isa = PBXGroup;
 			children = (
 				BD98517BAED301412E21B91A /* BillingPeriodWindowTests.swift */,
+				55564038BBB5A4CFF17E17CA /* DailyBudgetResetBoundaryTests.swift */,
 				0518CBF531BA145055BC824C /* DailyBudgetTests.swift */,
 				22B73774C672331884BCCD27 /* DailyBudgetWeekOffsetTests.swift */,
 				A6021E6879FFCC12EDA03EED /* GrokHistoryStoreTests.swift */,
@@ -1210,6 +1213,7 @@
 				B4436859CF0A1331C7634FF4 /* CursorUsageClientTests.swift in Sources */,
 				D8BB4CB81D5C2F9933501366 /* CursorUsagePollerTests.swift in Sources */,
 				EFD7EAF3204F95C041943281 /* DailyBudgetHoverTests.swift in Sources */,
+				F2186CCA3A8B314321E937F1 /* DailyBudgetResetBoundaryTests.swift in Sources */,
 				F6BEE4D070BD4C2FDF13EC40 /* DailyBudgetTests.swift in Sources */,
 				81960443E797D0AA8D68A31C /* DailyBudgetWeekOffsetTests.swift in Sources */,
 				2CF14F3F7EDE7A31413484BC /* DailyQuotaDeltaStoreTests.swift in Sources */,
