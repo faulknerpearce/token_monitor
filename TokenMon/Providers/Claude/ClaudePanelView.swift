@@ -115,38 +115,76 @@ struct ClaudeCodeUsageSection: View {
             ])
             if !usage.monthModels.isEmpty {
                 PanelCard {
-                    ClaudeModelsSection(models: usage.monthModels, isExpanded: $modelsExpanded)
+                    ClaudeModelsSection(usage: usage, isExpanded: $modelsExpanded)
                 }
             }
         }
+        // A model's hover label can rise above this section; keep it over
+        // the cards before it while it shows.
+        .raisedWhileHoverLabelShown()
     }
 }
 
 /// This month's Claude models with a share-of-spend bar each, under a header
-/// that opens and closes the list.
+/// that opens and closes the list. Hovering a model floats its month detail
+/// and last-month comparison beside the pointer.
 struct ClaudeModelsSection: View {
-    let models: [ClaudeModelUsage]
+    let usage: ClaudeCodeUsageSummary
     @Binding var isExpanded: Bool
+
+    /// Index into the models of the row under the pointer, if any.
+    @State private var hoveredIndex: Int?
+    /// Each row's frame in the rows' coordinate space, by index.
+    @State private var rowFrames: [Int: CGRect] = [:]
+
+    /// The rows' coordinate space, which row frames and the pointer share.
+    private enum CoordinateSpaceName: Hashable { case rows }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CollapsibleSectionHeader(title: "Models This Month", isExpanded: $isExpanded)
 
             if isExpanded {
-                ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
-                    ClaudeModelRow(model: model)
-                    if index < models.count - 1 {
-                        Divider().opacity(0.35)
+                rows(usage.monthModels.map { ClaudeModelHoverDetail(model: $0, summary: usage) })
+            }
+        }
+    }
+
+    private func rows(_ details: [ClaudeModelHoverDetail]) -> some View {
+        let models = usage.monthModels
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
+                ClaudeModelRow(model: model, detail: details[index], isHovered: hoveredIndex == index)
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .named(CoordinateSpaceName.rows))
+                    } action: { frame in
+                        rowFrames[index] = frame
                     }
+                if index < models.count - 1 {
+                    Divider().opacity(0.35)
                 }
+            }
+        }
+        .coordinateSpace(.named(CoordinateSpaceName.rows))
+        .floatingHoverLabel(hoveredIndex: $hoveredIndex, staysAboveBottomEdge: true) { pointer, _ in
+            HoverLabelPlacement.nearestRowIndex(
+                y: pointer.y,
+                rowFrames: models.indices.map { rowFrames[$0] ?? .null }
+            )
+        } label: { index in
+            if details.indices.contains(index) {
+                ClaudeModelHoverLabel(detail: details[index])
             }
         }
     }
 }
 
-/// One model: logo, name, API-rate value, and its share bar.
+/// One model: logo, name, API-rate value, and its share bar. Read by
+/// VoiceOver as its hover detail.
 struct ClaudeModelRow: View {
     let model: ClaudeModelUsage
+    let detail: ClaudeModelHoverDetail
+    var isHovered = false
 
     private var valueLabel: String {
         model.isUnpriced ? "No price" : Format.usd(model.costUSD)
@@ -180,5 +218,12 @@ struct ClaudeModelRow: View {
             .frame(height: 6)
         }
         .padding(.vertical, 4)
+        .background {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(isHovered ? 0.06 : 0))
+                .padding(.horizontal, -6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(detail.accessibilityLabel)
     }
 }

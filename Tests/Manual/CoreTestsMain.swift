@@ -86,6 +86,16 @@ struct CoreTestsMain {
         try assertTrue(cal.component(.weekday, from: bounds.start) == 5, "period starts Thursday")
         try assertTrue(cal.component(.weekday, from: bounds.end) == 4, "period ends Wednesday")
 
+        let rise = MonthlyUsageChange.between(previous: 1_500.05, current: 1_712.45, unit: .usd)
+        try assertTrue(
+            rise.summary(versus: "October", unit: .usd) == "↑ 14% · +$212.40 vs October",
+            "month-over-month increase line"
+        )
+        try assertTrue(
+            MonthlyUsageChange.between(previous: nil, current: 3.91, unit: .usd) == .new,
+            "no usage last month is new"
+        )
+
         print("ALL TESTS PASSED")
     }
 }
