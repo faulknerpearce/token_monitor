@@ -149,6 +149,7 @@
 		AB003C88589B88A88C1B74D0 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257FA737834B257FD6A46E6B /* AppSettingsTests.swift */; };
 		AB17E47D1BFAC44DD1ECA8DF /* ClaudeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F1E36CB5D4F50B6A3432EBF /* ClaudeModels.swift */; };
 		AB7399210A55D804ABFA9641 /* AuthenticatedRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C78DD0CE473F9E89C1298DA /* AuthenticatedRequest.swift */; };
+		AC5CD1EB124E848DEECF3E96 /* MonthlyUsageChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39FD607A2D97D994D5D713A /* MonthlyUsageChangeTests.swift */; };
 		AE99E42791B76C883445B33B /* AppInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2831F536A3D09C69497FEF69 /* AppInstaller.swift */; };
 		AEB2BD1A4D75B8024C81944E /* GrokUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8502E35D3775327BCBC1EDE /* GrokUsagePoller.swift */; };
 		B02C357FF0A3CAC55F2A0C42 /* GrokbotUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98AF438463764D00181B1BDF /* GrokbotUsagePollerTests.swift */; };
@@ -195,6 +196,7 @@
 		E034A31E376D3E03047EDF44 /* ProviderRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22CDEB40CD2C6229C53B7B4B /* ProviderRefreshTests.swift */; };
 		E356ED7177119DEB29328479 /* AppLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C194D27624BF19AF988189 /* AppLog.swift */; };
 		E67B01BEBBE9F134B1AE09F0 /* SignInBrowserNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7265D1C2FC9BF60197606191 /* SignInBrowserNavigationTests.swift */; };
+		E7BD504EB15E1515C3B4F9B5 /* MonthlyUsageChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 054C36F279715DBD2D9A7D0F /* MonthlyUsageChange.swift */; };
 		EBE2B4D303FE5D350ED91F63 /* CursorUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A184FA4C6EC0C25EAA78002C /* CursorUsagePoller.swift */; };
 		ECC86A89EDAED2A82C46525C /* Percent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E61C3E4D69105F655DCB85 /* Percent.swift */; };
 		ECF4D935AA82598C077C7045 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0D256F75FC792D8E73069426 /* PrivacyInfo.xcprivacy */; };
@@ -231,6 +233,7 @@
 		035D5817CDF2B39ABB3D7C99 /* ChatGPTUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTUsageClientTests.swift; sourceTree = "<group>"; };
 		03A2479978DF223C5A3FB032 /* DailyBudgetHoverLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetHoverLabel.swift; sourceTree = "<group>"; };
 		0518CBF531BA145055BC824C /* DailyBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetTests.swift; sourceTree = "<group>"; };
+		054C36F279715DBD2D9A7D0F /* MonthlyUsageChange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyUsageChange.swift; sourceTree = "<group>"; };
 		061C3C9D175027F5C518C502 /* ChatGPTUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTUsagePoller.swift; sourceTree = "<group>"; };
 		06C0BAFB2DDDF57C66DF9D2E /* ProviderSwitcherLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSwitcherLayoutTests.swift; sourceTree = "<group>"; };
 		0A45C7CA17EAD20109ECFE5E /* DailyBudgetBarsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetBarsView.swift; sourceTree = "<group>"; };
@@ -375,6 +378,7 @@
 		B120FC67BCDAED48BACF8482 /* OpenCodeLocalScanCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalScanCache.swift; sourceTree = "<group>"; };
 		B161EEE25050CED17FBFC98B /* ProviderHourlyUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHourlyUsage.swift; sourceTree = "<group>"; };
 		B1A920451DAC4B9DB75153AA /* ObservationLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservationLoopTests.swift; sourceTree = "<group>"; };
+		B39FD607A2D97D994D5D713A /* MonthlyUsageChangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyUsageChangeTests.swift; sourceTree = "<group>"; };
 		B449EDDB7717A5E25E7818E9 /* SegmentedUsageBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedUsageBar.swift; sourceTree = "<group>"; };
 		B850B5AF074C93AC1E04E5F9 /* OpenRouterUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsagePoller.swift; sourceTree = "<group>"; };
 		BD98517BAED301412E21B91A /* BillingPeriodWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingPeriodWindowTests.swift; sourceTree = "<group>"; };
@@ -898,6 +902,7 @@
 			children = (
 				9A0936695A686A705D9616D5 /* DailyTokenUsageTests.swift */,
 				D083AECFFB3A2E279673002F /* DayKeyTests.swift */,
+				B39FD607A2D97D994D5D713A /* MonthlyUsageChangeTests.swift */,
 				7F3D6079EADCE7FAFE6973C7 /* UsagePoolTests.swift */,
 			);
 			path = Usage;
@@ -932,6 +937,7 @@
 				FDEE04D675F839698D199A6B /* DailyBudgetPace.swift */,
 				F69D8EE1005CB6E65C0D5459 /* DailyTokenUsage.swift */,
 				0F31151B54ECEEE84B43FDD8 /* DayKey.swift */,
+				054C36F279715DBD2D9A7D0F /* MonthlyUsageChange.swift */,
 				72E61C3E4D69105F655DCB85 /* Percent.swift */,
 				ADD114DF69FF92FB987B1451 /* UsagePool.swift */,
 			);
@@ -1237,6 +1243,7 @@
 				52F367B5CEB6523C276BFA37 /* LegacyCacheCleanupTests.swift in Sources */,
 				1EB24EA3097D0F0EF135E4E5 /* MenuBarStatusRendererTests.swift in Sources */,
 				84837BD0E185A8A640721857 /* MonthlyDailyBudgetBarsViewTests.swift in Sources */,
+				AC5CD1EB124E848DEECF3E96 /* MonthlyUsageChangeTests.swift in Sources */,
 				7A415C8C064FAA3A2976086E /* NeverRespondingURLProtocol.swift in Sources */,
 				C56D215B0E039B1EC9647FB7 /* ObservationLoopTests.swift in Sources */,
 				B5921DDB23CA5A2E32D2D6A5 /* ObservationProbe.swift in Sources */,
@@ -1351,6 +1358,7 @@
 				854D6FD3E4343A20A836B109 /* MetricStat.swift in Sources */,
 				DA2244C8AC6C4FC363E08029 /* ModelCompanyLogo.swift in Sources */,
 				B5063BD056C2A759A515B487 /* MonitorProvider.swift in Sources */,
+				E7BD504EB15E1515C3B4F9B5 /* MonthlyUsageChange.swift in Sources */,
 				F89EA653D543006ED54FEDC3 /* ObservationLoop.swift in Sources */,
 				FB80268B4FCCFE991B390FB3 /* OpenCodeAuthSession.swift in Sources */,
 				8F8D4FB2ED7FED1D54613157 /* OpenCodeConsoleClient.swift in Sources */,
