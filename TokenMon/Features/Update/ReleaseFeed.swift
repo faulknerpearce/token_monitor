@@ -34,17 +34,10 @@ struct AvailableRelease: Equatable, Sendable {
 /// installed in place once its SHA-256 matches the asset digest; without that
 /// asset the user is sent to the installer package or the release page.
 enum ReleaseFeed {
-    /// GitHub owner the release feed is requested from.
-    static let owner = "faulknerpearce"
+    /// GitHub owner of the repository; the feed is read, and downloads are
+    /// trusted, only under it.
+    static let owner = "tokenmonitor"
     static let repository = "token_monitor"
-
-    /// Owners whose release downloads are trusted, lowercased.
-    ///
-    /// GitHub redirects requests for a transferred repository to its new
-    /// owner, so the feed can list assets under either the personal account
-    /// or the `tokenmonitor` organization. Accepting both keeps in-place
-    /// updates working across that transfer.
-    static let trustedOwners: Set<String> = ["faulknerpearce", "tokenmonitor"]
 
     /// Hosts GitHub redirects release-asset downloads to.
     static let assetCDNHosts: Set<String> = [
@@ -127,15 +120,14 @@ enum ReleaseFeed {
         return hex
     }
 
-    /// True for `https://github.com/<owner>/<repository>/releases/download/<tag>/<file>`
-    /// where `<owner>` is one of `trustedOwners`.
+    /// True for `https://github.com/<owner>/<repository>/releases/download/<tag>/<file>`.
     static func isRepositoryReleaseDownload(_ url: URL) -> Bool {
         guard isPlainHTTPS(url), url.host?.lowercased() == "github.com" else { return false }
         let components = url.pathComponents
         guard components.count == 7,
               !components.contains(".."), !components.contains(".")
         else { return false }
-        return trustedOwners.contains(components[1].lowercased())
+        return components[1].lowercased() == owner.lowercased()
             && components[2].lowercased() == repository.lowercased()
             && components[3] == "releases"
             && components[4] == "download"

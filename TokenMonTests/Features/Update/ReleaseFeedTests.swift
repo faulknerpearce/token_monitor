@@ -12,7 +12,7 @@ final class ReleaseFeedTests: XCTestCase {
         let release = try parse("""
         {
           "tag_name": "v1.5.0",
-          "html_url": "https://github.com/faulknerpearce/token_monitor/releases/tag/v1.5.0",
+          "html_url": "https://github.com/tokenmonitor/token_monitor/releases/tag/v1.5.0",
           "published_at": "2026-09-01T10:00:00Z",
           "draft": false,
           "prerelease": false
@@ -43,7 +43,15 @@ final class ReleaseFeedTests: XCTestCase {
         let release = try parse(#"{"tag_name":"2.0.0"}"#)
         XCTAssertEqual(
             release?.pageURL.absoluteString,
-            "https://github.com/faulknerpearce/token_monitor/releases/latest"
+            "https://github.com/tokenmonitor/token_monitor/releases/latest"
+        )
+    }
+
+    /// The feed is read from the repository under the `tokenmonitor` organization.
+    func testLatestReleaseURLIsTheOrganizationRepository() {
+        XCTAssertEqual(
+            ReleaseFeed.latestReleaseURL.absoluteString,
+            "https://api.github.com/repos/tokenmonitor/token_monitor/releases/latest"
         )
     }
 
@@ -52,37 +60,24 @@ final class ReleaseFeedTests: XCTestCase {
         {
           "tag_name": "2.0.0",
           "assets": [
-            {"name": "notes.txt", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/notes.txt"},
-            {"name": "Other.zip", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/Other.zip"},
-            {"name": "TokenMon-2.0.0.pkg", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"},
-            {"name": "TokenMon-2.0.0.zip", "browser_download_url": "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
+            {"name": "notes.txt", "browser_download_url": "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/notes.txt"},
+            {"name": "Other.zip", "browser_download_url": "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/Other.zip"},
+            {"name": "TokenMon-2.0.0.pkg", "browser_download_url": "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"},
+            {"name": "TokenMon-2.0.0.zip", "browser_download_url": "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
             {"name": "Evil.zip", "browser_download_url": "https://example.com/Evil.zip"}
           ]
         }
         """)
         XCTAssertEqual(
             release?.archiveURL?.absoluteString,
-            "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
+            "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
         )
-    }
-
-    /// After the repository moves to the `tokenmonitor` organization, GitHub
-    /// redirects the feed there and lists assets under the new owner; those
-    /// assets must still install in place.
-    func testArchiveUnderTokenMonitorOrganizationIsKept() throws {
-        let url = "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
-        let release = try parse("""
-        {"tag_name":"2.0.0","assets":[
-          {"name":"TokenMon-2.0.0.zip","browser_download_url":"\(url)"}
-        ]}
-        """)
-        XCTAssertEqual(release?.archiveURL?.absoluteString, url)
     }
 
     func testUntrustedArchiveIsIgnored() throws {
         let release = try parse("""
         {"tag_name":"2.0.0","assets":[
-          {"name":"TokenMon-2.0.0.zip","browser_download_url":"http://github.com/faulknerpearce/token_monitor/TokenMon.zip"}
+          {"name":"TokenMon-2.0.0.zip","browser_download_url":"http://github.com/tokenmonitor/token_monitor/TokenMon.zip"}
         ]}
         """)
         XCTAssertNil(release?.archiveURL)
@@ -94,9 +89,9 @@ final class ReleaseFeedTests: XCTestCase {
         let release = try parse("""
         {"tag_name":"2.0.0","assets":[
           {"name":"TokenMon-2.0.0.zip","digest":"sha256:\(hex.uppercased())",
-           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
+           "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"},
           {"name":"TokenMon-2.0.0.pkg","digest":"sha256:\(hex)",
-           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"}
+           "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.pkg"}
         ]}
         """)
         XCTAssertEqual(release?.archive?.sha256, hex)
@@ -108,9 +103,9 @@ final class ReleaseFeedTests: XCTestCase {
         let release = try parse("""
         {"tag_name":"2.0.0","assets":[
           {"name":"TokenMon-2.0.0-dSYM.zip",
-           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0-dSYM.zip"},
+           "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0-dSYM.zip"},
           {"name":"TokenMon-2.0.0.zip",
-           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"}
+           "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"}
         ]}
         """)
         XCTAssertEqual(release?.archive?.name, "TokenMon-2.0.0.zip")
@@ -128,24 +123,23 @@ final class ReleaseFeedTests: XCTestCase {
     /// redirects them to, are trusted.
     func testTrustedDownloadIsLimitedToThisRepositorysReleases() {
         let trusted = [
-            "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
-            "https://github.com/FaulknerPearce/Token_Monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
             "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
-            "https://github.com/TokenMonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
+            "https://github.com/TokenMonitor/Token_Monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
             "https://objects.githubusercontent.com/github-production-release-asset/1/abc",
             "https://release-assets.githubusercontent.com/github-production-release-asset/1/abc"
         ]
         let untrusted = [
             "https://github.com/someone/else/releases/download/v2.0.0/TokenMon-2.0.0.zip",
+            "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
             "https://github.com/token-monitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
             "https://github.com/tokenmonitor-evil/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip",
             "https://github.com/tokenmonitor/other_repo/releases/download/v2.0.0/TokenMon-2.0.0.zip",
-            "https://github.com/faulknerpearce/token_monitor/raw/master/TokenMon.zip",
-            "https://github.com/faulknerpearce/token_monitor/releases/download/v2/../../x/TokenMon.zip",
-            "https://user:pass@github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
-            "https://github.com:8443/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
-            "http://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon.zip",
-            "https://raw.githubusercontent.com/faulknerpearce/token_monitor/master/TokenMon.zip",
+            "https://github.com/tokenmonitor/token_monitor/raw/master/TokenMon.zip",
+            "https://github.com/tokenmonitor/token_monitor/releases/download/v2/../../x/TokenMon.zip",
+            "https://user:pass@github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "https://github.com:8443/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "http://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon.zip",
+            "https://raw.githubusercontent.com/tokenmonitor/token_monitor/master/TokenMon.zip",
             "https://evil.githubusercontent.com/TokenMon.zip"
         ]
         for raw in trusted {
@@ -154,7 +148,7 @@ final class ReleaseFeedTests: XCTestCase {
         for raw in untrusted {
             XCTAssertFalse(ReleaseFeed.isTrustedDownload(URL(string: raw)!), raw)
         }
-        XCTAssertFalse(ReleaseFeed.isRepositoryReleaseDownload(URL(string: trusted[4])!))
+        XCTAssertFalse(ReleaseFeed.isRepositoryReleaseDownload(URL(string: trusted[2])!))
     }
 
     /// An unusable tag is an error, not a silent "no update", so the check

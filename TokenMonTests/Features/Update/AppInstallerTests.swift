@@ -31,7 +31,7 @@ private final class ArchiveStubURLProtocol: URLProtocol {
 final class AppInstallerTests: XCTestCase {
     private static let bundleID = "com.modelmonitor.app"
     private static let releaseURL = URL(
-        string: "https://github.com/faulknerpearce/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
+        string: "https://github.com/tokenmonitor/token_monitor/releases/download/v2.0.0/TokenMon-2.0.0.zip"
     )!
 
     private var root: URL!
