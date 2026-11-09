@@ -9,7 +9,7 @@ Thanks for helping improve TokenMon. This project is a native macOS menu bar app
 3. Select the **TokenMon** scheme → **My Mac** → Run.
 
 ```bash
-git clone https://github.com/faulknerpearce/token_monitor.git
+git clone https://github.com/tokenmonitor/token_monitor.git
 cd token_monitor
 open TokenMon.xcodeproj
 ```

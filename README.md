@@ -6,10 +6,10 @@
 
 TokenMon is a native macOS menu bar app that shows how much of your AI usage allowances you have used, across the coding assistants, chat subscriptions and model APIs you connect, in real time.
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/faulknerpearce/token_monitor)
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)](https://github.com/tokenmonitor/token_monitor)
 [![Swift](https://img.shields.io/badge/Swift-5.10-orange)](https://www.swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/faulknerpearce/token_monitor/actions/workflows/ci.yml)
+[![CI](https://github.com/tokenmonitor/token_monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenmonitor/token_monitor/actions/workflows/ci.yml)
 
 ## Overview
 
@@ -60,7 +60,7 @@ Every window is anchored to the provider's own reset metadata (`resetsAt`, billi
 ### 1. Clone and open
 
 ```bash
-git clone https://github.com/faulknerpearce/token_monitor.git
+git clone https://github.com/tokenmonitor/token_monitor.git
 cd token_monitor
 open TokenMon.xcodeproj
 ```
