@@ -170,7 +170,7 @@ Then add a `MonitorProvider` case (name, accent colour, whether it has a menu-ba
 
 ## Privacy
 
-- **Credentials** (session cookies and API keys) are stored in the **macOS login Keychain** (one item: service `com.modelmonitor.app.credentials`, account `vault`; this device only, never synced). Account emails and workspace ids stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. Credentials still stored as files in that folder are moved into the Keychain at launch.
+- **Credentials** (session cookies and API keys) are stored in the **macOS login Keychain** (one item: service `com.modelmonitor.app.credentials`, account `vault`; this device only, never synced). Account emails and workspace ids stay in user-only files (mode `0600`) under `~/Library/Application Support/TokenMon/`. TokenMon never stores credentials unencrypted: if the Keychain refuses a sign-in, the sign-in fails instead of falling back to a file. Credentials an older version left as files in that folder are moved into the Keychain at launch, and the files deleted; if the Keychain refuses them, the files are still deleted and you sign in again.
 - **Keychain prompts after updates.** Release builds are ad-hoc signed, so after each update macOS asks once whether the new TokenMon may read its Keychain item. Choose **Always Allow** to keep it from asking again until the next update.
 - **Network access** is limited to:
   - each connected provider's own hosts, for usage and sign-in (listed per provider in [Docs/AUTH_AND_ENDPOINTS.md](Docs/AUTH_AND_ENDPOINTS.md)), plus the identity pages a provider's sign-in redirects to;

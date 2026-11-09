@@ -61,7 +61,7 @@ final class OpenCodeAuthSession: ProviderAuthSession {
     }
 
     func saveWorkspaceID(_ id: String) {
-        writeStore(key: "workspace", value: id)
+        writeStoreLoggingFailure(key: "workspace", value: id)
         workspaceID = id
     }
 

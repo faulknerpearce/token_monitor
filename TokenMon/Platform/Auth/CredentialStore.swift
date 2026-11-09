@@ -5,13 +5,47 @@ import Security
 /// Persistence for provider credentials (session cookies, bearer tokens, API keys).
 protocol CredentialStore {
     func value(forKey key: String) -> String?
-    /// Persists `value`; returns `false` when the write did not stick.
-    @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool
+    /// Persists `value`.
+    ///
+    /// - Throws: `CredentialStoreError` when the write did not stick; nothing
+    ///   is stored in that case.
+    func set(_ value: String, forKey key: String) throws
     func remove(forKey key: String)
 }
 
+/// Why a `CredentialStore` refused a write.
+///
+/// TokenMon never stores a credential unencrypted, so a secret the login
+/// Keychain refuses is not saved anywhere: the sign-in fails with this error
+/// instead of falling back to a file.
+enum CredentialStoreError: Error, LocalizedError, CustomStringConvertible, Equatable {
+    /// The login Keychain did not accept the secret, or did not read it back intact.
+    case secureStoreRefused
+    /// A non-secret label (email, account identity, workspace id) could not be written to its file.
+    case fileWriteFailed
+
+    /// User-visible explanation, shown by the sign-in flow.
+    var description: String {
+        switch self {
+        case .secureStoreRefused:
+            return "Couldn't save your sign-in securely. TokenMon never stores credentials unencrypted. "
+                + "Check your login Keychain, then try again."
+        case .fileWriteFailed:
+            return "Couldn't save your account details. Check that ~/Library/Application Support/TokenMon "
+                + "is writable, then try again."
+        }
+    }
+
+    var errorDescription: String? {
+        description
+    }
+}
+
 /// Application Support files with mode `0600`.
+///
+/// - Warning: Plain files, not encrypted. Production code uses this only for
+///   labels that cannot authenticate (email, account identity, workspace id);
+///   secrets go through `SecretRoutingCredentialStore` to the Keychain.
 struct FileBackedCredentialStore: CredentialStore {
     private let backing: FileBackedStringStore
 
@@ -27,9 +61,8 @@ struct FileBackedCredentialStore: CredentialStore {
         backing.value(forKey: key)
     }
 
-    @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool {
-        backing.set(value, forKey: key)
+    func set(_ value: String, forKey key: String) throws {
+        guard backing.set(value, forKey: key) else { throw CredentialStoreError.fileWriteFailed }
     }
 
     func remove(forKey key: String) {
@@ -50,10 +83,8 @@ final class InMemoryCredentialStore: CredentialStore {
         values[key]
     }
 
-    @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool {
+    func set(_ value: String, forKey key: String) {
         values[key] = value
-        return true
     }
 
     func remove(forKey key: String) {
@@ -353,9 +384,12 @@ final class KeychainCredentialStore: CredentialStore {
         vault.value(forAccount: accountPrefix + key)
     }
 
-    @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool {
-        vault.set(value, forAccount: accountPrefix + key)
+    /// - Throws: `CredentialStoreError.secureStoreRefused` when the vault
+    ///   could not be written or did not read back intact.
+    func set(_ value: String, forKey key: String) throws {
+        guard vault.set(value, forAccount: accountPrefix + key) else {
+            throw CredentialStoreError.secureStoreRefused
+        }
     }
 
     func remove(forKey key: String) {
@@ -365,13 +399,17 @@ final class KeychainCredentialStore: CredentialStore {
 
 // MARK: - Routing + migration
 
-/// Sends secret keys to a secure store and everything else to a file store,
-/// moving any secret still held in a legacy file into the secure store.
+/// Sends secret keys to a secure store and everything else to a file store.
 ///
-/// Migration copies the file value into the secure store, which verifies it by
-/// reading it back, and only then deletes the file. When the secure write
-/// fails the file is kept and keeps serving reads and writes, so the user
-/// stays signed in through a Keychain problem.
+/// A secret is never written to the file store. When the secure store refuses
+/// it, `set` throws `CredentialStoreError.secureStoreRefused` and nothing is
+/// saved, so the sign-in fails instead of leaving a plaintext copy on disk.
+///
+/// At init, a secret still held in a legacy `.dat` file (written by an older
+/// build) is moved into the secure store, verified by reading it back, and the
+/// file is deleted. When the move fails the file is deleted anyway and the
+/// secret is removed from the secure store too, so the provider is signed out
+/// and the user signs in again. Secret values are never logged.
 final class SecretRoutingCredentialStore: CredentialStore {
     private let secure: any CredentialStore
     private let files: any CredentialStore
@@ -383,28 +421,28 @@ final class SecretRoutingCredentialStore: CredentialStore {
         self.files = files
         self.secretKeys = secretKeys
         for key in secretKeys.sorted() {
-            migrateIfNeeded(key: key)
+            migrateLegacyFile(key: key)
         }
     }
 
     func value(forKey key: String) -> String? {
-        guard secretKeys.contains(key) else { return files.value(forKey: key) }
-        if let legacy = files.value(forKey: key) {
-            // Migration failed earlier; the file stays authoritative.
-            return legacy
-        }
-        return secure.value(forKey: key)
+        secretKeys.contains(key) ? secure.value(forKey: key) : files.value(forKey: key)
     }
 
-    @discardableResult
-    func set(_ value: String, forKey key: String) -> Bool {
-        guard secretKeys.contains(key) else { return files.set(value, forKey: key) }
-        if secure.set(value, forKey: key) {
-            files.remove(forKey: key)
-            return true
+    /// - Throws: `CredentialStoreError.secureStoreRefused` when `key` is a
+    ///   secret and the secure store refused it; `CredentialStoreError` from
+    ///   the file store for a non-secret key.
+    func set(_ value: String, forKey key: String) throws {
+        guard secretKeys.contains(key) else {
+            try files.set(value, forKey: key)
+            return
         }
-        logger.error("Keeping \(key, privacy: .public) in the file store; Keychain write failed")
-        return files.set(value, forKey: key)
+        do {
+            try secure.set(value, forKey: key)
+        } catch {
+            logger.error("Keychain refused \(key, privacy: .public); not saved, never written to a file")
+            throw CredentialStoreError.secureStoreRefused
+        }
     }
 
     func remove(forKey key: String) {
@@ -414,14 +452,26 @@ final class SecretRoutingCredentialStore: CredentialStore {
         files.remove(forKey: key)
     }
 
-    private func migrateIfNeeded(key: String) {
+    /// Moves a secret left in a `.dat` file by an older build into the secure
+    /// store. The file is deleted whatever the outcome; when the secure store
+    /// refuses the secret, the key is cleared there as well so the provider
+    /// reads as signed out rather than holding an older session.
+    private func migrateLegacyFile(key: String) {
         guard let legacy = files.value(forKey: key) else { return }
-        guard secure.set(legacy, forKey: key), secure.value(forKey: key) == legacy else {
-            logger.error("Keychain migration failed for \(key, privacy: .public); keeping the file")
-            return
+        let moved: Bool
+        do {
+            try secure.set(legacy, forKey: key)
+            moved = secure.value(forKey: key) == legacy
+        } catch {
+            moved = false
         }
         files.remove(forKey: key)
-        logger.info("Moved \(key, privacy: .public) into the Keychain")
+        if moved {
+            logger.info("Moved \(key, privacy: .public) from a file into the Keychain")
+        } else {
+            secure.remove(forKey: key)
+            logger.error("Keychain refused \(key, privacy: .public); deleted the plaintext file, sign-in required")
+        }
     }
 }
 
