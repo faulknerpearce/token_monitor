@@ -16,17 +16,17 @@ final class DailyBudgetHoverTests: XCTestCase {
     /// room on the left, and stays inside the chart when neither side fits.
     func testLabelFloatsBesideThePointer() {
         let size = CGSize(width: 100, height: 60)
-        let gap = DailyBudgetHover.pointerGap
+        let gap = HoverLabelPlacement.pointerGap
         XCTAssertEqual(
-            DailyBudgetHover.labelOrigin(pointer: CGPoint(x: 200, y: 50), labelSize: size, containerWidth: 300),
+            HoverLabelPlacement.labelOrigin(pointer: CGPoint(x: 200, y: 50), labelSize: size, containerWidth: 300),
             CGPoint(x: 200 - gap - 100, y: 20)
         )
         XCTAssertEqual(
-            DailyBudgetHover.labelOrigin(pointer: CGPoint(x: 40, y: 50), labelSize: size, containerWidth: 300),
+            HoverLabelPlacement.labelOrigin(pointer: CGPoint(x: 40, y: 50), labelSize: size, containerWidth: 300),
             CGPoint(x: 40 + gap, y: 20)
         )
         XCTAssertEqual(
-            DailyBudgetHover.labelOrigin(pointer: CGPoint(x: 100, y: 50), labelSize: CGSize(width: 250, height: 60), containerWidth: 300),
+            HoverLabelPlacement.labelOrigin(pointer: CGPoint(x: 100, y: 50), labelSize: CGSize(width: 250, height: 60), containerWidth: 300),
             CGPoint(x: 0, y: 20)
         )
     }
