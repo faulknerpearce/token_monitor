@@ -84,12 +84,12 @@ final class UpdateCheckerTests: XCTestCase {
 
     private static let releaseWithAssets = """
     {"tag_name":"v1.6.0","draft":false,"prerelease":false,
-     "html_url":"https://github.com/faulknerpearce/token_monitor/releases/tag/v1.6.0",
+     "html_url":"https://github.com/tokenmonitor/token_monitor/releases/tag/v1.6.0",
      "assets":[
        {"name":"TokenMon-1.6.0.zip",
-        "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.zip"},
+        "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.zip"},
        {"name":"TokenMon-1.6.0.pkg",
-        "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.pkg"}
+        "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v1.6.0/TokenMon-1.6.0.pkg"}
      ]}
     """
 
@@ -108,7 +108,7 @@ final class UpdateCheckerTests: XCTestCase {
     func testNewerReleaseIsPublished() async {
         respond(status: 200, body: """
         {"tag_name":"v1.5.1","draft":false,"prerelease":false,
-         "html_url":"https://github.com/faulknerpearce/token_monitor/releases/tag/v1.5.1"}
+         "html_url":"https://github.com/tokenmonitor/token_monitor/releases/tag/v1.5.1"}
         """)
         let checker = makeChecker()
         await checker.checkNow()
@@ -170,9 +170,9 @@ final class UpdateCheckerTests: XCTestCase {
     func testManualCheckSurfacesANewerRelease() async {
         respond(status: 200, body: """
         {"tag_name":"v1.5.1","draft":false,"prerelease":false,
-         "html_url":"https://github.com/faulknerpearce/token_monitor/releases/tag/v1.5.1",
+         "html_url":"https://github.com/tokenmonitor/token_monitor/releases/tag/v1.5.1",
          "assets":[{"name":"TokenMon-1.5.1.zip",
-           "browser_download_url":"https://github.com/faulknerpearce/token_monitor/releases/download/v1.5.1/TokenMon-1.5.1.zip"}]}
+           "browser_download_url":"https://github.com/tokenmonitor/token_monitor/releases/download/v1.5.1/TokenMon-1.5.1.zip"}]}
         """)
         let checker = makeChecker()
         await checker.checkManually()

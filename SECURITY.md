@@ -10,7 +10,7 @@ Please **do not** open a public GitHub issue for security problems.
 
 Instead, report privately via GitHub Security Advisories:
 
-1. Open https://github.com/faulknerpearce/token_monitor/security/advisories/new
+1. Open https://github.com/tokenmonitor/token_monitor/security/advisories/new
 2. Include steps to reproduce, impact, and affected versions/commits if known.
 
 If advisories are unavailable, email the maintainer listed on the GitHub profile for this repository.
@@ -23,4 +23,4 @@ If advisories are unavailable, email the maintainer listed on the GitHub profile
 
 ## Non-security bugs
 
-Normal bugs and feature requests belong in [GitHub Issues](https://github.com/faulknerpearce/token_monitor/issues).
+Normal bugs and feature requests belong in [GitHub Issues](https://github.com/tokenmonitor/token_monitor/issues).
