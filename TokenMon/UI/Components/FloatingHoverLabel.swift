@@ -92,6 +92,7 @@ private struct FloatingHoverLabelModifier<Label: View>: ViewModifier {
                     placedLabel(label(hoveredIndex), at: location)
                 }
             }
+            .preference(key: FloatingHoverLabelShownKey.self, value: hoveredIndex != nil && location != nil)
     }
 
     private func placedLabel(_ label: Label, at pointer: CGPoint) -> some View {
@@ -115,7 +116,37 @@ private struct FloatingHoverLabelModifier<Label: View>: ViewModifier {
     }
 }
 
+/// Whether a floating hover label is showing somewhere inside a view.
+private struct FloatingHoverLabelShownKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
+/// Draws a panel section above its siblings while one of its hover labels
+/// shows, so a label that rises past the section's top is not covered by the
+/// cards before it.
+private struct RaisedWhileHoverLabelShownModifier: ViewModifier {
+    @State private var isShown = false
+
+    func body(content: Content) -> some View {
+        content
+            .onPreferenceChange(FloatingHoverLabelShownKey.self) { shown in
+                isShown = shown
+            }
+            .zIndex(isShown ? 2 : 0)
+    }
+}
+
 extension View {
+    /// Draws this panel section above its siblings while a hover label inside
+    /// it shows. Apply it to a direct child of the panel's stack.
+    func raisedWhileHoverLabelShown() -> some View {
+        modifier(RaisedWhileHoverLabelShownModifier())
+    }
+
     /// Floats a label beside the pointer while it hovers over one of this
     /// container's items, and reports the hovered item.
     ///

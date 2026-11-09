@@ -89,6 +89,23 @@ enum MonthlyUsageChange: Hashable, Sendable {
         return "\(arrow) \(percentText(percent)) · \(sign)\(unit.format(amount)) vs \(previousMonth)"
     }
 
+    /// ``summary(versus:unit:)`` in words for VoiceOver, without arrows or
+    /// signs: "Up 18%, $212.40 more than October", "$3.91 more than October",
+    /// "Down 12%, $80.00 less than October", "Same as October", or
+    /// "New this month".
+    func spokenSummary(versus previousMonth: String, unit: Unit) -> String {
+        switch self {
+        case .new, .unchanged:
+            return summary(versus: previousMonth, unit: unit)
+        case let .increase(amount, percent):
+            let difference = "\(unit.format(amount)) more than \(previousMonth)"
+            return percent.map { "Up \(Self.percentText($0)), \(difference)" } ?? difference
+        case let .decrease(amount, percent):
+            let difference = "\(unit.format(amount)) less than \(previousMonth)"
+            return percent.map { "Down \(Self.percentText($0)), \(difference)" } ?? difference
+        }
+    }
+
     /// A non-negative percentage rounded to a whole number, without
     /// overstating the extremes: "<1%" for a change that rounds to 0, and
     /// ">99%" for one just short of 100 (a drop to nearly, but not exactly,

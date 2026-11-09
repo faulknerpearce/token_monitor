@@ -44,6 +44,16 @@ struct ClaudeUsageMonth: Hashable, Sendable {
     func shortDate(_ date: Date) -> String {
         Format.date(date, dateFormat: "MMM d", timeZone: calendar.timeZone)
     }
+
+    /// The days of this month from `since` to its end, e.g. "Oct 9–31", or
+    /// just "Oct 31" when `since` is the last day.
+    func span(from since: Date) -> String {
+        let first = shortDate(since)
+        guard let lastDay = calendar.range(of: .day, in: .month, for: start)?.count,
+              calendar.component(.day, from: since) < lastDay
+        else { return first }
+        return "\(first)–\(lastDay)"
+    }
 }
 
 /// How much of a month the ledger's saved days cover.

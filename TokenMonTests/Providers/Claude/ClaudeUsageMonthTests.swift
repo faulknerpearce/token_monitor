@@ -49,6 +49,14 @@ final class ClaudeUsageMonthTests: XCTestCase {
         XCTAssertEqual(month.shortDate(try date("2026-11-01T00:00:00Z")), "Nov 1")
     }
 
+    func testSpanRunsFromADayToTheMonthEnd() throws {
+        let october = ClaudeUsageMonth(containing: try date("2026-10-15T00:00:00Z"), calendar: utc)
+        XCTAssertEqual(october.span(from: try date("2026-10-09T00:00:00Z")), "Oct 9–31")
+        XCTAssertEqual(october.span(from: try date("2026-10-31T00:00:00Z")), "Oct 31")
+        let february = ClaudeUsageMonth(containing: try date("2028-02-10T00:00:00Z"), calendar: utc)
+        XCTAssertEqual(february.span(from: try date("2028-02-10T00:00:00Z")), "Feb 10–29")
+    }
+
     // MARK: - Aggregation
 
     func testLastMonthSumsEachModelAcrossItsDays() throws {

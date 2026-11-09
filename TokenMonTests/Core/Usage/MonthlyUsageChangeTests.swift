@@ -92,6 +92,19 @@ final class MonthlyUsageChangeTests: XCTestCase {
         XCTAssertEqual(drop.summary(versus: "October", unit: .tokens), "↓ 75% · \u{2212}3.0M tokens vs October")
     }
 
+    func testSpokenLinesUseWordsInsteadOfArrows() {
+        let rise = MonthlyUsageChange.between(previous: 1_500.05, current: 1_712.45, unit: .usd)
+        XCTAssertEqual(rise.spokenSummary(versus: "October", unit: .usd), "Up 14%, $212.40 more than October")
+        let drop = MonthlyUsageChange.between(previous: 880, current: 749.51, unit: .usd)
+        XCTAssertEqual(drop.spokenSummary(versus: "October", unit: .usd), "Down 15%, $130.49 less than October")
+        let fromZero = MonthlyUsageChange.between(previous: 0, current: 3.91, unit: .usd)
+        XCTAssertEqual(fromZero.spokenSummary(versus: "October", unit: .usd), "$3.91 more than October")
+        let toZero = MonthlyUsageChange.decrease(amount: 3.91, percent: nil)
+        XCTAssertEqual(toZero.spokenSummary(versus: "October", unit: .usd), "$3.91 less than October")
+        XCTAssertEqual(MonthlyUsageChange.new.spokenSummary(versus: "October", unit: .usd), "New this month")
+        XCTAssertEqual(MonthlyUsageChange.unchanged.spokenSummary(versus: "October", unit: .usd), "Same as October")
+    }
+
     // MARK: - Percent rounding
 
     func testPercentRoundsHalfAwayFromZero() {
