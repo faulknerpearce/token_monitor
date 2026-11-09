@@ -268,10 +268,13 @@ final class ClaudeUsagePollerTests: XCTestCase {
         XCTAssertEqual(attached[0].spentUSD, 5)
     }
 
-    private static let codeSummary = ClaudeCodeUsageSummary(
-        month: ClaudeUsageTotals(tokens: 10, costUSD: 1),
-        allTime: ClaudeUsageTotals(tokens: 20, costUSD: 2),
-        monthModels: []
+    private static let codeSummary = ClaudeCodeUsageSummary.make(
+        days: [
+            "2026-09-30": ["claude-opus-5-5": ClaudeModelTokens(inputTokens: 10)],
+            "2026-10-01": ["claude-opus-5-5": ClaudeModelTokens(inputTokens: 10)]
+        ],
+        now: Date(timeIntervalSince1970: 1_791_288_000), // 2026-10-06T12:00:00Z
+        calendar: ClaudeCodeUsageLedger.dayCalendar
     )
 
     private func makePoller(

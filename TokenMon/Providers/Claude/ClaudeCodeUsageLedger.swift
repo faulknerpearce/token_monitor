@@ -112,23 +112,38 @@ struct ClaudeUsageTotals: Hashable, Sendable {
 }
 
 /// Claude Code usage on this Mac for the panel: this calendar month, all
-/// recorded days, and this month's per-model breakdown. With the ledger's UTC
-/// days, the month turns over at midnight UTC.
+/// recorded days, this month's per-model breakdown, and last month's
+/// per-model totals to compare it with. With the ledger's UTC days, the month
+/// turns over at midnight UTC.
 struct ClaudeCodeUsageSummary: Hashable, Sendable {
     var month: ClaudeUsageTotals
     var allTime: ClaudeUsageTotals
     /// This month's models, highest value first.
     var monthModels: [ClaudeModelUsage]
+    /// The month `month` and `monthModels` cover.
+    var currentMonth: ClaudeUsageMonth
+    /// The calendar month before `currentMonth`.
+    var previousMonth: ClaudeUsageMonth
+    /// How much of `previousMonth` the ledger has recorded.
+    var previousMonthCoverage: ClaudeMonthCoverage
+    /// Last month's token counts per model id; a model unused last month is
+    /// absent.
+    var previousMonthModels: [String: ClaudeModelTokens]
 
     /// Summary of `days` for the calendar month containing `now` in `calendar`.
     static func make(days: ClaudeDailyTokens, now: Date, calendar: Calendar) -> Self {
-        // `DayKey`s start with `yyyy-MM`, so a month's days share that prefix.
-        let monthPrefix = String(DayKey.key(for: now, calendar: calendar).prefix(7))
-        let monthDays = days.filter { $0.key.hasPrefix(monthPrefix) }
+        let current = ClaudeUsageMonth(containing: now, calendar: calendar)
+        let previous = current.previous
+        let monthModels = byModel(days.filter { current.contains(dayKey: $0.key) })
         return Self(
-            month: totals(byModel(monthDays)),
+            month: totals(monthModels),
             allTime: totals(byModel(days)),
-            monthModels: ranked(byModel(monthDays))
+            monthModels: ranked(monthModels),
+            currentMonth: current,
+            previousMonth: previous,
+            previousMonthCoverage: .of(previous, earliestDayKey: days.keys.min()),
+            previousMonthModels: byModel(days.filter { previous.contains(dayKey: $0.key) })
+                .filter { $0.value.totalTokens > 0 }
         )
     }
 
