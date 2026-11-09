@@ -62,11 +62,12 @@ Tests in `TokenMonTests/` mirror these folders.
 
 Each cookie provider has a `ProviderAuthSession` subclass: `GrokAuthSession` (Grok), `CursorAuthSession` (also used by Grokbot), `OpenCodeAuthSession`, `ClaudeAuthSession`, and `ChatGPTAuthSession`. `OpenRouterAuthSession` stores a pasted API key instead of cookies. Each session signs in through its own non-persistent `WKWebsiteDataStore`, keeps only an allowlist of essential cookies, and invalidates itself after three consecutive rejections (`authFailureThreshold`). A `sessionGeneration` counter lets pollers drop responses that finish after a sign-out or account switch. Sign-out fires `signedOut`, which drops the displayed snapshot; stored history and the account identity are kept, and `accountReset` clears a provider's stored history only when a different account signs in.
 
-Credentials are stored through `SecretRoutingCredentialStore`:
+Credentials are stored through `SecretRoutingCredentialStore`. TokenMon never stores a credential unencrypted:
 
 - Secrets (each provider's `session` cookie header, OpenRouter's `key`) share one generic-password item in the login Keychain (`KeychainVault`: service `com.modelmonitor.app.credentials`, account `vault`, a JSON object keyed by `<prefix><key>`), this device only. Secrets held as separate per-account items under the same service are copied into the vault on first read.
 - Account email, account identity, and OpenCode's workspace id are mode `0600` files in `~/Library/Application Support/TokenMon/` (`<prefix><key>.dat`).
-- A secret still in a `.dat` file is moved into the Keychain once it has been written and read back; if the Keychain write fails the file is kept and used.
+- A secret is never written to a file. When the Keychain refuses it (locked, denied, or the read-back does not match), the save throws `CredentialStoreError.secureStoreRefused` and nothing is stored; the sign-in sheet or the OpenRouter key field shows "Couldn't save your sign-in securely. TokenMon never stores credentials unencrypted. Check your login Keychain, then try again."
+- At launch, a secret an older build left in a `.dat` file is moved into the Keychain (written, then read back) and the file is deleted. If the Keychain refuses it, the file is deleted anyway and the secret is cleared from the vault, so that provider is signed out until the user signs in again. Secret values are never logged.
 
 At launch, `Application Support/ModelMonitor/` is moved to `TokenMon/` when `TokenMon/` does not exist. At launch `LegacyCacheCleanup` removes, once, the `URLCache` files in `~/Library/Caches/com.modelmonitor.app/` and the shared cookie jar `com.modelmonitor.app.binarycookies` that `URLSession.shared` can hold for provider requests.
 
