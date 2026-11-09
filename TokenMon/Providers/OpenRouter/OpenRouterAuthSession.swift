@@ -28,6 +28,11 @@ final class OpenRouterAuthSession {
     private let store: any CredentialStore
     private let logger = Logger(category: "OpenRouter")
 
+    /// - Parameters:
+    ///   - directory: Test-only: keeps the key in a plain file there.
+    ///     Production passes nil, which stores the key in the Keychain and never
+    ///     in a file.
+    ///   - store: Overrides both; the XCTest host injects an in-memory store.
     init(directory: URL? = nil, store: (any CredentialStore)? = nil) {
         if let store {
             self.store = store
@@ -73,8 +78,9 @@ final class OpenRouterAuthSession {
         generation == sessionGeneration && isSignedIn && !needsSignIn
     }
 
-    /// Persists a trimmed API key. Returns `false` (without saving) when the
-    /// value does not look like an OpenRouter key.
+    /// Persists a trimmed API key. Returns `false` (without saving) and sets
+    /// `lastAuthError` when the value does not look like an OpenRouter key or
+    /// the Keychain refused it; the key is never written to a file.
     @discardableResult
     func saveAPIKey(_ rawKey: String) -> Bool {
         let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -86,7 +92,13 @@ final class OpenRouterAuthSession {
             lastAuthError = "That doesn't look like an OpenRouter key (expected sk-or-…)."
             return false
         }
-        writeStore(key: "key", value: key)
+        do {
+            try store.set(key, forKey: "key")
+        } catch {
+            lastAuthError = error.localizedDescription
+            logger.error("OpenRouter API key not saved: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
         lastAuthError = nil
         consecutiveAuthFailures = 0
         isSignedIn = true
@@ -121,10 +133,6 @@ final class OpenRouterAuthSession {
     }
 
     // MARK: - Store
-
-    private func writeStore(key storageKey: String, value: String) {
-        store.set(value, forKey: storageKey)
-    }
 
     private func readStore(key storageKey: String) -> String? {
         store.value(forKey: storageKey)

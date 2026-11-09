@@ -78,6 +78,11 @@ class ProviderAuthSession: ProviderCookieCapturing {
     /// cannot authenticate, so they stay in Application Support files.
     static let secretStoreKeys: Set<String> = ["session"]
 
+    /// - Parameters:
+    ///   - directory: Test-only: keeps every key, the session included, in
+    ///     plain files there. Production passes nil, which stores the session in
+    ///     the Keychain and never in a file.
+    ///   - store: Overrides both; the XCTest host injects an in-memory store.
     init(config: ProviderAuthConfig, directory: URL? = nil, store: (any CredentialStore)? = nil) {
         self.config = config
         self.logger = Logger(category: config.logCategory)
@@ -156,8 +161,9 @@ class ProviderAuthSession: ProviderCookieCapturing {
         let pruned = Self.pruneCookieHeader(stored, policy: config.capturePolicy)
         if pruned != stored {
             // A stored jar can carry SSO cookies from another account (e.g. an X
-            // session in the Grok jar).
-            writeStore(key: "session", value: pruned)
+            // session in the Grok jar). When the Keychain refuses the narrowed
+            // header, the stored one stays and is narrowed again next time.
+            writeStoreLoggingFailure(key: "session", value: pruned)
         }
         return pruned
     }
@@ -238,7 +244,7 @@ class ProviderAuthSession: ProviderCookieCapturing {
         }
         let header = pairs.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
         guard header != stored else { return }
-        writeStore(key: "session", value: header)
+        writeStoreLoggingFailure(key: "session", value: header)
     }
 
     /// Splits a `Cookie:` header into ordered name/value pairs.
@@ -253,7 +259,7 @@ class ProviderAuthSession: ProviderCookieCapturing {
     /// Persists the account email. For providers identified by email, an email
     /// that differs from the previous account's fires `accountReset`.
     func saveAccountEmail(_ email: String) {
-        writeStore(key: "email", value: email)
+        writeStoreLoggingFailure(key: "email", value: email)
         accountEmail = email
         if config.accountIdentityCookie == nil {
             noteAccountIdentity(email)
@@ -265,7 +271,7 @@ class ProviderAuthSession: ProviderCookieCapturing {
     private func noteAccountIdentity(_ identity: String) {
         let previous = readStore(key: "account")
         guard previous != identity else { return }
-        writeStore(key: "account", value: identity)
+        writeStoreLoggingFailure(key: "account", value: identity)
         if previous != nil {
             logger.info("\(self.config.logCategory, privacy: .public) account changed")
             accountReset.send()
@@ -279,15 +285,30 @@ class ProviderAuthSession: ProviderCookieCapturing {
         return value.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    func save(cookieHeader: String) {
-        writeStore(key: "session", value: cookieHeader)
+    /// Stores `cookieHeader` as the live session.
+    ///
+    /// - Returns: `false` when the store refused it (the Keychain is
+    ///   unavailable). Nothing is saved, the sign-in state is unchanged, and
+    ///   `lastAuthError` explains why; TokenMon never falls back to a file.
+    @discardableResult
+    func save(cookieHeader: String) -> Bool {
+        do {
+            try writeStore(key: "session", value: cookieHeader)
+        } catch {
+            lastAuthError = error.localizedDescription
+            logger.error("\(self.config.logCategory, privacy: .public) session not saved: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
         isSignedIn = true
         needsSignIn = false
         consecutiveAuthFailures = 0
         sessionGeneration += 1
+        return true
     }
 
-    /// Captures the isolated store's session cookies; returns false and records `lastAuthError` when none qualify.
+    /// Captures the isolated store's session cookies; returns false and
+    /// records `lastAuthError` when none qualify or the session could not be
+    /// saved securely.
     func captureCookiesFromWebKit() async -> Bool {
         // Finish any pending sign-out purge first so it completes before cookies
         // from a fresh sign-in are captured.
@@ -297,13 +318,16 @@ class ProviderAuthSession: ProviderCookieCapturing {
             logger.warning("No auth cookies found after sign-in")
             return false
         }
-        adopt(result)
-        return true
+        return adopt(result)
     }
 
     /// Stores a capture as the live session and records its account.
-    func adopt(_ result: WebKitCookieCapture.CaptureResult) {
-        save(cookieHeader: result.cookieHeader)
+    ///
+    /// - Returns: `false` when the session could not be saved securely; the
+    ///   account is left untouched and `lastAuthError` explains why.
+    @discardableResult
+    func adopt(_ result: WebKitCookieCapture.CaptureResult) -> Bool {
+        guard save(cookieHeader: result.cookieHeader) else { return false }
         // Only the credential store keeps these, so the session stays out of
         // `HTTPCookieStorage.shared`, a shared jar that outlives sign-out and
         // auto-attaches cookies to unrelated requests. Request paths send the
@@ -315,7 +339,7 @@ class ProviderAuthSession: ProviderCookieCapturing {
             noteAccountIdentity(identity)
         }
         if let email = result.email {
-            writeStore(key: "email", value: email)
+            writeStoreLoggingFailure(key: "email", value: email)
             accountEmail = email
         } else {
             removeStore(key: "email")
@@ -326,6 +350,7 @@ class ProviderAuthSession: ProviderCookieCapturing {
         needsSignIn = false
         lastAuthError = nil
         logger.info("Captured \(result.cookies.count, privacy: .public) session cookies")
+        return true
     }
 
     /// Explicit sign-out: clears credentials and fires `signedOut` so pollers
@@ -364,8 +389,21 @@ class ProviderAuthSession: ProviderCookieCapturing {
 
     // MARK: - Store (protected for subclasses)
 
-    func writeStore(key: String, value: String) {
-        store.set(value, forKey: key)
+    /// Persists `value` under `key`.
+    ///
+    /// - Throws: `CredentialStoreError` when the store refused it.
+    func writeStore(key: String, value: String) throws {
+        try store.set(value, forKey: key)
+    }
+
+    /// Persists a value whose loss is recoverable (a label, or a renewed
+    /// session the stored one still covers), logging a refusal without the value.
+    func writeStoreLoggingFailure(key: String, value: String) {
+        do {
+            try writeStore(key: key, value: value)
+        } catch {
+            logger.error("\(self.config.logCategory, privacy: .public) \(key, privacy: .public) not saved: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func readStore(key: String) -> String? {

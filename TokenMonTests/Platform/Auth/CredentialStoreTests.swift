@@ -9,10 +9,9 @@ final class CredentialStoreTests: XCTestCase {
         var values: [String: String] = [:]
         var failsWrites = false
         func value(forKey key: String) -> String? { values[key] }
-        func set(_ value: String, forKey key: String) -> Bool {
-            guard !failsWrites else { return false }
+        func set(_ value: String, forKey key: String) throws {
+            guard !failsWrites else { throw CredentialStoreError.secureStoreRefused }
             values[key] = value
-            return true
         }
 
         func remove(forKey key: String) { values.removeValue(forKey: key) }
@@ -67,7 +66,7 @@ final class CredentialStoreTests: XCTestCase {
 
         let store = FileBackedCredentialStore(directory: dir, filenamePrefix: "openrouter_auth_")
         XCTAssertNil(store.value(forKey: "key"))
-        store.set("sk-or-v1-secret", forKey: "key")
+        try? store.set("sk-or-v1-secret", forKey: "key")
         XCTAssertEqual(store.value(forKey: "key"), "sk-or-v1-secret")
         store.remove(forKey: "key")
         XCTAssertNil(store.value(forKey: "key"))
@@ -105,39 +104,21 @@ final class CredentialStoreTests: XCTestCase {
         XCTAssertNil(secure.values["email"])
     }
 
-    /// A failed secure write keeps the file, which keeps serving the session.
-    func testMigrationFailureKeepsFileAndKeepsWorking() {
+    /// A refused migration deletes the plaintext file anyway and leaves the
+    /// provider signed out, clearing any older secret the secure store held.
+    func testMigrationFailureDeletesPlaintextAndSignsOut() {
         let files = InMemoryStore()
-        files.values = ["session": "sid=abc"]
+        files.values = ["session": "sid=abc", "email": "user@example.com"]
         let secure = InMemoryStore()
+        secure.values = ["session": "sid=older"]
         secure.failsWrites = true
 
         let store = SecretRoutingCredentialStore(secure: secure, files: files, secretKeys: ["session"])
 
-        XCTAssertEqual(files.values["session"], "sid=abc")
-        XCTAssertEqual(store.value(forKey: "session"), "sid=abc")
-        XCTAssertTrue(store.set("sid=new", forKey: "session"))
-        XCTAssertEqual(store.value(forKey: "session"), "sid=new")
-        XCTAssertEqual(files.values["session"], "sid=new")
-    }
-
-    /// A secret written after a failed migration leaves no stale file behind
-    /// once the secure store accepts writes again.
-    func testSecureWriteRemovesLeftoverFile() {
-        let files = InMemoryStore()
-        files.values = ["key": "sk-or-v1-old"]
-        let secure = InMemoryStore()
-        secure.failsWrites = true
-        let store = SecretRoutingCredentialStore(secure: secure, files: files, secretKeys: ["key"])
-
-        secure.failsWrites = false
-        XCTAssertTrue(store.set("sk-or-v1-new", forKey: "key"))
-
-        XCTAssertNil(files.values["key"])
-        XCTAssertEqual(store.value(forKey: "key"), "sk-or-v1-new")
-        store.remove(forKey: "key")
-        XCTAssertNil(store.value(forKey: "key"))
-        XCTAssertNil(secure.values["key"])
+        XCTAssertNil(files.values["session"])
+        XCTAssertNil(secure.values["session"])
+        XCTAssertNil(store.value(forKey: "session"))
+        XCTAssertEqual(files.values["email"], "user@example.com", "labels are not credentials")
     }
 
     // MARK: - Keychain store (fake backend)
@@ -188,9 +169,9 @@ final class CredentialStoreTests: XCTestCase {
         let chatGPT = KeychainCredentialStore(accountPrefix: "chatgpt_auth_", vault: vault)
         let openRouter = KeychainCredentialStore(accountPrefix: "openrouter_auth_", vault: vault)
 
-        XCTAssertTrue(chatGPT.set("sid=abc", forKey: "session"))
-        XCTAssertTrue(chatGPT.set("sid=def", forKey: "session"))
-        XCTAssertTrue(openRouter.set("sk-or-v1-x", forKey: "key"))
+        XCTAssertNoThrow(try chatGPT.set("sid=abc", forKey: "session"))
+        XCTAssertNoThrow(try chatGPT.set("sid=def", forKey: "session"))
+        XCTAssertNoThrow(try openRouter.set("sk-or-v1-x", forKey: "key"))
 
         XCTAssertEqual(Set(keychain.items.keys), [vaultKey])
         XCTAssertEqual(chatGPT.value(forKey: "session"), "sid=def")
@@ -208,7 +189,7 @@ final class CredentialStoreTests: XCTestCase {
     /// The vault is read once; later lookups come from memory.
     func testVaultCachesReads() {
         let keychain = FakeKeychain()
-        XCTAssertTrue(makeStore("auth_", keychain).set("sso=z", forKey: "session"))
+        XCTAssertNoThrow(try makeStore("auth_", keychain).set("sso=z", forKey: "session"))
         let store = makeStore("auth_", keychain)
         keychain.reads = 0
 
@@ -260,13 +241,13 @@ final class CredentialStoreTests: XCTestCase {
     /// A refused vault read reports secrets as missing and never overwrites the item.
     func testRefusedVaultIsNeverOverwritten() {
         let keychain = FakeKeychain()
-        XCTAssertTrue(makeStore("auth_", keychain).set("sso=z", forKey: "session"))
+        XCTAssertNoThrow(try makeStore("auth_", keychain).set("sso=z", forKey: "session"))
         let stored = keychain.items[vaultKey]
         keychain.refusedAccounts = ["vault"]
         let store = makeStore("auth_", keychain)
 
         XCTAssertNil(store.value(forKey: "session"))
-        XCTAssertFalse(store.set("sso=new", forKey: "session"))
+        XCTAssertThrowsError(try store.set("sso=new", forKey: "session"))
         store.remove(forKey: "session")
         XCTAssertEqual(keychain.items[vaultKey], stored)
     }
@@ -277,7 +258,7 @@ final class CredentialStoreTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let keychain = FakeKeychain()
-        XCTAssertTrue(makeStore("auth_", keychain).set("sso=old", forKey: "session"))
+        XCTAssertNoThrow(try makeStore("auth_", keychain).set("sso=old", forKey: "session"))
         keychain.refusedAccounts = ["vault"]
         let refused = KeychainCredentialStore(
             accountPrefix: "auth_",
@@ -299,11 +280,12 @@ final class CredentialStoreTests: XCTestCase {
         keychain.addStatus = errSecInteractionNotAllowed
         let store = makeStore("auth_", keychain)
 
-        XCTAssertFalse(store.set("sso=z", forKey: "session"))
+        XCTAssertThrowsError(try store.set("sso=z", forKey: "session"))
         XCTAssertNil(store.value(forKey: "session"))
     }
 
-    /// A write whose read-back differs is reported as failed, so migration keeps the file.
+    /// A write whose read-back differs is reported as failed: migration
+    /// deletes the file and the provider reads as signed out.
     func testKeychainStoreVerifiesWriteByReadingBack() {
         let keychain = FakeKeychain()
         keychain.corruptsWrites = true
@@ -313,8 +295,10 @@ final class CredentialStoreTests: XCTestCase {
 
         let store = SecretRoutingCredentialStore(secure: secure, files: files, secretKeys: ["session"])
 
-        XCTAssertEqual(files.values["session"], "sso=z")
-        XCTAssertEqual(store.value(forKey: "session"), "sso=z")
+        XCTAssertNil(files.values["session"])
+        XCTAssertNil(store.value(forKey: "session"))
+        XCTAssertThrowsError(try store.set("sso=new", forKey: "session"))
+        XCTAssertTrue(files.values.isEmpty)
     }
 
     // MARK: - File store writes
